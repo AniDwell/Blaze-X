@@ -64,7 +64,7 @@
             <div class="tk-dot tk-dot-1"></div>
             <div class="tk-dot tk-dot-2"></div>
         </div>
-        <p class="text-xs text-gray-500 font-bold tracking-widest uppercase" id="boot-text">Igniting Blaze-X Engine...</p>
+        <p class="text-xs text-gray-500 font-bold tracking-widest uppercase">Igniting Blaze-X Engine...</p>
     </div>
 
     <div id="modal-overlay" class="fixed inset-0 z-[70] hidden bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -98,10 +98,10 @@
     <script>
         window.app = {
             config: {
-                // Cloudflare Function proxy path (Bypasses Anikoto Rate Limits)
+                // Cloudflare proxy path
                 anikotoBase: '/api/anikoto', 
                 
-                // Direct MegaPlay Embed (Must be direct to prevent bandwidth abuse bans)
+                // Direct MegaPlay Embed Route
                 megaPlayBase: 'https://megaplay.buzz/stream/s-2', 
                 
                 defaultAvatars: ["https://iili.io/fWydBMG.md.png", "https://iili.io/fWydqns.md.png"]
@@ -134,9 +134,6 @@
             
             // Application Boot Sequence
             init: () => {
-                const bootText = document.getElementById('boot-text');
-                bootText.innerText = "Synchronizing Components...";
-
                 // Boot the router if it exists
                 if (window.app.router) window.app.router.init();
 
@@ -157,8 +154,22 @@
                 // Trigger component renders safely
                 if(app.components.header) app.components.header();
                 if(app.components.carousel) app.components.carousel();
-                
-                // Add remaining component calls here as you build them:
+            }
+        };
+    </script>
+
+    <script type="module" src="header.js"></script>
+    
+    <script src="router.js"></script>
+    <script src="carousel.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            window.app.init();
+        });
+    </script>
+</body>
+</html>
                 // if(app.components.pillSlider) app.components.pillSlider();
                 // if(app.components.recent) app.components.recent();
             }
