@@ -2,7 +2,6 @@
 
 window.app.components.carousel = async () => {
     const container = document.getElementById('carousel-container');
-    
     if (!container) return;
 
     // 1. Loading Skeleton
@@ -16,10 +15,19 @@ window.app.components.carousel = async () => {
     `;
 
     try {
-        // 2. Direct fetch from the actual API endpoint
+        // Fetch from our active worker path
         const response = await window.app.api.fetch('/recent-anime?page=1');
         
-        if (!response || !response.data || response.data.length === 0) {
+        // Data Parser (Handles both raw arrays and nested objects)
+        let rawSlides = [];
+        if (response && Array.isArray(response)) {
+            rawSlides = response;
+        } else if (response && response.data && Array.isArray(response.data)) {
+            rawSlides = response.data;
+        }
+
+        // Failsafe
+        if (rawSlides.length === 0) {
             container.innerHTML = `
                 <div class="p-6 text-center text-gray-500 text-xs border border-white/5 mx-4 rounded-xl bg-[#0a0a0a] tracking-widest uppercase">
                     <i class="fas fa-exclamation-circle mr-1 text-[#F47521]"></i> Stream Offline
@@ -28,8 +36,11 @@ window.app.components.carousel = async () => {
             return;
         }
 
-        const slides = response.data.slice(0, 5);
+        const slides = rawSlides.slice(0, 5);
+        
+        // Save to global state so our click handlers can access them
         window.app.state.carouselItems = slides; 
+        window.app.state.carouselCurrentIndex = 0;
 
         let slidesHtml = '';
         let dotsHtml = '';
@@ -37,23 +48,28 @@ window.app.components.carousel = async () => {
         slides.forEach((s, i) => {
             const id = s.id || 'unknown';
             const title = s.title || 'Unknown Title';
-            const desc = s.description || 'No synopsis available for this title.';
-            const img = s.background_image || s.poster || 'https://via.placeholder.com/1280x720?text=No+Image';
+            const desc = s.description || 'No synopsis available.';
+            // Added massive fallback chain to guarantee we catch the correct image key
+            const img = s.image || s.cover || s.poster || s.background_image || s.thumbnail || 'https://via.placeholder.com/1280x720/111/fff?text=No+Image';
 
+            // SMOOTH ANIMATION: Using inline styles for a 1.5s ease-in-out transition
             slidesHtml += `
-                <div class="carousel-slide absolute inset-0 transition-opacity duration-1000 ease-in-out ${i === 0 ? 'opacity-100 z-20' : 'opacity-0 z-10'}" id="slide-${i}">
-                    <img src="${img}" class="absolute inset-0 w-full h-full object-cover blur-backdrop opacity-40 z-0">
+                <div class="carousel-slide absolute inset-0" id="slide-${i}" style="opacity: ${i === 0 ? '1' : '0'}; z-index: ${i === 0 ? '20' : '10'}; transition: opacity 1.5s ease-in-out;">
                     
-                    <div class="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent z-10"></div>
-                    <div class="absolute inset-0 bg-gradient-to-r from-black via-black/30 to-transparent z-10"></div>
+                    <div class="absolute inset-0 cursor-pointer z-0 group" onclick="window.location.href='info.html?id=${id}'">
+                        <img src="${img}" class="absolute inset-0 w-full h-full object-cover transition-transform duration-[10s] group-hover:scale-105">
+                        
+                        <div class="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent"></div>
+                        <div class="absolute inset-0 bg-gradient-to-r from-black/90 via-black/40 to-transparent md:w-2/3"></div>
+                    </div>
                     
                     <div class="absolute bottom-8 left-4 md:bottom-12 md:left-12 z-30 max-w-[85%] md:max-w-2xl pr-8">
-                        <h2 class="text-3xl md:text-5xl font-black text-white mb-3 drop-shadow-2xl line-clamp-2 tracking-tight">${title}</h2>
+                        <h2 class="text-3xl md:text-5xl font-black text-white mb-3 drop-shadow-2xl line-clamp-2 tracking-tight cursor-pointer" onclick="window.location.href='info.html?id=${id}'">${title}</h2>
                         <p class="text-xs md:text-sm text-gray-300 line-clamp-3 mb-6 drop-shadow-lg leading-relaxed font-medium">${desc}</p>
                         
-                        <div class="flex gap-3">
-                            <button onclick="window.location.href='play.html?id=${id}'" class="bg-[#F47521] text-black px-6 py-2.5 rounded shadow-[0_0_15px_rgba(244,117,33,0.3)] font-bold text-xs uppercase tracking-wider hover:bg-white hover:shadow-none transition-all flex items-center gap-2">
-                                <i class="fas fa-play"></i> Play
+                        <div class="flex gap-3 relative z-40">
+                            <button onclick="window.location.href='info.html?id=${id}'" class="bg-[#F47521] text-black px-6 py-2.5 rounded shadow-[0_0_15px_rgba(244,117,33,0.3)] font-bold text-xs uppercase tracking-wider hover:bg-white hover:shadow-none transition-all flex items-center gap-2">
+                                <i class="fas fa-info-circle"></i> Info
                             </button>
                             
                             <button onclick="window.app.handleCarouselLibraryClick(${i})" class="bg-white/10 backdrop-blur-md text-white px-5 py-2.5 rounded font-bold text-xs uppercase tracking-wider hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2">
@@ -64,63 +80,95 @@ window.app.components.carousel = async () => {
                 </div>
             `;
 
+            // DOTS: Added onclick function to allow manual switching
             dotsHtml += `
-                <div class="carousel-dot w-1.5 h-1.5 md:w-2 md:h-2 rounded-sm transition-all duration-300 ${i === 0 ? 'bg-[#F47521] h-5 md:h-7' : 'bg-white/20'}" id="dot-${i}"></div>
+                <div onclick="window.app.goToCarouselSlide(${i})" class="carousel-dot w-2 h-2 md:w-2.5 md:h-2.5 rounded-sm transition-all duration-300 cursor-pointer pointer-events-auto shadow-md ${i === 0 ? 'bg-[#F47521] h-6 md:h-8' : 'bg-white/30 hover:bg-white/60'}" id="dot-${i}"></div>
             `;
         });
 
         container.innerHTML = `
             <div class="relative w-full aspect-[4/5] md:aspect-[21/9] overflow-hidden bg-black border-b border-white/5">
                 <div id="hero-slides" class="relative w-full h-full">${slidesHtml}</div>
-                <div class="absolute right-4 md:right-8 top-1/2 transform -translate-y-1/2 flex flex-col gap-1.5 z-30" id="carousel-indicators">${dotsHtml}</div>
+                
+                <div class="absolute right-4 md:right-8 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 z-50" id="carousel-indicators">${dotsHtml}</div>
             </div>
         `;
 
-        startFadeCarousel(slides.length);
+        startAutoRotate();
         
     } catch (err) {
         console.error("Carousel Script Error:", err);
     }
 };
 
-function startFadeCarousel(count) {
-    let currentIndex = 0;
+// --- MANUAL SWITCHING LOGIC ---
+window.app.goToCarouselSlide = (targetIndex) => {
+    const currentIndex = window.app.state.carouselCurrentIndex;
+    if (targetIndex === currentIndex) return; // Don't do anything if clicking the active dot
+
+    // Stop the auto-timer so it doesn't instantly jump again
     if (window.app.state.carouselInterval) clearInterval(window.app.state.carouselInterval);
 
+    // Execute transition
+    transitionSlide(currentIndex, targetIndex);
+    
+    // Update global memory
+    window.app.state.carouselCurrentIndex = targetIndex;
+
+    // Restart the timer
+    startAutoRotate();
+};
+
+// --- ANIMATION ENGINE ---
+function transitionSlide(oldIndex, newIndex) {
+    const oldSlide = document.getElementById(`slide-${oldIndex}`);
+    const oldDot = document.getElementById(`dot-${oldIndex}`);
+    const newSlide = document.getElementById(`slide-${newIndex}`);
+    const newDot = document.getElementById(`dot-${newIndex}`);
+
+    // Fade Out Old
+    if (oldSlide) {
+        oldSlide.style.opacity = '0';
+        oldSlide.classList.replace('z-20', 'z-10');
+    }
+    if (oldDot) {
+        oldDot.classList.remove('bg-[#F47521]', 'h-6', 'md:h-8');
+        oldDot.classList.add('bg-white/30');
+    }
+
+    // Fade In New
+    if (newSlide) {
+        newSlide.style.opacity = '1';
+        newSlide.classList.replace('z-10', 'z-20');
+    }
+    if (newDot) {
+        newDot.classList.remove('bg-white/30');
+        newDot.classList.add('bg-[#F47521]', 'h-6', 'md:h-8');
+    }
+}
+
+// --- AUTO ROTATE TIMER ---
+function startAutoRotate() {
+    if (window.app.state.carouselInterval) clearInterval(window.app.state.carouselInterval);
+
+    // Slower interval: Swaps every 6 seconds
     window.app.state.carouselInterval = setInterval(() => {
         if (window.app.state.currentView !== 'home' || !document.getElementById('hero-slides')) {
             clearInterval(window.app.state.carouselInterval);
             return;
         }
 
-        const currentSlide = document.getElementById(`slide-${currentIndex}`);
-        const currentDot = document.getElementById(`dot-${currentIndex}`);
+        const count = window.app.state.carouselItems.length;
+        const currentIndex = window.app.state.carouselCurrentIndex;
+        const nextIndex = (currentIndex + 1) % count;
 
-        if (currentSlide) {
-            currentSlide.classList.replace('opacity-100', 'opacity-0');
-            currentSlide.classList.replace('z-20', 'z-10');
-        }
-        if (currentDot) {
-            currentDot.classList.remove('bg-[#F47521]', 'h-5', 'md:h-7');
-            currentDot.classList.add('bg-white/20', 'h-1.5', 'md:h-2');
-        }
+        transitionSlide(currentIndex, nextIndex);
+        window.app.state.carouselCurrentIndex = nextIndex;
 
-        currentIndex = (currentIndex + 1) % count;
-
-        const nextSlide = document.getElementById(`slide-${currentIndex}`);
-        const nextDot = document.getElementById(`dot-${currentIndex}`);
-
-        if (nextSlide) {
-            nextSlide.classList.replace('opacity-0', 'opacity-100');
-            nextSlide.classList.replace('z-10', 'z-20');
-        }
-        if (nextDot) {
-            nextDot.classList.remove('bg-white/20', 'h-1.5', 'md:h-2');
-            nextDot.classList.add('bg-[#F47521]', 'h-5', 'md:h-7');
-        }
-    }, 5000);
+    }, 6000); 
 }
 
+// --- LIBRARY LOGIC ---
 window.app.handleCarouselLibraryClick = async (index) => {
     const profile = window.app.state.activeProfile;
     if (!profile || !profile.uid) return alert("Syncing user session. Please wait.");
@@ -131,7 +179,7 @@ window.app.handleCarouselLibraryClick = async (index) => {
     const formattedAnime = {
         id: rawData.id,
         title: rawData.title,
-        img: rawData.poster || rawData.background_image || ''
+        img: rawData.image || rawData.cover || rawData.poster || rawData.background_image || ''
     };
 
     if (profile.watchlist.some(item => item.id === formattedAnime.id)) {
