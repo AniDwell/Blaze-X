@@ -4,7 +4,7 @@ window.app.components.carousel = async () => {
     const container = document.getElementById('carousel-container');
     if (!container) return;
 
-    // Mobile margin applied (mt-[60px]) to clear the header, removed on desktop (md:mt-0)
+    // ADDED: mt-[60px] md:mt-0 to push down on mobile, but keep cinematic overlay on desktop
     container.innerHTML = `
         <div class="w-full aspect-[4/5] md:aspect-[21/9] bg-black flex items-center justify-center border-b border-white/5 mt-[60px] md:mt-0">
             <div class="tk-loader scale-50">
@@ -92,17 +92,17 @@ window.app.components.carousel = async () => {
                         <div class="absolute inset-0 bg-gradient-to-r from-black via-black/80 to-transparent hidden md:block w-[70%]"></div>
                     </div>
                     
-                    <div class="absolute bottom-8 left-4 right-8 md:bottom-12 md:top-auto md:left-12 md:w-[35%] z-30 pr-4">
+                    <div class="absolute bottom-8 left-4 right-8 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:left-12 md:w-[35%] z-30 pr-4">
                         ${ratingHtml}
-                        <h2 class="text-2xl md:text-3xl lg:text-4xl font-black text-white mb-2 md:mb-3 drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] line-clamp-2 tracking-tight cursor-pointer leading-tight" onclick="window.location.href='info.html?id=${id}'">${title}</h2>
-                        <p class="text-[11px] md:text-[11px] lg:text-xs text-gray-300 line-clamp-3 mb-5 md:mb-6 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-relaxed">${desc}</p>
+                        <h2 class="text-3xl md:text-5xl font-black text-white mb-2 md:mb-3 drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] line-clamp-2 md:line-clamp-3 tracking-tight cursor-pointer leading-tight" onclick="window.location.href='info.html?id=${id}'">${title}</h2>
+                        <p class="text-[11px] md:text-xs text-gray-300 line-clamp-3 md:line-clamp-4 mb-5 md:mb-6 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-relaxed">${desc}</p>
                         
                         <div class="flex gap-2.5 relative z-40">
-                            <button onclick="window.location.href='info.html?id=${id}'" class="bg-[#F47521] text-black px-6 py-2 md:px-7 md:py-2.5 rounded shadow-[0_0_15px_rgba(244,117,33,0.3)] font-bold text-[10px] md:text-[11px] uppercase tracking-wider hover:bg-white hover:shadow-none transition-all flex items-center gap-2">
+                            <button onclick="window.location.href='info.html?id=${id}'" class="bg-[#F47521] text-black px-6 py-2 md:px-7 md:py-2.5 rounded shadow-[0_0_15px_rgba(244,117,33,0.3)] font-bold text-[10px] md:text-xs uppercase tracking-wider hover:bg-white hover:shadow-none transition-all flex items-center gap-2">
                                 <i class="fas fa-play ml-0.5"></i> Play
                             </button>
                             
-                            <button onclick="window.app.handleCarouselLibraryClick(event, ${i})" class="bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-2.5 rounded font-bold text-[10px] md:text-[11px] uppercase tracking-wider hover:bg-white/30 transition-colors border border-white/10 flex items-center gap-2">
+                            <button onclick="window.app.handleCarouselLibraryClick(event, ${i})" class="bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-2.5 rounded font-bold text-[10px] md:text-xs uppercase tracking-wider hover:bg-white/30 transition-colors border border-white/10 flex items-center gap-2">
                                 <i class="fas fa-plus"></i> Library
                             </button>
                         </div>
@@ -119,7 +119,7 @@ window.app.components.carousel = async () => {
             `;
         });
 
-        // Mobile Top Margin enforced to prevent header overlap
+        // ADDED: mt-[60px] md:mt-0
         container.innerHTML = `
             <div class="relative w-full aspect-[4/5] md:aspect-[21/9] max-h-[75vh] overflow-hidden bg-black border-b border-white/5 mt-[60px] md:mt-0">
                 <div id="hero-slides" class="relative w-full h-full">${slidesHtml}</div>
@@ -159,10 +159,10 @@ window.app.showPreview = (title, desc, posterUrl, rating, trailerId) => {
             <div class="absolute inset-0 bg-gradient-to-r from-black via-black/80 to-transparent hidden md:block w-[70%] z-20"></div>
         </div>
         
-        <div class="absolute bottom-8 left-4 right-8 md:bottom-12 md:top-auto md:left-12 md:w-[35%] z-30 pr-4">
+        <div class="absolute bottom-8 left-4 right-8 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:left-12 md:w-[35%] z-30 pr-4">
             ${ratingHtml}
-            <h2 class="text-2xl md:text-3xl lg:text-4xl font-black text-white mb-2 md:mb-3 drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] line-clamp-2 tracking-tight leading-tight">${title}</h2>
-            <p class="text-[11px] md:text-[11px] lg:text-xs text-gray-300 line-clamp-3 mb-5 md:mb-6 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-relaxed">${desc}</p>
+            <h2 class="text-3xl md:text-5xl font-black text-white mb-2 md:mb-3 drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] line-clamp-2 md:line-clamp-3 tracking-tight leading-tight">${title}</h2>
+            <p class="text-[11px] md:text-xs text-gray-300 line-clamp-3 md:line-clamp-4 mb-5 md:mb-6 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-relaxed">${desc}</p>
         </div>
     `;
 
@@ -265,3 +265,6 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
         await firestore.updateDoc(userRef, { watchlist: firestore.arrayUnion(formattedAnime) });
     } catch (error) { console.error("Firebase update failed:", error); }
 };
+
+
+In mobile view load it below header even with cover and in desktop mode dont load text more above half of its height horizontally make text smaller to fit
