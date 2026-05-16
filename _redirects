@@ -1,0 +1,3 @@
+/api/anikoto/*  https://anikotoapi.site/:splat  200
+/stream/*       https://megaplay.buzz/stream/:splat  200
+
