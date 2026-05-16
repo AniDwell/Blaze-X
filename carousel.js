@@ -266,5 +266,3 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
     } catch (error) { console.error("Firebase update failed:", error); }
 };
 
-
-In mobile view load it below header even with cover and in desktop mode dont load text more above half of its height horizontally make text smaller to fit
