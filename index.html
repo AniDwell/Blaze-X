@@ -82,7 +82,7 @@
             <div class="tk-dot tk-dot-1"></div>
             <div class="tk-dot tk-dot-2"></div>
         </div>
-        <p class="text-xs text-gray-500 font-bold tracking-widest uppercase">.</p>
+        <p class="text-xs text-gray-500 font-bold tracking-widest uppercase">Connecting to Blaze-X...</p>
     </div>
 
     <!-- Modal Overlay -->
@@ -142,8 +142,8 @@
     <script>
         window.app = {
             config: {
-                anikotoBase: 'https://anikotoapi.site',
-                megaPlayBase: 'https://megaplay.buzz/stream/s-2',
+                anikotoBase: '/api/anikoto', // Cloudflare hidden proxy route
+                megaPlayBase: '/stream/s-2', // Cloudflare player proxy route
                 defaultAvatars: ["https://iili.io/fWydBMG.md.png", "https://iili.io/fWydqns.md.png"]
             },
             state: { 
@@ -161,11 +161,13 @@
             components: {}, 
             
             init: () => {
+                // Initialize Router Engine alongside UI compilation loops
+                if (window.app.router) window.app.router.init();
+
                 // Simulate network load time to show loader, then render app
                 setTimeout(() => {
                     document.getElementById('boot-loader').style.display = 'none';
                     document.getElementById('app-container').classList.remove('hidden');
-                    app.renderHome();
                 }, 1500); 
             },
 
@@ -173,7 +175,7 @@
                 document.getElementById('dynamic-view').classList.add('hidden');
                 document.getElementById('home-view').classList.remove('hidden');
 
-                // Call each component's render function if it exists
+                // Call each home component's render function if it exists
                 if(app.components.header) app.components.header();
                 if(app.components.carousel) app.components.carousel();
                 if(app.components.pillSlider) app.components.pillSlider();
@@ -190,11 +192,10 @@
     </script>
 
     <!-- COMPONENT SCRIPTS -->
-    <!-- header.js MUST be a module because of Firebase imports -->
-    <!-- Pointing directly to the root directory -->
     <script type="module" src="header.js"></script>
+    <script src="router.js"></script>
     
-    <!-- Commented out until we actually build these files! -->
+    <!-- Commented out until built sequentially in the root folder -->
     <!-- 
     <script src="carousel.js"></script>
     <script src="pill_slider.js"></script>
@@ -214,8 +215,5 @@
             window.app.init();
         });
     </script>
-</body>
-</html>
-cript>
 </body>
 </html>
