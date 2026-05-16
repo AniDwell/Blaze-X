@@ -1,55 +1,42 @@
 // carousel.js
 
-// 1. Initial Load Check - This proves the browser actually read the file!
-console.log("Carousel script initialized.");
-
 window.app.components.carousel = async () => {
     const container = document.getElementById('carousel-container');
     
-    // Failsafe: If the container doesn't exist in HTML, stop here.
-    if (!container) {
-        console.error("CRITICAL: 'carousel-container' div is missing from index.html!");
-        return;
-    }
+    if (!container) return;
 
-    // 2. Wrap EVERYTHING in a massive Try/Catch block to catch silent crashes
-    try {
-        // Show Loading Skeleton
-        container.innerHTML = `
-            <div class="w-full aspect-[4/5] md:aspect-[21/9] bg-[#111] flex flex-col items-center justify-center border-b border-white/5">
-                <div class="tk-loader scale-50 mb-4">
-                    <div class="tk-dot tk-dot-1"></div>
-                    <div class="tk-dot tk-dot-2"></div>
-                </div>
-                <p class="text-xs text-[#F47521] font-bold tracking-widest uppercase">Fetching Anime Data...</p>
+    // 1. Loading Skeleton
+    container.innerHTML = `
+        <div class="w-full aspect-[4/5] md:aspect-[21/9] bg-[#0a0a0a] flex items-center justify-center border-b border-white/5">
+            <div class="tk-loader scale-50">
+                <div class="tk-dot tk-dot-1"></div>
+                <div class="tk-dot tk-dot-2"></div>
             </div>
-        `;
+        </div>
+    `;
 
-        // 3. Attempt to Fetch Data
-        console.log("Fetching from /api/anikoto/recent-anime?page=1...");
+    try {
+        // 2. Direct fetch from the actual API endpoint
         const response = await window.app.api.fetch('/recent-anime?page=1');
         
-        // Error Catch 1: No Response (Proxy Failure or 404)
-        if (!response) {
-            throw new Error("Network request returned NULL. The Cloudflare _redirects proxy might be failing or the API is completely down.");
+        if (!response || !response.data || response.data.length === 0) {
+            container.innerHTML = `
+                <div class="p-6 text-center text-gray-500 text-xs border border-white/5 mx-4 rounded-xl bg-[#0a0a0a] tracking-widest uppercase">
+                    <i class="fas fa-exclamation-circle mr-1 text-[#F47521]"></i> Stream Offline
+                </div>
+            `;
+            return;
         }
 
-        // Error Catch 2: Unexpected Data Structure
-        if (!response.data || !Array.isArray(response.data) || response.data.length === 0) {
-            throw new Error("API connected, but 'data' array is empty or missing. Anikoto might have changed their JSON structure: " + JSON.stringify(response));
-        }
-
-        // 4. Data is safe! Let's build the UI.
         const slides = response.data.slice(0, 5);
-        window.app.state.carouselItems = slides; // Stash safely in memory
+        window.app.state.carouselItems = slides; 
 
         let slidesHtml = '';
         let dotsHtml = '';
 
         slides.forEach((s, i) => {
-            // Extreme fallback mapping to prevent undefined variable crashes
-            const id = s.id || s.slug || 'unknown';
-            const title = s.title || s.name || 'Unknown Title';
+            const id = s.id || 'unknown';
+            const title = s.title || 'Unknown Title';
             const desc = s.description || 'No synopsis available for this title.';
             const img = s.background_image || s.poster || 'https://via.placeholder.com/1280x720?text=No+Image';
 
@@ -58,18 +45,18 @@ window.app.components.carousel = async () => {
                     <img src="${img}" class="absolute inset-0 w-full h-full object-cover blur-backdrop opacity-40 z-0">
                     
                     <div class="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent z-10"></div>
-                    <div class="absolute inset-0 bg-gradient-to-r from-black via-black/40 to-transparent z-10"></div>
+                    <div class="absolute inset-0 bg-gradient-to-r from-black via-black/30 to-transparent z-10"></div>
                     
                     <div class="absolute bottom-8 left-4 md:bottom-12 md:left-12 z-30 max-w-[85%] md:max-w-2xl pr-8">
                         <h2 class="text-3xl md:text-5xl font-black text-white mb-3 drop-shadow-2xl line-clamp-2 tracking-tight">${title}</h2>
                         <p class="text-xs md:text-sm text-gray-300 line-clamp-3 mb-6 drop-shadow-lg leading-relaxed font-medium">${desc}</p>
                         
                         <div class="flex gap-3">
-                            <button onclick="window.location.hash='watch/${id}/1/sub'" class="bg-[#F47521] text-black px-6 py-2.5 rounded shadow-[0_0_15px_rgba(244,117,33,0.3)] font-bold text-xs uppercase tracking-wide">
+                            <button onclick="window.location.href='play.html?id=${id}'" class="bg-[#F47521] text-black px-6 py-2.5 rounded shadow-[0_0_15px_rgba(244,117,33,0.3)] font-bold text-xs uppercase tracking-wider hover:bg-white hover:shadow-none transition-all flex items-center gap-2">
                                 <i class="fas fa-play"></i> Play
                             </button>
                             
-                            <button onclick="window.app.handleCarouselLibraryClick(${i})" class="bg-white/10 backdrop-blur-md text-white px-5 py-2.5 rounded font-bold text-xs uppercase tracking-wider">
+                            <button onclick="window.app.handleCarouselLibraryClick(${i})" class="bg-white/10 backdrop-blur-md text-white px-5 py-2.5 rounded font-bold text-xs uppercase tracking-wider hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2">
                                 <i class="fas fa-plus"></i> Library
                             </button>
                         </div>
@@ -90,25 +77,12 @@ window.app.components.carousel = async () => {
         `;
 
         startFadeCarousel(slides.length);
-
-    } catch (error) {
-        // --- THE MASTER ERROR CATCHER ---
-        console.error("CAROUSEL CRASHED:", error);
         
-        container.innerHTML = `
-            <div class="w-full aspect-[4/5] md:aspect-video flex flex-col items-center justify-center bg-red-950/30 border-b border-red-500/50 p-6">
-                <i class="fas fa-bug text-red-500 text-5xl mb-4"></i>
-                <h2 class="text-red-500 font-black text-xl mb-2 text-center uppercase tracking-widest">Carousel System Crash</h2>
-                <div class="bg-black border border-red-500/30 p-4 rounded text-left max-w-lg w-full">
-                    <p class="text-red-400 font-mono text-xs mb-2"><b>Error Message:</b><br>${error.message}</p>
-                    <p class="text-gray-500 font-mono text-[10px] break-all"><b>Stack Trace:</b><br>${error.stack}</p>
-                </div>
-            </div>
-        `;
+    } catch (err) {
+        console.error("Carousel Script Error:", err);
     }
 };
 
-// --- ANIMATION ENGINE ---
 function startFadeCarousel(count) {
     let currentIndex = 0;
     if (window.app.state.carouselInterval) clearInterval(window.app.state.carouselInterval);
@@ -147,7 +121,6 @@ function startFadeCarousel(count) {
     }, 5000);
 }
 
-// --- FIREBASE DB LIBRARY FUNCTION ---
 window.app.handleCarouselLibraryClick = async (index) => {
     const profile = window.app.state.activeProfile;
     if (!profile || !profile.uid) return alert("Syncing user session. Please wait.");
