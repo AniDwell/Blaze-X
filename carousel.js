@@ -34,7 +34,6 @@ window.app.components.carousel = async () => {
 
         const topSlides = rawSlides.slice(0, 5);
         
-        // --- ANILIST INTEGRATION: Fetching Textless Covers & Trailer IDs ---
         const enrichedSlides = await Promise.all(topSlides.map(async (slide) => {
             const cleanTitle = (slide.title || '').replace(/\(Dub\)|\(Sub\)|Episode \d+/gi, '').trim();
             
@@ -43,7 +42,6 @@ window.app.components.carousel = async () => {
             let trailerId = null;
 
             try {
-                // Changed to coverImage for textless posters, and requested trailer
                 const query = `query ($search: String) { Media (search: $search, type: ANIME, sort: SEARCH_MATCH) { coverImage { extraLarge } averageScore trailer { id site } } }`;
                 const aniRes = await fetch('https://graphql.anilist.co', {
                     method: 'POST',
@@ -83,13 +81,13 @@ window.app.components.carousel = async () => {
                 : '';
 
             slidesHtml += `
-                <div class="carousel-slide absolute inset-0 flex flex-col md:flex-row bg-black" id="slide-${i}" style="opacity: ${i === 0 ? '1' : '0'}; z-index: ${i === 0 ? '20' : '10'}; transition: opacity 1.5s ease-in-out;">
+                <div class="carousel-slide absolute inset-0 flex flex-col md:flex-row bg-[#0a0a0a]" id="slide-${i}" style="opacity: ${i === 0 ? '1' : '0'}; z-index: ${i === 0 ? '20' : '10'}; transition: opacity 1.5s ease-in-out;">
                     
-                    <div class="absolute inset-0 md:left-[40%] md:w-[60%] cursor-pointer z-0 group overflow-hidden bg-black" onclick="window.location.href='info.html?id=${id}'">
+                    <div class="absolute inset-0 md:left-[40%] md:w-[60%] cursor-pointer z-0 group overflow-hidden bg-[#0a0a0a]" onclick="window.location.href='info.html?id=${id}'">
                         <img src="${img}" class="absolute inset-0 w-full h-full object-cover object-center transition-transform duration-[10s] group-hover:scale-105 opacity-80 md:opacity-100">
                         
-                        <div class="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/80 to-transparent md:hidden"></div>
-                        <div class="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/50 to-transparent hidden md:block w-full"></div>
+                        <div class="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] from-15% via-[#0a0a0a]/80 via-50% to-transparent md:hidden"></div>
+                        <div class="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] from-10% via-[#0a0a0a]/80 via-40% to-transparent hidden md:block w-full"></div>
                     </div>
                     
                     <div class="absolute bottom-6 left-4 right-4 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:left-12 md:w-[35%] z-30">
@@ -110,19 +108,21 @@ window.app.components.carousel = async () => {
                 </div>
             `;
 
+            // VERTICAL DOTS: Active is an orange rectangle (h-8), inactive is a white square (h-2)
             dotsHtml += `
-                <div onclick="window.app.goToCarouselSlide(${i})" class="carousel-dot w-2 h-2 md:w-2 md:h-2 rounded-sm transition-all duration-300 cursor-pointer pointer-events-auto shadow-md ${i === 0 ? 'bg-[#F47521] md:h-6 h-2 w-6 md:w-2' : 'bg-white/30 hover:bg-white/60'} shrink-0" id="dot-${i}"></div>
+                <div onclick="window.app.goToCarouselSlide(${i})" class="carousel-dot w-2 rounded-sm transition-all duration-300 cursor-pointer pointer-events-auto shadow-md ${i === 0 ? 'bg-[#F47521] h-8' : 'bg-white/30 hover:bg-white/60 h-2'} shrink-0" id="dot-${i}"></div>
             `;
         });
 
-        // Structure includes standard slides + a dedicated Preview Layer on top
         container.innerHTML = `
             <div class="relative w-full aspect-[4/5] md:aspect-[21/9] max-h-[75vh] overflow-hidden bg-[#0a0a0a] border-b border-white/5">
                 <div id="hero-slides" class="relative w-full h-full">${slidesHtml}</div>
                 
+                <div class="absolute bottom-0 inset-x-0 h-1/3 bg-gradient-to-t from-[#0a0a0a] from-20% to-transparent z-40 pointer-events-none"></div>
+
                 <div id="carousel-preview-layer" class="absolute inset-0 z-[60] opacity-0 pointer-events-none transition-opacity duration-500 bg-[#0a0a0a] flex flex-col md:flex-row"></div>
                 
-                <div class="absolute right-0 left-0 bottom-3 md:bottom-auto md:left-auto md:right-8 md:top-1/2 md:-translate-y-1/2 flex flex-row md:flex-col justify-center gap-2 z-[70]" id="carousel-indicators">${dotsHtml}</div>
+                <div class="absolute right-4 md:right-8 top-1/2 transform -translate-y-1/2 flex flex-col justify-center gap-2 z-[70]" id="carousel-indicators">${dotsHtml}</div>
             </div>
         `;
 
@@ -133,18 +133,14 @@ window.app.components.carousel = async () => {
     }
 };
 
-// --- DYNAMIC TRAILER ENGINE (Call this from your Sliders) ---
 window.app.showPreview = (title, desc, posterUrl, rating, trailerId) => {
-    // 1. Pause auto-rotation
     if (window.app.state.carouselInterval) clearInterval(window.app.state.carouselInterval);
 
     const previewLayer = document.getElementById('carousel-preview-layer');
     if (!previewLayer) return;
 
-    // 2. Build the UI for the hovered anime
     const ratingHtml = rating ? `<div class="flex items-center gap-1.5 mb-1.5 md:mb-2 text-[#F47521] text-[10px] md:text-xs font-black tracking-widest drop-shadow-md"><i class="fas fa-star"></i> ${rating}% SCORE</div>` : '';
     
-    // Iframe Trick: Scaled up to 150% to hide YouTube watermarks and controls, unclickable via pointer-events-none
     const videoHtml = trailerId ? `
         <div class="absolute inset-0 w-full h-full overflow-hidden pointer-events-none z-0">
             <iframe id="preview-trailer-iframe" class="absolute top-1/2 left-1/2 w-[150vw] h-[150vh] md:w-[150%] md:h-[150%] -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-0 transition-opacity duration-1000" src="https://www.youtube.com/embed/${trailerId}?autoplay=1&mute=1&controls=0&disablekb=1&fs=0&modestbranding=1&playsinline=1&rel=0&iv_load_policy=3&playlist=${trailerId}&loop=1" frameborder="0" allow="autoplay; encrypted-media"></iframe>
@@ -152,11 +148,11 @@ window.app.showPreview = (title, desc, posterUrl, rating, trailerId) => {
     ` : '';
 
     previewLayer.innerHTML = `
-        <div class="absolute inset-0 md:left-[40%] md:w-[60%] z-0 bg-black overflow-hidden">
+        <div class="absolute inset-0 md:left-[40%] md:w-[60%] z-0 bg-[#0a0a0a] overflow-hidden">
             <img id="preview-poster" src="${posterUrl}" class="absolute inset-0 w-full h-full object-cover object-center z-10 transition-opacity duration-1000">
             ${videoHtml}
-            <div class="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/80 to-transparent md:hidden z-20"></div>
-            <div class="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/50 to-transparent hidden md:block w-full z-20"></div>
+            <div class="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] from-15% via-[#0a0a0a]/80 via-50% to-transparent md:hidden z-20"></div>
+            <div class="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] from-10% via-[#0a0a0a]/80 via-40% to-transparent hidden md:block w-full z-20"></div>
         </div>
         
         <div class="absolute bottom-6 left-4 right-4 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:left-12 md:w-[35%] z-30">
@@ -166,11 +162,9 @@ window.app.showPreview = (title, desc, posterUrl, rating, trailerId) => {
         </div>
     `;
 
-    // Show the layer
     previewLayer.classList.remove('opacity-0');
     previewLayer.classList.add('opacity-100');
 
-    // Hide image and show video once iframe loads
     const iframe = document.getElementById('preview-trailer-iframe');
     const poster = document.getElementById('preview-poster');
     if (iframe && poster) {
@@ -178,7 +172,7 @@ window.app.showPreview = (title, desc, posterUrl, rating, trailerId) => {
             setTimeout(() => {
                 iframe.classList.remove('opacity-0');
                 poster.classList.add('opacity-0');
-            }, 1500); // 1.5s delay to let YouTube buffer internally
+            }, 1500); 
         };
     }
 };
@@ -188,14 +182,11 @@ window.app.hidePreview = () => {
     if (previewLayer) {
         previewLayer.classList.remove('opacity-100');
         previewLayer.classList.add('opacity-0');
-        // Clear content to stop video playing in background
         setTimeout(() => { previewLayer.innerHTML = ''; }, 500); 
     }
-    startAutoRotate(); // Resume normal carousel
+    startAutoRotate();
 };
 
-
-// --- STANDARD CAROUSEL CONTROLS ---
 window.app.goToCarouselSlide = (targetIndex) => {
     const currentIndex = window.app.state.carouselCurrentIndex;
     if (targetIndex === currentIndex) return;
@@ -215,20 +206,19 @@ function transitionSlide(oldIndex, newIndex) {
         oldSlide.style.opacity = '0';
         oldSlide.classList.replace('z-20', 'z-10');
     }
+    // Set old dot to white square
     if (oldDot) {
-        oldDot.classList.remove('bg-[#F47521]');
-        oldDot.classList.add('bg-white/30');
-        oldDot.className = oldDot.className.replace(/h-6 w-6 md:h-8 md:w-8/g, 'h-2 w-2 md:h-2 md:w-2'); // Reset dot size
+        oldDot.classList.remove('bg-[#F47521]', 'h-8');
+        oldDot.classList.add('bg-white/30', 'h-2');
     }
     if (newSlide) {
         newSlide.style.opacity = '1';
         newSlide.classList.replace('z-10', 'z-20');
     }
+    // Set new dot to orange rectangle
     if (newDot) {
-        newDot.classList.remove('bg-white/30');
-        newDot.classList.add('bg-[#F47521]');
-        // Expand dot depending on mobile (width) vs desktop (height)
-        newDot.className += window.innerWidth < 768 ? ' w-6' : ' md:h-6'; 
+        newDot.classList.remove('bg-white/30', 'h-2');
+        newDot.classList.add('bg-[#F47521]', 'h-8');
     }
 }
 
