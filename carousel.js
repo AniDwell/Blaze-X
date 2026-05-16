@@ -4,8 +4,9 @@ window.app.components.carousel = async () => {
     const container = document.getElementById('carousel-container');
     if (!container) return;
 
+    // ADDED: mt-[60px] md:mt-0 to push down on mobile, but keep cinematic overlay on desktop
     container.innerHTML = `
-        <div class="w-full aspect-[4/5] md:aspect-[21/9] bg-black flex items-center justify-center border-b border-white/5">
+        <div class="w-full aspect-[4/5] md:aspect-[21/9] bg-black flex items-center justify-center border-b border-white/5 mt-[60px] md:mt-0">
             <div class="tk-loader scale-50">
                 <div class="tk-dot tk-dot-1"></div>
                 <div class="tk-dot tk-dot-2"></div>
@@ -25,7 +26,7 @@ window.app.components.carousel = async () => {
 
         if (rawSlides.length === 0) {
             container.innerHTML = `
-                <div class="p-6 text-center text-gray-500 text-xs border border-white/5 mx-4 rounded-xl bg-black tracking-widest uppercase">
+                <div class="p-6 text-center text-gray-500 text-xs border border-white/5 mx-4 mt-[60px] md:mt-0 rounded-xl bg-black tracking-widest uppercase">
                     <i class="fas fa-exclamation-circle mr-1 text-[#F47521]"></i> Stream Offline
                 </div>
             `;
@@ -109,7 +110,6 @@ window.app.components.carousel = async () => {
                 </div>
             `;
 
-            // VERTICAL DOTS: Active is an orange rectangle, Inactive is a white square
             const dotClass = i === 0 
                 ? 'carousel-dot w-2 h-8 bg-[#F47521] transition-all duration-300 cursor-pointer pointer-events-auto shadow-md shrink-0 rounded-sm'
                 : 'carousel-dot w-2 h-2 bg-white/30 hover:bg-white/60 transition-all duration-300 cursor-pointer pointer-events-auto shadow-md shrink-0 rounded-sm';
@@ -119,8 +119,9 @@ window.app.components.carousel = async () => {
             `;
         });
 
+        // ADDED: mt-[60px] md:mt-0
         container.innerHTML = `
-            <div class="relative w-full aspect-[4/5] md:aspect-[21/9] max-h-[75vh] overflow-hidden bg-black border-b border-white/5">
+            <div class="relative w-full aspect-[4/5] md:aspect-[21/9] max-h-[75vh] overflow-hidden bg-black border-b border-white/5 mt-[60px] md:mt-0">
                 <div id="hero-slides" class="relative w-full h-full">${slidesHtml}</div>
                 
                 <div id="carousel-preview-layer" class="absolute inset-0 z-[60] opacity-0 pointer-events-none transition-opacity duration-500 bg-black flex flex-col md:flex-row"></div>
@@ -210,7 +211,6 @@ function transitionSlide(oldIndex, newIndex) {
         oldSlide.classList.replace('z-20', 'z-10');
     }
     
-    // Exact class swapping for the dots to prevent shape stretching bugs
     if (oldDot) {
         oldDot.className = "carousel-dot w-2 h-2 bg-white/30 hover:bg-white/60 transition-all duration-300 cursor-pointer pointer-events-auto shadow-md shrink-0 rounded-sm";
     }
