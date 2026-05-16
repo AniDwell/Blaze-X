@@ -168,6 +168,7 @@
                 setTimeout(() => {
                     document.getElementById('boot-loader').style.display = 'none';
                     document.getElementById('app-container').classList.remove('hidden');
+                    app.renderHome();
                 }, 1500); 
             },
 
@@ -175,7 +176,7 @@
                 document.getElementById('dynamic-view').classList.add('hidden');
                 document.getElementById('home-view').classList.remove('hidden');
 
-                // Call each home component's render function if it exists
+                // Call each component's render function if it exists
                 if(app.components.header) app.components.header();
                 if(app.components.carousel) app.components.carousel();
                 if(app.components.pillSlider) app.components.pillSlider();
@@ -195,9 +196,11 @@
     <script type="module" src="header.js"></script>
     <script src="router.js"></script>
     
-    <!-- Commented out until built sequentially in the root folder -->
-    <!-- 
+    <!-- WE UNCOMMENTED CAROUSEL.JS SO IT LOADS NOW! -->
     <script src="carousel.js"></script>
+    
+    <!-- Still commented out until we build them -->
+    <!-- 
     <script src="pill_slider.js"></script>
     <script src="history.js"></script>
     <script src="recent.js"></script>
