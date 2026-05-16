@@ -98,9 +98,9 @@
     <script>
         window.app = {
             config: {
-                // Cloudflare Edge Worker routes (Completely hides external targets)
-                anikotoBase: '/api/anikoto', 
-                megaPlayBase: '/stream/s-2', 
+                // Changed back to direct API URLs as requested
+                anikotoBase: 'https://anikotoapi.site', 
+                megaPlayBase: 'https://megaplay.buzz/stream/s-2', 
                 defaultAvatars: ["https://iili.io/fWydBMG.md.png", "https://iili.io/fWydqns.md.png"]
             },
             
@@ -153,163 +153,8 @@
     </script>
 
     <script type="module" src="header.js"></script>
-    
     <script src="carousel.js"></script>
-    
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            window.app.init();
-        });
-    </script>
-</body>
-</html>
-        /* UI Elements */
-        .glass-modal { background: rgba(20, 20, 20, 0.95); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
-        .ani-input { background: #2a2a2a; border: 1px solid #444; color: white; padding: 10px; border-radius: 6px; width: 100%; outline: none; }
-        .ani-input:focus { border-color: var(--primary); }
-        .blur-backdrop { filter: blur(20px) brightness(0.4); transform: scale(1.1); }
-        img { user-drag: none; -webkit-user-drag: none; pointer-events: auto; }
 
-        /* TikTok-Style Loader Engine */
-        .tk-loader { position: relative; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
-        .tk-dot { position: absolute; width: 20px; height: 20px; border-radius: 50%; }
-        .tk-dot-1 { background-color: var(--primary); animation: tk-move-1 0.8s infinite ease-in-out alternate; }
-        .tk-dot-2 { background-color: #ffffff; animation: tk-move-2 0.8s infinite ease-in-out alternate; }
-        
-        @keyframes tk-move-1 {
-            0% { transform: translateX(-15px) scale(1); z-index: 2; }
-            100% { transform: translateX(15px) scale(0.8); z-index: 1; }
-        }
-        @keyframes tk-move-2 {
-            0% { transform: translateX(15px) scale(0.8); z-index: 1; }
-            100% { transform: translateX(-15px) scale(1); z-index: 2; }
-        }
-    </style>
-</head>
-<body oncontextmenu="return false;">
-
-    <div id="boot-loader" class="fixed inset-0 flex flex-col items-center justify-center bg-black z-[100]">
-        <div class="tk-loader mb-4">
-            <div class="tk-dot tk-dot-1"></div>
-            <div class="tk-dot tk-dot-2"></div>
-        </div>
-        <p class="text-xs text-gray-500 font-bold tracking-widest uppercase">Igniting Blaze-X Engine...</p>
-    </div>
-
-    <div id="modal-overlay" class="fixed inset-0 z-[70] hidden bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-        <div id="modal-content" class="glass-modal w-full max-w-sm rounded-xl p-6 transform transition-all scale-95 opacity-0 shadow-2xl"></div>
-    </div>
-
-    <div id="app-container" class="hidden flex flex-col h-full w-full">
-        
-        <div id="header-container" class="flex-none z-50 relative"></div>
-
-        <main id="main-content" class="flex-1 overflow-y-auto relative hide-scrollbar bg-black pb-20">
-            
-            <div id="home-view" class="w-full flex flex-col gap-6 animate-fade-in pb-8">
-                <div id="carousel-container"></div>
-                <div id="pill-slider-container" class="pl-4 mt-2"></div>
-                <div id="history-container" class="pl-4"></div>
-                <div id="recent-container" class="pl-4"></div>
-                <div id="popular-container" class="pl-4"></div>
-                <div id="movies-container" class="pl-4"></div>
-                <div id="series-container" class="pl-4"></div>
-                <div id="genrebased-container" class="pl-4"></div>
-                <div id="newep-container" class="px-4"></div>
-            </div>
-
-            <div id="dynamic-view" class="hidden w-full"></div>
-        </main>
-
-        <div id="bottomnav-container" class="flex-none absolute bottom-0 w-full z-50"></div>
-    </div>
-
-    <script>
-        window.app = {
-            config: {
-                // Cloudflare proxy path
-                anikotoBase: '/api/anikoto', 
-                
-                // Direct MegaPlay Embed Route
-                megaPlayBase: 'https://megaplay.buzz/stream/s-2', 
-                
-                defaultAvatars: ["https://iili.io/fWydBMG.md.png", "https://iili.io/fWydqns.md.png"]
-            },
-            
-            state: { 
-                activeProfile: null, 
-                currentView: 'home',
-                carouselItems: [],
-                carouselInterval: null
-            },
-            
-            // Centralized API Fetcher with Error Handling
-            api: {
-                fetch: async (endpoint) => {
-                    try {
-                        const target = `${app.config.anikotoBase}${endpoint}`;
-                        const res = await fetch(target);
-                        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-                        return await res.json();
-                    } catch (error) { 
-                        console.error("Blaze-X Fetch Error:", error); 
-                        return null; 
-                    }
-                }
-            },
-            
-            // Component Registry
-            components: {}, 
-            
-            // Application Boot Sequence
-            init: () => {
-                // Boot the router if it exists
-                if (window.app.router) window.app.router.init();
-
-                // Drop the loader shield and render the app
-                setTimeout(() => {
-                    document.getElementById('boot-loader').style.display = 'none';
-                    document.getElementById('app-container').classList.remove('hidden');
-                    app.renderHome();
-                }, 1000); 
-            },
-
-            // Master Render Controller for the Home Screen
-            renderHome: () => {
-                document.getElementById('dynamic-view').classList.add('hidden');
-                document.getElementById('home-view').classList.remove('hidden');
-                window.app.state.currentView = 'home';
-
-                // Trigger component renders safely
-                if(app.components.header) app.components.header();
-                if(app.components.carousel) app.components.carousel();
-            }
-        };
-    </script>
-
-    <script type="module" src="header.js"></script>
-    
-    <script src="router.js"></script>
-    <script src="carousel.js"></script>
-    
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            window.app.init();
-        });
-    </script>
-</body>
-</html>
-                // if(app.components.pillSlider) app.components.pillSlider();
-                // if(app.components.recent) app.components.recent();
-            }
-        };
-    </script>
-
-    <script type="module" src="header.js"></script>
-    
-    <script src="router.js"></script>
-    <script src="carousel.js"></script>
-    
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             window.app.init();
