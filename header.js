@@ -29,7 +29,7 @@ window.app.components.header = () => {
 
     // Default UI state before Firebase loads
     container.innerHTML = `
-        <nav class="relative bg-black/90 backdrop-blur-md border-b border-white/10 px-4 py-3 flex items-center justify-between shadow-lg z-50">
+        <nav class="bg-black/90 backdrop-blur-md border-b border-white/10 px-4 py-3 flex items-center justify-between shadow-lg relative z-50">
             <div class="flex items-center gap-4">
                 <!-- Hamburger Menu -->
                 <i class="fas fa-bars text-white text-xl cursor-pointer hover:text-[#F47521] transition-colors" onclick="if(window.app.components.hamburgerMenu) window.app.components.hamburgerMenu()"></i>
@@ -45,7 +45,7 @@ window.app.components.header = () => {
                 <i class="fas fa-search text-white text-xl cursor-pointer hover:text-[#F47521] transition-colors" onclick="window.location.href = 'search.html'"></i>
                 
                 <!-- Profile Icon (Defaults to placeholder, updates on Auth) -->
-                <img id="header-profile-img" src="https://iili.io/fWydBMG.md.png" class="w-8 h-8 rounded-full border-2 border-transparent object-cover cursor-pointer hover:border-[#F47521] transition-colors"></img>
+                <img id="header-profile-img" src="https://iili.io/fWydBMG.md.png" class="w-8 h-8 rounded-full border-2 border-transparent object-cover cursor-pointer hover:border-[#F47521] transition-colors" onclick="if(window.app.components.profile) window.app.components.profile()">
             </div>
         </nav>
     `;

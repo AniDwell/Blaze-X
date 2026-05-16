@@ -4,9 +4,9 @@ window.app.components.carousel = async () => {
     const container = document.getElementById('carousel-container');
     if (!container) return;
 
-    // ADDED: mt-[60px] md:mt-0 to push down on mobile, but keep cinematic overlay on desktop
+    // Loading state - no top margin for seamless alignment with header
     container.innerHTML = `
-        <div class="w-full aspect-[4/5] md:aspect-[21/9] bg-black flex items-center justify-center border-b border-white/5 mt-[60px] md:mt-0">
+        <div class="w-full aspect-[4/5] md:aspect-[21/9] bg-black flex items-center justify-center border-b border-white/5">
             <div class="tk-loader scale-50">
                 <div class="tk-dot tk-dot-1"></div>
                 <div class="tk-dot tk-dot-2"></div>
@@ -26,7 +26,7 @@ window.app.components.carousel = async () => {
 
         if (rawSlides.length === 0) {
             container.innerHTML = `
-                <div class="p-6 text-center text-gray-500 text-xs border border-white/5 mx-4 mt-[60px] md:mt-0 rounded-xl bg-black tracking-widest uppercase">
+                <div class="p-6 text-center text-gray-500 text-xs border border-white/5 mx-4 rounded-xl bg-black tracking-widest uppercase">
                     <i class="fas fa-exclamation-circle mr-1 text-[#F47521]"></i> Stream Offline
                 </div>
             `;
@@ -83,7 +83,7 @@ window.app.components.carousel = async () => {
                 : '';
 
             slidesHtml += `
-                <div class="carousel-slide absolute inset-0 flex flex-col md:flex-row bg-black" id="slide-${i}" style="opacity: ${i === 0 ? '1' : '0'}; z-index: ${i === 0 ? '20' : '10'}; transition: opacity 1.5s ease-in-out;">
+                <div class="carousel-slide absolute inset-0 flex flex-col md:flex-row bg-black" id="slide-${i}" style="opacity: ${i === 0 ? '1' : '0'}; z-index: ${i === 0 ? '20' : '10'}; transition: opacity 0.5s ease-in-out;">
                     
                     <div class="absolute inset-0 md:left-[40%] md:w-[60%] cursor-pointer z-0 group overflow-hidden bg-black" onclick="window.location.href='info.html?id=${id}'">
                         <img src="${img}" class="absolute inset-0 w-full h-full object-cover object-center transition-transform duration-[10s] group-hover:scale-105 opacity-90 md:opacity-100">
@@ -94,15 +94,15 @@ window.app.components.carousel = async () => {
                     
                     <div class="absolute bottom-8 left-4 right-8 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:left-12 md:w-[35%] z-30 pr-4">
                         ${ratingHtml}
-                        <h2 class="text-3xl md:text-5xl font-black text-white mb-2 md:mb-3 drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] line-clamp-2 md:line-clamp-3 tracking-tight cursor-pointer leading-tight" onclick="window.location.href='info.html?id=${id}'">${title}</h2>
+                        <h2 class="text-3xl md:text-5xl font-black text-white mb-2 md:mb-3 drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] line-clamp-2 md:line-clamp-3 tracking-tight cursor-pointer leading-tight">${title}</h2>
                         <p class="text-[11px] md:text-xs text-gray-300 line-clamp-3 md:line-clamp-4 mb-5 md:mb-6 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-relaxed">${desc}</p>
                         
                         <div class="flex gap-2.5 relative z-40">
-                            <button onclick="window.location.href='info.html?id=${id}'" class="bg-[#F47521] text-black px-6 py-2 md:px-7 md:py-2.5 rounded shadow-[0_0_15px_rgba(244,117,33,0.3)] font-bold text-[10px] md:text-xs uppercase tracking-wider hover:bg-white hover:shadow-none transition-all flex items-center gap-2">
+                            <button onclick="window.location.href='info.html?id=${id}'" class="bg-[#F47521] text-black px-6 py-2 md:px-7 md:py-2.5 rounded shadow-[0_0_15px_rgba(244,117,33,0.3)] font-bold text-[10px] md:text-xs tracking-wider uppercase hover:bg-[#ff9d5c] transition-colors">
                                 <i class="fas fa-play ml-0.5"></i> Play
                             </button>
                             
-                            <button onclick="window.app.handleCarouselLibraryClick(event, ${i})" class="bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-2.5 rounded font-bold text-[10px] md:text-xs uppercase tracking-wider hover:bg-white/30 transition-colors border border-white/10 flex items-center gap-2">
+                            <button onclick="window.app.handleCarouselLibraryClick(event, ${i})" class="bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-2.5 rounded font-bold text-[10px] md:text-xs tracking-wider uppercase hover:bg-white/20 transition-colors">
                                 <i class="fas fa-plus"></i> Library
                             </button>
                         </div>
@@ -119,9 +119,9 @@ window.app.components.carousel = async () => {
             `;
         });
 
-        // ADDED: mt-[60px] md:mt-0
+        // No top margin - seamless alignment with header
         container.innerHTML = `
-            <div class="relative w-full aspect-[4/5] md:aspect-[21/9] max-h-[75vh] overflow-hidden bg-black border-b border-white/5 mt-[60px] md:mt-0">
+            <div class="relative w-full aspect-[4/5] md:aspect-[21/9] max-h-[75vh] overflow-hidden bg-black border-b border-white/5">
                 <div id="hero-slides" class="relative w-full h-full">${slidesHtml}</div>
                 
                 <div id="carousel-preview-layer" class="absolute inset-0 z-[60] opacity-0 pointer-events-none transition-opacity duration-500 bg-black flex flex-col md:flex-row"></div>
@@ -147,7 +147,7 @@ window.app.showPreview = (title, desc, posterUrl, rating, trailerId) => {
     
     const videoHtml = trailerId ? `
         <div class="absolute inset-0 w-full h-full overflow-hidden pointer-events-none z-0 bg-black">
-            <iframe id="preview-trailer-iframe" class="absolute top-1/2 left-1/2 w-[150vw] h-[150vh] md:w-[150%] md:h-[150%] -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-0 transition-opacity duration-1000" src="https://www.youtube.com/embed/${trailerId}?autoplay=1&mute=1&controls=0&disablekb=1&fs=0&modestbranding=1&playsinline=1&rel=0&iv_load_policy=3&playlist=${trailerId}&loop=1" frameborder="0" allow="autoplay; encrypted-media"></iframe>
+            <iframe id="preview-trailer-iframe" class="absolute top-1/2 left-1/2 w-[150vw] h-[150vh] md:w-[150%] md:h-[150%] -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-0 transition-opacity duration-1000" src="https://www.youtube.com/embed/${trailerId}?autoplay=1&mute=1" frameborder="0" allow="autoplay" allowfullscreen></iframe>
         </div>
     ` : '';
 
@@ -265,4 +265,3 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
         await firestore.updateDoc(userRef, { watchlist: firestore.arrayUnion(formattedAnime) });
     } catch (error) { console.error("Firebase update failed:", error); }
 };
-
