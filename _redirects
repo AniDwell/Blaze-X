@@ -1,3 +1,2 @@
-/api/anikoto/*  https://anikotoapi.site/:splat  200
+/api/anikoto/*  https://api.anikotoapi.org/v2/:splat  200
 /stream/*       https://megaplay.buzz/stream/:splat  200
-
