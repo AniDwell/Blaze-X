@@ -82,7 +82,7 @@
             <div class="tk-dot tk-dot-1"></div>
             <div class="tk-dot tk-dot-2"></div>
         </div>
-        <p class="text-xs text-gray-500 font-bold tracking-widest uppercase">Connecting to Blaze-X...</p>
+        <p class="text-xs text-gray-500 font-bold tracking-widest uppercase">.</p>
     </div>
 
     <!-- Modal Overlay -->
@@ -191,18 +191,22 @@
 
     <!-- COMPONENT SCRIPTS -->
     <!-- header.js MUST be a module because of Firebase imports -->
-    <script type="module" src="js/header.js"></script>
+    <!-- Pointing directly to the root directory -->
+    <script type="module" src="header.js"></script>
     
-    <script src="js/carousel.js"></script>
-    <script src="js/pill_slider.js"></script>
-    <script src="js/history.js"></script>
-    <script src="js/recent.js"></script>
-    <script src="js/popular.js"></script>
-    <script src="js/movies.js"></script>
-    <script src="js/series.js"></script>
-    <script src="js/genrebased.js"></script>
-    <script src="js/newep.js"></script>
-    <script src="js/bottomnav.js"></script>
+    <!-- Commented out until we actually build these files! -->
+    <!-- 
+    <script src="carousel.js"></script>
+    <script src="pill_slider.js"></script>
+    <script src="history.js"></script>
+    <script src="recent.js"></script>
+    <script src="popular.js"></script>
+    <script src="movies.js"></script>
+    <script src="series.js"></script>
+    <script src="genrebased.js"></script>
+    <script src="newep.js"></script>
+    <script src="bottomnav.js"></script>
+    -->
 
     <!-- INITIALIZE APP AFTER ALL SCRIPTS LOAD -->
     <script>
@@ -210,5 +214,8 @@
             window.app.init();
         });
     </script>
+</body>
+</html>
+cript>
 </body>
 </html>
