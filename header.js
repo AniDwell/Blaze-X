@@ -98,12 +98,3 @@ window.app.components.header = () => {
         }
     });
 };
- detected, force an anonymous sign-in
-            try {
-                await signInAnonymously(auth);
-            } catch (error) {
-                console.error("Authentication failed:", error);
-            }
-        }
-    });
-};
