@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Blaze-X</title>
+    
+    <!-- Tailwind & Icons -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary: #F47521;
+            --bg-dark: #000000;
+            --text-light: #ffffff;
+        }
+
+        html, body {
+            height: 100%; width: 100%; margin: 0; padding: 0;
+            background-color: var(--bg-dark); color: var(--text-light);
+            overflow: hidden; font-family: 'Lato', sans-serif;
+            -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
+        }
+
+        /* Utilities */
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        
+        .animate-fade-in { animation: fade-in 0.3s ease-out forwards; }
+        @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .glass-modal { background: rgba(20, 20, 20, 0.95); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .ani-input { background: #2a2a2a; border: 1px solid #444; color: white; padding: 10px; border-radius: 6px; width: 100%; outline: none; }
+        .ani-input:focus { border-color: var(--primary); }
+        .blur-backdrop { filter: blur(20px) brightness(0.4); transform: scale(1.1); }
+
+        img { user-drag: none; -webkit-user-drag: none; pointer-events: auto; }
+
+        /* TIKTOK-STYLE LOADER */
+        .tk-loader {
+            position: relative;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .tk-dot {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+        }
+        .tk-dot-1 {
+            background-color: var(--primary); /* Orange */
+            animation: tk-move-1 0.8s infinite ease-in-out alternate;
+        }
+        .tk-dot-2 {
+            background-color: #ffffff; /* White */
+            animation: tk-move-2 0.8s infinite ease-in-out alternate;
+        }
+        
+        @keyframes tk-move-1 {
+            0% { transform: translateX(-15px) scale(1); z-index: 2; }
+            100% { transform: translateX(15px) scale(0.8); z-index: 1; }
+        }
+        @keyframes tk-move-2 {
+            0% { transform: translateX(15px) scale(0.8); z-index: 1; }
+            100% { transform: translateX(-15px) scale(1); z-index: 2; }
+        }
+    </style>
+</head>
+<body oncontextmenu="return false;">
+
+    <!-- Boot Loader (TikTok Style) -->
+    <div id="boot-loader" class="fixed inset-0 flex flex-col items-center justify-center bg-black z-[100]">
+        <div class="tk-loader mb-4">
+            <div class="tk-dot tk-dot-1"></div>
+            <div class="tk-dot tk-dot-2"></div>
+        </div>
+        <p class="text-xs text-gray-500 font-bold tracking-widest uppercase">Connecting to Blaze-X...</p>
+    </div>
+
+    <!-- Modal Overlay -->
+    <div id="modal-overlay" class="fixed inset-0 z-[70] hidden bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div id="modal-content" class="glass-modal w-full max-w-sm rounded-xl p-6 transform transition-all scale-95 opacity-0"></div>
+    </div>
+
+    <!-- Main App Container -->
+    <div id="app-container" class="hidden flex flex-col h-full w-full">
+        
+        <!-- 1. Header Injection Point -->
+        <div id="header-container" class="flex-none z-50 relative"></div>
+
+        <!-- Scrollable Main Content -->
+        <main id="main-content" class="flex-1 overflow-y-auto relative hide-scrollbar bg-black pb-20">
+            
+            <!-- HOME VIEW: This holds all your modular components -->
+            <div id="home-view" class="w-full flex flex-col gap-6 animate-fade-in">
+                <!-- 2. Carousel -->
+                <div id="carousel-container"></div>
+                
+                <!-- 3. Pill Slider (Genres/Categories) -->
+                <div id="pill-slider-container" class="pl-4 mt-2"></div>
+                
+                <!-- 4. History (Hidden if empty) -->
+                <div id="history-container" class="pl-4"></div>
+                
+                <!-- 5. Recent Episodes -->
+                <div id="recent-container" class="pl-4"></div>
+                
+                <!-- 6. Popular Anime -->
+                <div id="popular-container" class="pl-4"></div>
+                
+                <!-- 7. Movies -->
+                <div id="movies-container" class="pl-4"></div>
+                
+                <!-- 8. Series -->
+                <div id="series-container" class="pl-4"></div>
+                
+                <!-- 9. Genre Based Block -->
+                <div id="genrebased-container" class="pl-4"></div>
+                
+                <!-- 10. New Episodes (Bottom Feed) -->
+                <div id="newep-container" class="px-4 pb-8"></div>
+            </div>
+
+            <!-- DYNAMIC VIEW: Details, Player, Search, etc. will inject here and hide home-view -->
+            <div id="dynamic-view" class="hidden w-full"></div>
+            
+        </main>
+
+        <!-- 11. Bottom Navigation Injection Point -->
+        <div id="bottomnav-container" class="flex-none absolute bottom-0 w-full z-50"></div>
+    </div>
+
+    <!-- CORE ENGINE: State & API Configuration -->
+    <script>
+        window.app = {
+            config: {
+                anikotoBase: 'https://anikotoapi.site',
+                megaPlayBase: 'https://megaplay.buzz/stream/s-2',
+                defaultAvatars: ["https://iili.io/fWydBMG.md.png", "https://iili.io/fWydqns.md.png"]
+            },
+            state: { 
+                activeProfile: null, 
+                currentView: 'home'
+            },
+            api: {
+                fetch: async (endpoint) => {
+                    try {
+                        const res = await fetch(`${app.config.anikotoBase}${endpoint}`);
+                        return await res.json();
+                    } catch (error) { console.error("API Error", error); return null; }
+                }
+            },
+            components: {}, 
+            
+            init: () => {
+                // Simulate network load time to show loader, then render app
+                setTimeout(() => {
+                    document.getElementById('boot-loader').style.display = 'none';
+                    document.getElementById('app-container').classList.remove('hidden');
+                    app.renderHome();
+                }, 1500); 
+            },
+
+            renderHome: () => {
+                document.getElementById('dynamic-view').classList.add('hidden');
+                document.getElementById('home-view').classList.remove('hidden');
+
+                // Call each component's render function if it exists
+                if(app.components.header) app.components.header();
+                if(app.components.carousel) app.components.carousel();
+                if(app.components.pillSlider) app.components.pillSlider();
+                if(app.components.history) app.components.history();
+                if(app.components.recent) app.components.recent();
+                if(app.components.popular) app.components.popular();
+                if(app.components.movies) app.components.movies();
+                if(app.components.series) app.components.series();
+                if(app.components.genreBased) app.components.genreBased();
+                if(app.components.newEp) app.components.newEp();
+                if(app.components.bottomNav) app.components.bottomNav();
+            }
+        };
+    </script>
+
+    <!-- COMPONENT SCRIPTS -->
+    <!-- header.js MUST be a module because of Firebase imports -->
+    <script type="module" src="js/header.js"></script>
+    
+    <script src="js/carousel.js"></script>
+    <script src="js/pill_slider.js"></script>
+    <script src="js/history.js"></script>
+    <script src="js/recent.js"></script>
+    <script src="js/popular.js"></script>
+    <script src="js/movies.js"></script>
+    <script src="js/series.js"></script>
+    <script src="js/genrebased.js"></script>
+    <script src="js/newep.js"></script>
+    <script src="js/bottomnav.js"></script>
+
+    <!-- INITIALIZE APP AFTER ALL SCRIPTS LOAD -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            window.app.init();
+        });
+    </script>
+</body>
+</html>
