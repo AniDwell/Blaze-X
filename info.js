@@ -12,7 +12,7 @@ window.app.components.info = async () => {
         return;
     }
 
-    container.innerHTML = `<div class="w-full h-screen flex items-center justify-center -mt-10"><div class="tk-loader scale-75"><div class="tk-dot tk-dot-1"></div><div class="tk-dot tk-dot-2"></div></div></div>`;
+    container.innerHTML = `<div class="w-full h-[60vh] flex items-center justify-center"><div class="tk-loader scale-75"><div class="tk-dot tk-dot-1"></div><div class="tk-dot tk-dot-2"></div></div></div>`;
 
     try {
         // 1. Fetch from your Anikoto Proxy
@@ -42,6 +42,7 @@ window.app.components.info = async () => {
                     source 
                     status 
                     averageScore 
+                    trending
                     genres 
                     studios(isMain: true) { nodes { name } } 
                     staff(perPage: 12, sort: RELEVANCE) { 
@@ -62,8 +63,8 @@ window.app.components.info = async () => {
             if (aniJson?.data?.Media) aniData = aniJson.data.Media;
         } catch (e) { console.log("AniList sync failed."); }
 
-        // 3. Construct Global Page State
-        const finalTitle = aniData.title?.romaji || aniData.title?.english || baseAnime.title || baseAnime.name;
+        // 3. Construct Global Page State (PRIORITIZING API JSON TITLE)
+        const finalTitle = baseAnime.title || baseAnime.name || aniData.title?.english || aniData.title?.romaji || 'Unknown Title';
         const finalJpTitle = aniData.title?.native || baseAnime.alternative || 'N/A';
         const finalDesc = aniData.description || baseAnime.description || baseAnime.synopsis || 'No description available.';
 
@@ -113,18 +114,22 @@ function renderAnimeInfoShell() {
     const cleanDesc = data.synopsis.replace(/<[^>]*>?/gm, '');
     const genresStr = ani.genres ? ani.genres.join(' • ') : 'Anime Series';
 
-    container.innerHTML = `
-        <div class="w-full flex flex-col bg-[#050505] min-h-screen pb-24 relative">
-            
-            <div class="absolute top-0 left-0 w-full h-[55vh] md:h-[65vh] z-0 pointer-events-none">
-                <img src="${data.banner}" class="w-full h-full object-cover object-top opacity-50 md:opacity-70">
-                <div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/70 to-transparent"></div>
-                <div class="absolute inset-0 bg-gradient-to-r from-[#050505]/80 via-[#050505]/10 to-transparent hidden md:block"></div>
-            </div>
+    // Carousel-Style Badges
+    const trendingBadge = ani.trending ? `<span class="bg-[#F47521]/10 border border-[#F47521]/30 px-2 py-0.5 rounded backdrop-blur-sm">#${ani.trending} Trending</span>` : '';
+    const scoreBadge = ani.averageScore ? `<span class="flex items-center gap-1"><i class="fas fa-star"></i> ${ani.averageScore}% SCORE</span>` : '';
 
-            <div class="relative z-10 w-full min-h-[55vh] md:min-h-[65vh] flex items-center py-10 border-b border-white/5">
+    container.innerHTML = `
+        <div class="w-full flex flex-col bg-[#050505] min-h-screen pb-24">
+            
+            <div class="relative w-full min-h-[55vh] md:min-h-[65vh] flex items-center py-10 border-b border-white/5 overflow-hidden">
                 
-                <div class="w-full max-w-7xl mx-auto px-4 md:px-12 flex flex-col md:flex-row items-center md:items-start gap-8 md:gap-12 mt-4">
+                <div class="absolute inset-0 z-0 pointer-events-none">
+                    <img src="${data.banner}" class="w-full h-full object-cover object-top opacity-50 md:opacity-70">
+                    <div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/70 to-transparent"></div>
+                    <div class="absolute inset-0 bg-gradient-to-r from-[#050505]/90 via-[#050505]/20 to-transparent hidden md:block"></div>
+                </div>
+
+                <div class="relative z-10 w-full max-w-7xl mx-auto px-4 md:px-12 flex flex-col md:flex-row items-center md:items-start gap-8 md:gap-12 mt-4">
                     
                     <div class="w-[45%] max-w-[180px] md:w-1/4 md:max-w-[260px] flex-shrink-0 rounded-xl overflow-hidden shadow-[0_20px_40px_rgba(0,0,0,0.8)] border border-white/10">
                         <img src="${data.poster}" class="w-full h-full object-cover aspect-[2/3]">
@@ -132,6 +137,11 @@ function renderAnimeInfoShell() {
 
                     <div class="flex-1 flex flex-col items-center md:items-start text-center md:text-left w-full pt-2">
                         
+                        <div class="flex items-center justify-center md:justify-start gap-3 text-[#F47521] text-[10px] md:text-xs font-black tracking-widest drop-shadow-md mb-2 md:mb-3 uppercase w-full">
+                            ${trendingBadge}
+                            ${scoreBadge}
+                        </div>
+
                         <h1 class="text-3xl md:text-5xl lg:text-6xl font-black text-white mb-2 drop-shadow-lg leading-tight tracking-tight">${data.title}</h1>
                         <p class="text-xs md:text-base text-gray-400 font-medium mb-3 drop-shadow-md">${data.jpTitle}</p>
                         <p class="text-[10px] md:text-xs text-[#F47521] font-bold tracking-widest mb-8 uppercase">${genresStr}</p>
@@ -154,7 +164,7 @@ function renderAnimeInfoShell() {
                 </div>
             </div>
 
-            <div class="relative z-10 w-full mt-4">
+            <div class="w-full mt-4">
                 <div class="flex items-center justify-center w-full max-w-2xl mx-auto border-b border-white/10 text-xs md:text-sm font-bold uppercase tracking-widest pt-4">
                     <button onclick="window.app.switchInfoTab('information')" id="tab-information" class="flex-1 text-center pb-3 transition-colors ${window.app.state.activeInfoTab === 'information' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white'}">Information</button>
                     <button onclick="window.app.switchInfoTab('episodes')" id="tab-episodes" class="flex-1 text-center pb-3 transition-colors ${window.app.state.activeInfoTab === 'episodes' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white'}">Episodes</button>
@@ -189,36 +199,22 @@ function renderDynamicTabContent() {
             return;
         }
 
-        const genresHtml = ani.genres ? ani.genres.map(g => `<span class="bg-white/5 border border-white/10 px-3 py-1.5 rounded text-[10px] md:text-xs text-white font-medium">${g}</span>`).join('') : 'N/A';
         const studios = ani.studios?.nodes?.map(s => s.name).join(', ') || 'Unknown';
         
+        // Strictly 2 per row grid for staff members
         const staffHtml = ani.staff?.nodes?.map(s => `
             <div class="bg-[#111] p-3 rounded-lg border border-white/5 shadow-inner flex items-center gap-3 md:gap-4">
-                <img src="${s.image?.large || 'https://via.placeholder.com/150/222/fff?text=?'}" class="w-12 h-12 md:w-14 md:h-14 rounded-full object-cover border border-white/10 shadow-md">
+                <img src="${s.image?.large || 'https://via.placeholder.com/150/222/fff?text=?'}" class="w-10 h-10 md:w-12 md:h-12 rounded-full object-cover border border-white/10 shadow-md">
                 <div class="flex-1 min-w-0">
                     <div class="font-bold text-white text-xs md:text-sm truncate">${s.name.full}</div>
                     <div class="text-[10px] md:text-xs text-[#F47521] truncate mt-0.5">${s.primaryOccupations.join(', ')}</div>
                 </div>
             </div>
-        `).join('') || '<div class="text-gray-500 text-sm">No staff info available.</div>';
-
-        const scoreVal = ani.averageScore || 0;
-        const ringColor = scoreVal >= 80 ? 'border-green-500' : scoreVal >= 60 ? 'border-[#F47521]' : 'border-red-500';
+        `).join('') || '<div class="col-span-2 text-gray-500 text-sm">No staff info available.</div>';
 
         contentArea.innerHTML = `
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div class="lg:col-span-1 flex flex-col gap-5 bg-[#0a0a0a] p-6 rounded-xl border border-white/5 shadow-lg h-fit">
-                    
-                    <div class="flex items-center gap-5 border-b border-white/5 pb-5">
-                        <div class="relative w-16 h-16 rounded-full border-4 ${scoreVal ? ringColor : 'border-gray-600'} flex flex-col items-center justify-center bg-[#111] shadow-lg flex-shrink-0">
-                            <span class="text-white font-black text-lg leading-none">${scoreVal || '?'}</span>
-                            <span class="text-[8px] text-gray-400 font-bold uppercase mt-0.5">Score</span>
-                        </div>
-                        <div>
-                            <span class="text-white font-bold text-sm block tracking-wide">Community Rating</span>
-                            <span class="text-gray-500 text-[10px] uppercase tracking-widest mt-1 block">Powered by AniList</span>
-                        </div>
-                    </div>
                     
                     <div class="grid grid-cols-2 gap-4">
                         <div><span class="text-gray-600 text-[10px] font-bold uppercase block mb-1 tracking-wider">Status</span><span class="text-white font-medium capitalize text-xs md:text-sm">${ani.status ? ani.status.toLowerCase().replace('_', ' ') : 'Unknown'}</span></div>
@@ -232,12 +228,8 @@ function renderDynamicTabContent() {
 
                 <div class="lg:col-span-2 flex flex-col gap-8">
                     <div>
-                        <h3 class="text-white text-base md:text-lg font-black mb-4 tracking-tight border-b-2 border-[#F47521] inline-block pb-1">Genres</h3>
-                        <div class="flex flex-wrap gap-2 md:gap-3">${genresHtml}</div>
-                    </div>
-                    <div>
                         <h3 class="text-white text-base md:text-lg font-black mb-4 tracking-tight border-b-2 border-[#F47521] inline-block pb-1">Authors & Key Staff</h3>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">${staffHtml}</div>
+                        <div class="grid grid-cols-2 gap-3 md:gap-4">${staffHtml}</div>
                     </div>
                 </div>
             </div>
