@@ -63,10 +63,13 @@ window.app.components.info = async () => {
             if (aniJson?.data?.Media) aniData = aniJson.data.Media;
         } catch (e) { console.log("AniList sync failed."); }
 
-        // 3. Construct Global Page State (PRIORITIZING API JSON TITLE)
+        // 3. Construct Global Page State (PRIORITIZING ANILIST HD BACKDROP)
         const finalTitle = baseAnime.title || baseAnime.name || aniData.title?.english || aniData.title?.romaji || 'Unknown Title';
         const finalJpTitle = aniData.title?.native || baseAnime.alternative || 'N/A';
         const finalDesc = aniData.description || baseAnime.description || baseAnime.synopsis || 'No description available.';
+        
+        // Strictly uses AniList's Banner, falls back to AniList's Extra Large Poster, then API image
+        const finalBanner = aniData.bannerImage || aniData.coverImage?.extraLarge || baseAnime.background_image || baseAnime.cover || 'https://via.placeholder.com/1280x720/111/fff?text=No+Background';
 
         window.app.state.currentAnimePage = {
             id: animeId,
@@ -74,7 +77,7 @@ window.app.components.info = async () => {
             jpTitle: finalJpTitle,
             synopsis: finalDesc,
             poster: aniData.coverImage?.extraLarge || baseAnime.poster || baseAnime.image || 'https://via.placeholder.com/800x1200/111/fff?text=No+Poster',
-            banner: aniData.bannerImage || baseAnime.background_image || baseAnime.cover || 'https://via.placeholder.com/1280x720/111/fff?text=No+Background',
+            banner: finalBanner,
             episodes: episodesList,
             aniList: aniData
         };
@@ -114,7 +117,6 @@ function renderAnimeInfoShell() {
     const cleanDesc = data.synopsis.replace(/<[^>]*>?/gm, '');
     const genresStr = ani.genres ? ani.genres.join(' • ') : 'Anime Series';
 
-    // Carousel-Style Badges
     const trendingBadge = ani.trending ? `<span class="bg-[#F47521]/10 border border-[#F47521]/30 px-2 py-0.5 rounded backdrop-blur-sm">#${ani.trending} Trending</span>` : '';
     const scoreBadge = ani.averageScore ? `<span class="flex items-center gap-1"><i class="fas fa-star"></i> ${ani.averageScore}% SCORE</span>` : '';
 
@@ -176,6 +178,7 @@ function renderAnimeInfoShell() {
     `;
 
     renderDynamicTabContent();
+    setupDropdownListener();
 }
 
 window.app.switchInfoTab = (tabName) => {
@@ -201,9 +204,8 @@ function renderDynamicTabContent() {
 
         const studios = ani.studios?.nodes?.map(s => s.name).join(', ') || 'Unknown';
         
-        // Strictly 2 per row grid for staff members
         const staffHtml = ani.staff?.nodes?.map(s => `
-            <div class="bg-[#111] p-3 rounded-lg border border-white/5 shadow-inner flex items-center gap-3 md:gap-4">
+            <div class="bg-[#111] p-3 rounded-lg border border-white/5 shadow-inner flex items-center gap-3 md:gap-4 hover:border-white/20 transition-colors">
                 <img src="${s.image?.large || 'https://via.placeholder.com/150/222/fff?text=?'}" class="w-10 h-10 md:w-12 md:h-12 rounded-full object-cover border border-white/10 shadow-md">
                 <div class="flex-1 min-w-0">
                     <div class="font-bold text-white text-xs md:text-sm truncate">${s.name.full}</div>
@@ -235,31 +237,44 @@ function renderDynamicTabContent() {
             </div>
         `;
     } else {
+        // --- CUSTOM CSS DROPDOWN MENU ---
         const totalEps = data.episodes.length;
-        let rangeOptions = '';
+        let dropdownHtml = '';
+        let currentLabel = 'N/A';
+
         if (totalEps > 0) {
             for (let i = 0; i < totalEps; i += 100) {
                 const startNum = i + 1;
                 const endNum = Math.min(i + 100, totalEps);
                 const val = `${startNum}-${endNum}`;
-                const isSelected = window.app.state.epRangeFilter === val ? 'selected' : '';
-                rangeOptions += `<option value="${val}" ${isSelected}>Episodes ${startNum} - ${endNum}</option>`;
+                const label = `Episodes ${startNum} - ${endNum}`;
+                
+                if (!window.app.state.epRangeFilter && i === 0) window.app.state.epRangeFilter = val;
+                if (window.app.state.epRangeFilter === val) currentLabel = label;
+
+                dropdownHtml += `<button onclick="window.app.selectDropdownOption('${label}', '${val}')" class="w-full text-left px-4 py-3 text-xs md:text-sm font-bold text-white hover:bg-[#F47521] hover:text-black transition-colors border-b border-white/5 last:border-0">${label}</button>`;
             }
-            if (!window.app.state.epRangeFilter) window.app.state.epRangeFilter = `1-${Math.min(100, totalEps)}`;
         } else {
-            rangeOptions = `<option>N/A</option>`;
+            currentLabel = 'No Episodes';
+            dropdownHtml = `<div class="px-4 py-3 text-xs text-gray-500">N/A</div>`;
         }
 
         contentArea.innerHTML = `
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 bg-[#0a0a0a] p-3 md:p-4 rounded-xl border border-white/5 shadow-md">
-                <div class="relative w-full sm:w-64">
-                    <select id="ep-range-dropdown" onchange="window.app.updateEpFilterRange(this.value)" class="appearance-none w-full bg-[#111] border border-white/10 text-white text-xs md:text-sm font-bold py-2.5 pl-4 pr-10 rounded-lg cursor-pointer outline-none hover:border-white/30 focus:border-[#F47521]">
-                        ${rangeOptions}
-                    </select>
-                    <i class="fas fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                
+                <div class="relative w-full sm:w-64" id="custom-dropdown-container">
+                    <button id="custom-dropdown-btn" onclick="window.app.toggleDropdown()" class="flex items-center justify-between w-full bg-[#111] border border-white/10 text-white text-xs md:text-sm font-bold py-3 pl-4 pr-4 rounded-lg outline-none hover:border-white/30 focus:border-[#F47521] transition-all">
+                        <span id="custom-dropdown-selected">${currentLabel}</span>
+                        <i id="custom-dropdown-icon" class="fas fa-chevron-down text-gray-400 text-xs transition-transform duration-300"></i>
+                    </button>
+                    
+                    <div id="custom-dropdown-menu" class="absolute left-0 mt-2 w-full bg-[#111] border border-white/10 rounded-lg shadow-2xl z-50 hidden overflow-hidden flex flex-col max-h-60 overflow-y-auto hide-scrollbar">
+                        ${dropdownHtml}
+                    </div>
                 </div>
+
                 <div class="relative w-full sm:w-auto flex-1 max-w-sm">
-                    <input type="number" id="episode-search-box" value="${window.app.state.epSearchValue}" onkeyup="window.app.runEpisodeSearch(this.value)" placeholder="Search episode #..." class="w-full bg-[#111] border border-white/10 text-white text-xs md:text-sm py-2.5 pl-10 pr-4 rounded-lg outline-none focus:border-[#F47521] placeholder-gray-600">
+                    <input type="number" id="episode-search-box" value="${window.app.state.epSearchValue}" onkeyup="window.app.runEpisodeSearch(this.value)" placeholder="Search episode #..." class="w-full bg-[#111] border border-white/10 text-white text-xs md:text-sm py-3 pl-10 pr-4 rounded-lg outline-none focus:border-[#F47521] placeholder-gray-600 transition-colors">
                     <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-xs"></i>
                 </div>
             </div>
@@ -270,13 +285,49 @@ function renderDynamicTabContent() {
     }
 }
 
-window.app.updateEpFilterRange = (val) => {
+// --- CUSTOM DROPDOWN LOGIC ---
+window.app.toggleDropdown = () => {
+    const menu = document.getElementById('custom-dropdown-menu');
+    const icon = document.getElementById('custom-dropdown-icon');
+    if (!menu) return;
+    
+    if(menu.classList.contains('hidden')) {
+        menu.classList.remove('hidden');
+        icon.style.transform = 'rotate(180deg)';
+    } else {
+        menu.classList.add('hidden');
+        icon.style.transform = 'rotate(0deg)';
+    }
+};
+
+window.app.selectDropdownOption = (label, val) => {
     window.app.state.epRangeFilter = val;
+    document.getElementById('custom-dropdown-selected').innerText = label;
+    window.app.toggleDropdown(); // Close menu
+    
+    // Reset search
     document.getElementById('episode-search-box').value = ''; 
     window.app.state.epSearchValue = '';
+    
     renderNumericEpisodeGrid();
 };
 
+// Global listener to close custom dropdown when clicking outside
+function setupDropdownListener() {
+    document.addEventListener('click', (e) => {
+        const menu = document.getElementById('custom-dropdown-menu');
+        const btn = document.getElementById('custom-dropdown-btn');
+        if (menu && !menu.classList.contains('hidden')) {
+            if (btn && !btn.contains(e.target) && !menu.contains(e.target)) {
+                menu.classList.add('hidden');
+                document.getElementById('custom-dropdown-icon').style.transform = 'rotate(0deg)';
+            }
+        }
+    });
+}
+
+
+// --- EPISODE GRID RENDERING ---
 window.app.runEpisodeSearch = (val) => {
     window.app.state.epSearchValue = val;
     renderNumericEpisodeGrid();
