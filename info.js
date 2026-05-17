@@ -4,7 +4,7 @@ window.app.components.info = async () => {
     const container = document.getElementById('info-container');
     if (!container) return;
 
-    // 1. Get Anime ID from the URL (e.g., info.html?id=8630)
+    // 1. Get Anime ID from the URL
     const urlParams = new URLSearchParams(window.location.search);
     const animeId = urlParams.get('id');
 
@@ -26,17 +26,22 @@ window.app.components.info = async () => {
     `;
 
     try {
-        // 2. Fetch data from your proxy using the correct /series endpoint
+        // 2. Fetch data from your proxy
         const response = await window.app.api.fetch(`/series/${animeId}`);
-        const anime = response.data || response; // Safely unwrap data
+        
+        // --- NEW JSON PARSER FIX ---
+        // Safely extract the nested "anime" and "episodes" objects based on your API structure
+        const payload = response.data || response; 
+        const anime = payload.anime || payload; // The details object
+        const episodesList = payload.episodes || anime.episodes || []; // The episodes array
 
         if (!anime || (!anime.title && !anime.name)) {
-            throw new Error("Invalid anime data received");
+            throw new Error("Invalid anime data received: Title missing.");
         }
 
         // 3. Fetch high-res assets & Trailer from AniList
         let trailerId = null;
-        let bannerImage = anime.image || anime.cover || anime.poster || 'https://via.placeholder.com/1280x720/111/fff?text=No+Background';
+        let bannerImage = anime.background_image || anime.poster || anime.image || anime.cover || 'https://via.placeholder.com/1280x720/111/fff?text=No+Background';
         const rawTitle = anime.title || anime.name || 'Unknown Title';
         const cleanTitle = rawTitle.replace(/\(Dub\)|\(Sub\)/gi, '').trim();
 
@@ -59,7 +64,7 @@ window.app.components.info = async () => {
         // 4. Smart Play Button Logic (Check User History)
         const profile = window.app.state.activeProfile;
         let playBtnText = "Play E01";
-        let targetEpisodeId = anime.episodes && anime.episodes.length > 0 ? anime.episodes[0].id : '';
+        let targetEpisodeId = episodesList.length > 0 ? episodesList[0].id : '';
         
         if (profile && profile.history) {
             const historyItem = profile.history.find(h => h.animeId === animeId);
@@ -71,7 +76,7 @@ window.app.components.info = async () => {
 
         // 5. Render Hero Section
         const desc = anime.description || anime.synopsis || 'No description available for this series.';
-        const displayPoster = anime.image || anime.cover || anime.poster || 'https://via.placeholder.com/800x1200/111/fff?text=No+Poster';
+        const displayPoster = anime.poster || anime.image || anime.cover || 'https://via.placeholder.com/800x1200/111/fff?text=No+Poster';
         
         let html = `
             <div class="relative w-full h-[60vh] md:h-[75vh] bg-black overflow-hidden mt-[60px] md:mt-0 border-b border-white/5">
@@ -114,7 +119,7 @@ window.app.components.info = async () => {
 
             <div class="max-w-7xl mx-auto px-4 md:px-12 py-8">
                 <div class="flex justify-between items-end mb-6 border-b border-white/10 pb-4">
-                    <h2 class="text-xl md:text-2xl font-black tracking-tight text-white">Episodes <span class="text-gray-500 text-sm md:text-base font-medium ml-2">(${anime.episodes ? anime.episodes.length : 0})</span></h2>
+                    <h2 class="text-xl md:text-2xl font-black tracking-tight text-white">Episodes <span class="text-gray-500 text-sm md:text-base font-medium ml-2">(${episodesList.length})</span></h2>
                     
                     <div class="relative">
                         <select class="appearance-none bg-[#111] border border-white/10 text-white text-xs md:text-sm font-bold py-2 pl-4 pr-10 rounded cursor-pointer outline-none hover:border-white/30 transition-colors focus:border-[#F47521]">
@@ -127,12 +132,12 @@ window.app.components.info = async () => {
                 <div class="flex flex-col gap-3">
         `;
 
-        // 6. Render Episodes List
-        if (anime.episodes && Array.isArray(anime.episodes) && anime.episodes.length > 0) {
-            anime.episodes.forEach((ep, index) => {
+        // 6. Render Episodes List (Using the unwrapped episodesList array)
+        if (episodesList.length > 0) {
+            episodesList.forEach((ep, index) => {
                 const epNum = ep.number || (index + 1);
                 const epTitle = ep.title || `Episode ${epNum}`;
-                const epThumb = ep.image || bannerImage; 
+                const epThumb = bannerImage; // The JSON doesn't provide ep-specific thumbs, falling back to banner
                 
                 html += `
                     <div onclick="window.location.href='play.html?id=${ep.id}&anime=${animeId}'" class="group flex items-center gap-4 p-2 md:p-3 rounded-lg hover:bg-white/5 cursor-pointer transition-colors border border-transparent hover:border-white/5">
@@ -149,7 +154,7 @@ window.app.components.info = async () => {
 
                         <div class="flex-1 min-w-0">
                             <h3 class="text-sm md:text-base font-bold text-white mb-1 truncate group-hover:text-[#F47521] transition-colors">${epTitle}</h3>
-                            <p class="text-xs text-gray-400 line-clamp-2 md:line-clamp-3 leading-relaxed">${ep.description || `Follow the events of ${rawTitle} in episode ${epNum}.`}</p>
+                            <p class="text-xs text-gray-400 line-clamp-2 md:line-clamp-3 leading-relaxed">Follow the events of ${rawTitle} in episode ${epNum}.</p>
                         </div>
                     </div>
                 `;
@@ -178,7 +183,6 @@ window.app.components.info = async () => {
                                 frameborder="0" allow="autoplay; encrypted-media"></iframe>
                     `;
                     
-                    // Fade in video, fade out static background after letting it buffer for 1 second
                     setTimeout(() => {
                         trailerContainer.classList.remove('opacity-0');
                         heroBg.classList.add('opacity-0');
@@ -193,14 +197,13 @@ window.app.components.info = async () => {
             <div class="w-full h-screen flex flex-col items-center justify-center mt-[-60px]">
                 <i class="fas fa-exclamation-triangle text-5xl text-[#F47521] mb-4 drop-shadow-lg"></i>
                 <h2 class="text-2xl font-black text-white mb-2">Oops! Something went wrong.</h2>
-                <p class="text-gray-400 text-sm text-center max-w-md px-4 mb-6">We couldn't load the series data. The API might be down or the ID is incorrect.</p>
+                <p class="text-gray-400 text-sm text-center max-w-md px-4 mb-6">${error.message}</p>
                 <button onclick="window.location.reload()" class="bg-white/10 hover:bg-[#F47521] text-white px-6 py-2 rounded transition-colors font-bold text-sm tracking-wide uppercase">Try Again</button>
             </div>
         `;
     }
 };
 
-// Toggle Description Expand/Collapse
 window.app.toggleDesc = () => {
     const desc = document.getElementById('info-desc');
     const btn = document.getElementById('read-more-btn');
@@ -213,29 +216,24 @@ window.app.toggleDesc = () => {
     }
 };
 
-// Save to Library Logic
 window.app.addToLibrary = async (id, title, img) => {
     const profile = window.app.state.activeProfile;
     
     if (!profile || !profile.uid) {
-        if (window.app.components.auth) {
-            window.app.components.auth();
-        } else {
-            alert("Please log in or create an account to save to your Library!");
-        }
+        if (window.app.components.auth) window.app.components.auth();
+        else alert("Please log in or create an account to save to your Library!");
         return;
     }
 
     const formattedAnime = { id, title, img };
 
-    if (profile.watchlist && profile.watchlist.some(item => item.id === formattedAnime.id)) {
+    if (profile.watchlist && profile.watchlist.some(item => item.id == formattedAnime.id)) {
         return alert("This series is already in your Library!");
     }
 
     if(!profile.watchlist) profile.watchlist = [];
     profile.watchlist.unshift(formattedAnime);
     
-    // UI Feedback
     const btn = event.currentTarget;
     if (btn) {
         const originalHtml = btn.innerHTML;
