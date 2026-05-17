@@ -2,8 +2,8 @@
 
 // 1. Import Firebase Modular SDKs via CDN
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
+import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
 // 2. Firebase Configuration
 const firebaseConfig = {
@@ -15,86 +15,124 @@ const firebaseConfig = {
     appId: "1:770812306638:web:eaf5ded647861f32c25c9f"
 };
 
+// Ensure global app object exists
+window.app = window.app || { state: {}, components: {}, api: {}, config: {} };
+
 // 3. Initialize Firebase & Export to Global App Object
+// (This allows auth.js, info.js, and carousel.js to share the exact same connection)
 const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
 
+window.app.firebaseApp = firebaseApp;
 window.app.auth = auth;
 window.app.db = db;
 
 // 4. Header Component Logic
-window.app.components.header = () => {
+window.app.components.header = async () => {
     const container = document.getElementById('header-container');
+    if (!container) return;
 
-    // Default UI state before Firebase loads
-    container.innerHTML = `
-        <nav class="bg-black/90 backdrop-blur-md border-b border-white/10 px-4 py-3 flex items-center justify-between shadow-lg relative z-50">
-            <div class="flex items-center gap-4">
-                <!-- Hamburger Menu -->
-                <i class="fas fa-bars text-white text-xl cursor-pointer hover:text-[#F47521] transition-colors" onclick="if(window.app.components.hamburgerMenu) window.app.components.hamburgerMenu()"></i>
-                
-                <!-- Blaze-X Logo Image (Loads from root directory) -->
-                <div class="flex items-center cursor-pointer" onclick="window.app.renderHome()">
-                    <img src="logo.png" alt="Blaze-X" class="h-8 object-contain">
-                </div>
-            </div>
-            
-            <div class="flex gap-5 items-center">
-                <!-- Search Icon -->
-                <i class="fas fa-search text-white text-xl cursor-pointer hover:text-[#F47521] transition-colors" onclick="window.location.href = 'search.html'"></i>
-                
-                <!-- Profile Icon (Defaults to placeholder, updates on Auth) -->
-                <img id="header-profile-img" src="https://iili.io/fWydBMG.md.png" class="w-8 h-8 rounded-full border-2 border-transparent object-cover cursor-pointer hover:border-[#F47521] transition-colors" onclick="if(window.app.components.profile) window.app.components.profile()">
-            </div>
-        </nav>
-    `;
+    // A. INSTANT UI RESTORE: Check local storage for lightning-fast rendering
+    const localProfile = localStorage.getItem('blazex_user_profile');
+    if (localProfile) {
+        window.app.state.activeProfile = JSON.parse(localProfile);
+    }
 
-    // 5. Handle Anonymous Authentication & Database Setup
+    // Render the UI immediately
+    renderHeaderUI();
+
+    // B. BACKGROUND SYNC: Keep the header data perfectly synced with Firebase
     onAuthStateChanged(auth, async (user) => {
         if (user) {
-            console.log("User logged in anonymously with UID:", user.uid);
-            
-            // Reference to this specific user's document in Firestore
-            const userRef = doc(db, "users", user.uid);
-            const userSnap = await getDoc(userRef);
-
-            if (userSnap.exists()) {
-                // User exists, pull their data into global state
-                const userData = userSnap.data();
-                window.app.state.activeProfile = userData;
-                
-                // Update profile image if they have a custom one
-                if(userData.pfp) {
-                    document.getElementById('header-profile-img').src = userData.pfp;
+            // If they are logged into a real account (not an anonymous local guest)
+            if (!window.app.state.activeProfile || !window.app.state.activeProfile.uid.startsWith('anon_')) {
+                try {
+                    const userDocRef = doc(db, "users", user.uid);
+                    const docSnap = await getDoc(userDocRef);
+                    
+                    if (docSnap.exists()) {
+                        const freshData = docSnap.data();
+                        window.app.state.activeProfile = freshData;
+                        localStorage.setItem('blazex_user_profile', JSON.stringify(freshData));
+                        
+                        // Re-render silently to update PFP if they changed it elsewhere
+                        renderHeaderUI(); 
+                    }
+                } catch (e) {
+                    console.error("Header DB Sync Error", e);
                 }
-            } else {
-                // First time user, create their database shell
-                const newUserProfile = {
-                    uid: user.uid,
-                    username: "Anonymous User",
-                    pfp: "https://iili.io/fWydBMG.md.png", // Default image
-                    history: [],
-                    watchlist: [],
-                    searchHistory: [],
-                    likes: [],
-                    comments: [],
-                    createdAt: new Date().toISOString()
-                };
-
-                // Save to Firestore
-                await setDoc(userRef, newUserProfile);
-                
-                // Set to global state
-                window.app.state.activeProfile = newUserProfile;
-            }
-        } else {
-            // If no user is detected, force an anonymous sign-in
-            try {
-                await signInAnonymously(auth);
-            } catch (error) {
-                console.error("Authentication failed:", error);
             }
         }
     });
+};
+
+// --- UI RENDER ENGINE ---
+function renderHeaderUI() {
+    const container = document.getElementById('header-container');
+    const profile = window.app.state.activeProfile;
+
+    // Dynamic Profile Avatar Logic
+    let profileHtml = '';
+    if (profile && profile.pfp) {
+        // Logged in with a custom PFP
+        profileHtml = `<img src="${profile.pfp}" alt="Profile" class="w-8 h-8 md:w-9 md:h-9 rounded-full object-cover border-2 border-transparent hover:border-[#F47521] transition-colors shadow-md">`;
+    } else {
+        // Not logged in or missing PFP: Show sleek default SVG icon
+        profileHtml = `
+            <div class="w-8 h-8 md:w-9 md:h-9 rounded-full bg-white/10 flex items-center justify-center border-2 border-transparent hover:border-[#F47521] transition-colors text-gray-300 hover:text-white shadow-md">
+                <i class="fas fa-user text-sm md:text-base"></i>
+            </div>
+        `;
+    }
+
+    // Render Navbar (Fixed at top, with a spacer to prevent content overlapping)
+    container.innerHTML = `
+        <nav class="fixed top-0 left-0 right-0 h-[60px] bg-[#050505]/95 backdrop-blur-md border-b border-white/10 px-4 md:px-8 flex items-center justify-between shadow-xl z-50 transition-all duration-300">
+            
+            <div class="flex items-center gap-4">
+                <button onclick="if(window.app.components.hamburgerMenu) window.app.components.hamburgerMenu()" class="text-white hover:text-[#F47521] transition-colors focus:outline-none">
+                    <i class="fas fa-bars text-xl md:text-2xl"></i>
+                </button>
+                
+                <a href="index.html" class="flex items-center gap-2 group cursor-pointer ml-2">
+                    <span class="text-white font-black text-xl md:text-2xl tracking-tighter drop-shadow-md group-hover:text-[#F47521] transition-colors">BLAZE<span class="text-[#F47521]">X</span></span>
+                </a>
+            </div>
+
+            <div class="flex items-center gap-5 md:gap-6">
+                
+                <button onclick="window.location.href='search.html'" class="text-white hover:text-[#F47521] transition-colors focus:outline-none">
+                    <i class="fas fa-search text-lg md:text-xl"></i>
+                </button>
+
+                <button onclick="window.app.handleProfileClick()" class="focus:outline-none relative group transition-transform hover:scale-105">
+                    ${profileHtml}
+                    ${!profile ? `<span class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[#F47521] rounded-full shadow-[0_0_8px_rgba(244,117,33,1)]"></span>` : ''}
+                </button>
+
+            </div>
+        </nav>
+        
+        <div class="h-[60px] w-full"></div>
+    `;
+}
+
+// --- PROFILE CLICK ROUTER ---
+window.app.handleProfileClick = () => {
+    const profile = window.app.state.activeProfile;
+    
+    // Check if the user exists in state (Standard Account OR Guest Account)
+    if (profile && profile.uid) {
+        // They are logged in! Send them to their library/profile page.
+        window.location.href = 'profile.html';
+    } else {
+        // They are completely unauthenticated. Trigger the auth.js Modal!
+        if (window.app.components && window.app.components.auth) {
+            window.app.components.auth();
+        } else {
+            console.error("auth.js is missing! Ensure it is linked in your HTML file.");
+            alert("Please log in to access this feature.");
+        }
+    }
 };
