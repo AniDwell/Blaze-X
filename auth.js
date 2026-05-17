@@ -11,7 +11,7 @@ window.app.components.auth = () => {
     const existingModal = document.getElementById('auth-modal');
     if (existingModal) existingModal.remove();
 
-    // 3. Initialize Random PFP (pfp1.jpeg to pfp10.jpeg)
+    // 3. Initialize Random PFP
     window.app.state.authSelectedPfp = `pfp${Math.floor(Math.random() * 10) + 1}.jpeg`;
 
     // 4. Create Modal Overlay
@@ -22,19 +22,25 @@ window.app.components.auth = () => {
     modal.innerHTML = `
         <div class="relative w-full max-w-md bg-[#0a0a0a] rounded-2xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.9)] overflow-hidden transform scale-95 transition-transform duration-300" id="auth-modal-box">
             
+            <div class="absolute top-0 left-0 z-20 flex items-start pointer-events-none">
+                <img src="https://media.tenor.com/fYOO8YHxJsUAAAAi/genshin-impact-furina.gif" class="w-20 h-20 object-cover border-r border-b border-white/10 rounded-br-2xl">
+                <div class="mt-4 ml-1 bg-white text-black text-[10px] font-black px-3 py-1.5 rounded-xl rounded-tl-none shadow-[0_0_15px_rgba(255,255,255,0.4)] transform -rotate-2">
+                    Please login! ✨
+                </div>
+            </div>
+
             <button onclick="window.app.closeAuthModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors z-20">
                 <i class="fas fa-times text-xl"></i>
             </button>
 
-            <div class="text-center pt-8 pb-4">
-                <h2 class="text-2xl font-black text-white tracking-tight">Welcome to Blaze-X</h2>
-                <p class="text-gray-400 text-xs mt-1 font-medium">Log in or create an account to sync your library.</p>
+            <div class="text-right pt-6 pb-2 pr-6 border-b border-white/5">
+                <h2 class="text-2xl font-black text-white tracking-tight">Blaze-X</h2>
+                <p class="text-gray-400 text-[9px] font-bold uppercase tracking-widest mt-0.5">Sync Your Universe</p>
             </div>
 
-            <div class="flex border-b border-white/10 text-xs font-bold uppercase tracking-widest px-6">
-                <button onclick="window.app.switchAuthTab('login')" id="tab-login" class="flex-1 pb-3 text-white border-b-2 border-[#F47521] transition-colors">Sign In</button>
-                <button onclick="window.app.switchAuthTab('register')" id="tab-register" class="flex-1 pb-3 text-gray-500 hover:text-white border-b-2 border-transparent transition-colors">Sign Up</button>
-                <button onclick="window.app.switchAuthTab('guest')" id="tab-guest" class="flex-1 pb-3 text-gray-500 hover:text-white border-b-2 border-transparent transition-colors">Guest</button>
+            <div class="flex border-b border-white/10 text-xs font-bold uppercase tracking-widest px-6 pt-2">
+                <button onclick="window.app.switchAuthTab('login')" id="tab-login" class="flex-1 pb-3 text-white border-b-2 border-[#F47521] transition-colors relative z-30">Sign In</button>
+                <button onclick="window.app.switchAuthTab('register')" id="tab-register" class="flex-1 pb-3 text-gray-500 hover:text-white border-b-2 border-transparent transition-colors relative z-30">Sign Up</button>
             </div>
 
             <div class="p-6 md:p-8">
@@ -49,17 +55,17 @@ window.app.components.auth = () => {
                         <input type="password" id="login-password" placeholder="Password" required class="w-full bg-[#111] border border-white/10 text-white text-sm py-3 pl-10 pr-4 rounded-lg outline-none focus:border-[#F47521] transition-colors">
                     </div>
                     <div class="flex justify-end">
-                        <button type="button" onclick="window.app.handlePasswordReset()" class="text-[10px] text-gray-400 hover:text-[#F47521] font-bold uppercase tracking-wider transition-colors">Forgot Password?</button>
+                        <button type="button" onclick="window.app.showForgotPasswordModal()" class="text-[10px] text-gray-400 hover:text-[#F47521] font-bold uppercase tracking-wider transition-colors">Forgot Password?</button>
                     </div>
-                    <button type="submit" id="btn-login" class="w-full bg-[#F47521] text-white font-black text-sm uppercase tracking-wider py-3.5 rounded-lg hover:bg-white hover:text-black transition-colors shadow-[0_0_15px_rgba(244,117,33,0.3)] mt-2">Sign In</button>
+                    <button type="submit" id="btn-login" class="w-full bg-[#F47521] text-white font-black text-sm uppercase tracking-wider py-3.5 rounded-lg hover:bg-white hover:text-black transition-colors shadow-md mt-2">Sign In</button>
                 </form>
 
                 <form id="form-register" class="flex flex-col gap-4 hidden" onsubmit="window.app.handleRegister(event)">
-                    <div class="flex justify-center mb-2">
+                    <div class="flex justify-center mb-1">
                         <div class="relative cursor-pointer group" onclick="document.getElementById('pfp-upload-input').click()">
-                            <img id="register-pfp-preview" src="${window.app.state.authSelectedPfp}" class="w-16 h-16 rounded-full object-cover border-2 border-white/10 group-hover:border-[#F47521] transition-colors shadow-lg">
+                            <img id="register-pfp-preview" src="${window.app.state.authSelectedPfp}" class="w-14 h-14 rounded-full object-cover border border-white/20 group-hover:border-[#F47521] transition-colors shadow-lg">
                             <div class="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                <i class="fas fa-camera text-white text-sm"></i>
+                                <i class="fas fa-camera text-white text-xs"></i>
                             </div>
                         </div>
                         <input type="file" id="pfp-upload-input" accept="image/*" class="hidden" onchange="window.app.handlePfpUpload(event, 'register-pfp-preview')">
@@ -77,33 +83,42 @@ window.app.components.auth = () => {
                         <i class="fas fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm"></i>
                         <input type="password" id="register-password" placeholder="Password (Min 6 chars)" required minlength="6" class="w-full bg-[#111] border border-white/10 text-white text-sm py-3 pl-10 pr-4 rounded-lg outline-none focus:border-[#F47521] transition-colors">
                     </div>
-                    <button type="submit" id="btn-register" class="w-full bg-[#F47521] text-white font-black text-sm uppercase tracking-wider py-3.5 rounded-lg hover:bg-white hover:text-black transition-colors shadow-[0_0_15px_rgba(244,117,33,0.3)] mt-2">Create Account</button>
+                    <button type="submit" id="btn-register" class="w-full bg-[#F47521] text-white font-black text-sm uppercase tracking-wider py-3.5 rounded-lg hover:bg-white hover:text-black transition-colors shadow-md mt-2">Create Account</button>
                 </form>
 
                 <form id="form-guest" class="flex flex-col gap-4 hidden" onsubmit="window.app.handleGuestLogin(event)">
+                    <div class="text-center mb-2">
+                        <h3 class="text-white font-bold text-lg">Guest Setup</h3>
+                        <p class="text-[10px] text-gray-400 mt-1 uppercase tracking-widest">Saved Locally Only</p>
+                    </div>
                     <div class="flex justify-center mb-2">
                         <div class="relative cursor-pointer group" onclick="document.getElementById('guest-pfp-upload-input').click()">
-                            <img id="guest-pfp-preview" src="${window.app.state.authSelectedPfp}" class="w-16 h-16 rounded-full object-cover border-2 border-white/10 group-hover:border-[#F47521] transition-colors shadow-lg">
+                            <img id="guest-pfp-preview" src="${window.app.state.authSelectedPfp}" class="w-16 h-16 rounded-full object-cover border border-white/20 group-hover:border-[#F47521] transition-colors shadow-lg">
                             <div class="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                 <i class="fas fa-camera text-white text-sm"></i>
                             </div>
                         </div>
                         <input type="file" id="guest-pfp-upload-input" accept="image/*" class="hidden" onchange="window.app.handlePfpUpload(event, 'guest-pfp-preview')">
                     </div>
-                    
-                    <p class="text-xs text-gray-400 text-center mb-2">Guest data is saved locally. If you clear your browser data, your library will be lost.</p>
 
                     <div class="relative">
                         <i class="fas fa-user-ninja absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm"></i>
                         <input type="text" id="guest-name" placeholder="Choose a Display Name" required class="w-full bg-[#111] border border-white/10 text-white text-sm py-3 pl-10 pr-4 rounded-lg outline-none focus:border-[#F47521] transition-colors">
                     </div>
-                    <button type="submit" id="btn-guest" class="w-full bg-white text-black font-black text-sm uppercase tracking-wider py-3.5 rounded-lg hover:bg-[#F47521] hover:text-white transition-colors mt-2">Continue as Guest</button>
+                    <button type="submit" id="btn-guest" class="w-full bg-white text-black font-black text-sm uppercase tracking-wider py-3.5 rounded-lg hover:bg-[#F47521] hover:text-white transition-colors mt-2">Enter Universe</button>
+                    
+                    <button type="button" onclick="window.app.switchAuthTab('login')" class="text-[10px] text-gray-500 hover:text-white uppercase tracking-widest font-bold mt-2">← Back to Login</button>
                 </form>
 
-                <div id="social-login-container" class="mt-6 pt-6 border-t border-white/10">
-                    <button onclick="window.app.handleGoogleLogin()" class="w-full bg-white/5 border border-white/10 text-white font-bold text-sm py-3 rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center gap-3">
-                        <img src="https://www.svgrepo.com/show/475656/google-color.svg" class="w-5 h-5">
+                <div id="social-login-container" class="mt-6 pt-6 border-t border-white/10 flex flex-col gap-3">
+                    <button onclick="window.app.handleGoogleLogin()" class="w-full bg-white/5 border border-white/10 text-white font-bold text-xs md:text-sm py-3 rounded-lg hover:bg-white hover:text-black transition-colors flex items-center justify-center gap-3">
+                        <img src="https://www.svgrepo.com/show/475656/google-color.svg" class="w-4 h-4">
                         Continue with Google
+                    </button>
+                    
+                    <button onclick="window.app.openGuestSetup()" class="w-full bg-transparent border border-white/10 text-gray-400 font-bold text-xs md:text-sm py-3 rounded-lg hover:bg-white/5 hover:text-white transition-colors flex items-center justify-center gap-3">
+                        <i class="fas fa-user-ninja"></i>
+                        Continue as Guest
                     </button>
                 </div>
 
@@ -113,11 +128,59 @@ window.app.components.auth = () => {
 
     document.body.appendChild(modal);
 
-    // Animate In
     setTimeout(() => {
         modal.classList.remove('opacity-0');
         document.getElementById('auth-modal-box').classList.remove('scale-95');
     }, 10);
+};
+
+// --- CUSTOM CSS ALERTS & MODALS ---
+
+window.app.showAuthAlert = (title, message, actionHtml = '') => {
+    const existing = document.getElementById('auth-custom-alert');
+    if(existing) existing.remove();
+    
+    const alertBox = document.createElement('div');
+    alertBox.id = 'auth-custom-alert';
+    alertBox.className = 'absolute inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm opacity-0 transition-opacity duration-300 px-6 rounded-2xl';
+    
+    alertBox.innerHTML = `
+        <div class="bg-[#111] border border-white/10 p-6 rounded-xl shadow-2xl w-full transform scale-95 transition-transform duration-300" id="auth-alert-inner">
+            <h3 class="text-[#F47521] font-black text-lg mb-2 uppercase tracking-wide flex items-center gap-2">
+                <i class="fas fa-exclamation-circle text-sm"></i> ${title}
+            </h3>
+            <div class="text-gray-300 text-sm mb-6 leading-relaxed">${message}</div>
+            <div class="flex justify-end gap-3 items-center">
+                <button onclick="window.app.closeAuthAlert()" class="text-gray-500 hover:text-white text-xs font-bold uppercase tracking-wider transition-colors mr-auto">Close</button>
+                ${actionHtml}
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('auth-modal-box').appendChild(alertBox);
+    
+    setTimeout(() => {
+        alertBox.classList.remove('opacity-0');
+        document.getElementById('auth-alert-inner').classList.remove('scale-95');
+    }, 10);
+};
+
+window.app.closeAuthAlert = () => {
+    const box = document.getElementById('auth-custom-alert');
+    if(box) {
+        box.classList.add('opacity-0');
+        document.getElementById('auth-alert-inner').classList.add('scale-95');
+        setTimeout(() => box.remove(), 300);
+    }
+};
+
+window.app.showForgotPasswordModal = () => {
+    window.app.showAuthAlert(
+        'Reset Password',
+        `<p class="text-xs text-gray-400 mb-4">Enter your email address and we'll send you a link to securely reset your password.</p>
+         <input type="email" id="reset-email-input" placeholder="Your Email Address" class="w-full bg-[#0a0a0a] border border-white/10 text-white text-sm py-3 px-4 rounded-lg outline-none focus:border-[#F47521] transition-colors">`,
+        `<button onclick="window.app.executePasswordReset()" class="bg-[#F47521] text-white px-5 py-2.5 rounded shadow-md text-xs font-black uppercase tracking-wider hover:bg-white hover:text-black transition-colors">Send Link</button>`
+    );
 };
 
 // --- UI CONTROLS ---
@@ -133,37 +196,41 @@ window.app.closeAuthModal = () => {
 };
 
 window.app.switchAuthTab = (tab) => {
-    // Hide all forms
     document.getElementById('form-login').classList.add('hidden');
     document.getElementById('form-register').classList.add('hidden');
     document.getElementById('form-guest').classList.add('hidden');
+    document.getElementById('social-login-container').classList.remove('hidden'); // Show social buttons for standard tabs
     
-    // Reset tab styles
-    const tabs = ['login', 'register', 'guest'];
-    tabs.forEach(t => {
-        const el = document.getElementById(`tab-${t}`);
-        el.className = `flex-1 pb-3 transition-colors ${t === tab ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white border-b-2 border-transparent'}`;
-    });
+    // Style tabs
+    document.getElementById('tab-login').className = `flex-1 pb-3 transition-colors relative z-30 ${tab === 'login' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white border-b-2 border-transparent'}`;
+    document.getElementById('tab-register').className = `flex-1 pb-3 transition-colors relative z-30 ${tab === 'register' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white border-b-2 border-transparent'}`;
 
-    // Show target form
     document.getElementById(`form-${tab}`).classList.remove('hidden');
+};
 
-    // Hide Google login if on Guest tab
-    const socialContainer = document.getElementById('social-login-container');
-    if (tab === 'guest') socialContainer.classList.add('hidden');
-    else socialContainer.classList.remove('hidden');
+window.app.openGuestSetup = () => {
+    // Hide standard forms and social buttons
+    document.getElementById('form-login').classList.add('hidden');
+    document.getElementById('form-register').classList.add('hidden');
+    document.getElementById('social-login-container').classList.add('hidden');
+    
+    // Deselect all tabs visually
+    document.getElementById('tab-login').className = "flex-1 pb-3 text-gray-500 hover:text-white border-b-2 border-transparent transition-colors relative z-30";
+    document.getElementById('tab-register').className = "flex-1 pb-3 text-gray-500 hover:text-white border-b-2 border-transparent transition-colors relative z-30";
+
+    // Show guest form
+    document.getElementById('form-guest').classList.remove('hidden');
 };
 
 
-// --- PFP UPLOAD LOGIC ---
-// Silently uses your ImgBB key for instantaneous remote image URLs
+// --- PFP UPLOAD ---
 window.app.handlePfpUpload = async (event, previewId) => {
     const file = event.target.files[0];
     if (!file) return;
 
     const imgPreview = document.getElementById(previewId);
     const originalSrc = imgPreview.src;
-    imgPreview.src = 'https://i.gifer.com/ZKZg.gif'; // Temporary loading gif
+    imgPreview.src = 'https://i.gifer.com/ZKZg.gif'; 
 
     const formData = new FormData();
     formData.append("image", file);
@@ -182,13 +249,13 @@ window.app.handlePfpUpload = async (event, previewId) => {
             throw new Error("Upload failed");
         }
     } catch(e) {
-        alert("Image upload failed. Try again or use default.");
+        window.app.showAuthAlert('Upload Failed', 'We could not upload your image. Please try again or use the default avatar.');
         imgPreview.src = originalSrc;
     }
 };
 
 
-// --- FIREBASE AUTHENTICATION LOGIC ---
+// --- FIREBASE LOGIC ---
 
 window.app.handleLogin = async (e) => {
     e.preventDefault();
@@ -207,12 +274,23 @@ window.app.handleLogin = async (e) => {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         await window.app.syncProfileAfterAuth(userCredential.user);
         window.app.closeAuthModal();
-        window.location.reload(); // Refresh to apply states globally
+        window.location.reload(); 
         
     } catch (error) {
-        alert(error.message.replace('Firebase:', '').trim());
+        const errCode = error.code;
         btn.innerText = originalText;
         btn.disabled = false;
+
+        // Custom Error Routing for non-existent users
+        if (errCode === 'auth/user-not-found' || errCode === 'auth/invalid-credential') {
+            window.app.showAuthAlert(
+                'User Not Found', 
+                'This account does not exist or the credentials are incorrect. Please try signing up!', 
+                `<button onclick="window.app.closeAuthAlert(); window.app.switchAuthTab('register')" class="bg-[#F47521] text-white px-5 py-2.5 rounded shadow-md text-xs font-black uppercase tracking-wider hover:bg-white hover:text-black transition-colors">Sign Up</button>`
+            );
+        } else {
+            window.app.showAuthAlert('Login Error', error.message.replace('Firebase:', '').trim());
+        }
     }
 };
 
@@ -220,7 +298,7 @@ window.app.handleRegister = async (e) => {
     e.preventDefault();
     const btn = document.getElementById('btn-register');
     const originalText = btn.innerText;
-    btn.innerText = "Checking Username...";
+    btn.innerText = "Checking...";
     btn.disabled = true;
 
     const name = document.getElementById('register-name').value.trim();
@@ -232,26 +310,23 @@ window.app.handleRegister = async (e) => {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const usersRef = firestore.collection(window.app.db, "users");
         
-        // 1. Enforce Unique Username
         const q = firestore.query(usersRef, firestore.where("name", "==", name));
         const querySnapshot = await firestore.getDocs(q);
         
         if (!querySnapshot.empty) {
-            alert("This Username is already taken! Please choose another.");
+            window.app.showAuthAlert("Name Taken", "This Username is already in use by another warrior! Please choose a different one.");
             btn.innerText = originalText;
             btn.disabled = false;
             return;
         }
 
-        btn.innerText = "Creating Account...";
+        btn.innerText = "Creating...";
 
-        // 2. Create Auth Account
         const { getAuth, createUserWithEmailAndPassword } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
         const auth = getAuth(window.app.firebaseApp);
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
-        // 3. Save to Firestore
         const newProfile = {
             uid: user.uid,
             name: name,
@@ -265,7 +340,6 @@ window.app.handleRegister = async (e) => {
         const userDocRef = firestore.doc(window.app.db, "users", user.uid);
         await firestore.setDoc(userDocRef, newProfile);
 
-        // 4. Set local state & close
         window.app.state.activeProfile = newProfile;
         localStorage.setItem('blazex_user_profile', JSON.stringify(newProfile));
         
@@ -273,16 +347,18 @@ window.app.handleRegister = async (e) => {
         window.location.reload();
 
     } catch (error) {
-        alert(error.message.replace('Firebase:', '').trim());
+        window.app.showAuthAlert('Registration Error', error.message.replace('Firebase:', '').trim());
         btn.innerText = originalText;
         btn.disabled = false;
     }
 };
 
-window.app.handlePasswordReset = async () => {
-    const email = document.getElementById('login-email').value.trim();
+window.app.executePasswordReset = async () => {
+    const emailInput = document.getElementById('reset-email-input');
+    const email = emailInput ? emailInput.value.trim() : '';
+    
     if (!email) {
-        alert("Please enter your email address in the Login Email field first.");
+        alert("Please type your email."); // Fallback if input is somehow missing
         return;
     }
     
@@ -290,9 +366,10 @@ window.app.handlePasswordReset = async () => {
         const { getAuth, sendPasswordResetEmail } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
         const auth = getAuth(window.app.firebaseApp);
         await sendPasswordResetEmail(auth, email);
-        alert(`A password reset link has been sent to ${email}`);
+        
+        window.app.showAuthAlert('Success', `A secure password reset link has been sent to <b>${email}</b>. Check your inbox and spam folders!`);
     } catch (error) {
-        alert(error.message.replace('Firebase:', '').trim());
+        window.app.showAuthAlert('Error', error.message.replace('Firebase:', '').trim());
     }
 };
 
@@ -305,7 +382,6 @@ window.app.handleGoogleLogin = async () => {
         const result = await signInWithPopup(auth, provider);
         const user = result.user;
 
-        // Check if user exists in DB to avoid overwriting library, otherwise create
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const userDocRef = firestore.doc(window.app.db, "users", user.uid);
         const docSnap = await firestore.getDoc(userDocRef);
@@ -337,17 +413,16 @@ window.app.handleGoogleLogin = async () => {
     }
 };
 
-// --- GUEST LOGIN LOGIC ---
+// --- GUEST LOGIC ---
 window.app.handleGuestLogin = async (e) => {
     e.preventDefault();
     const btn = document.getElementById('btn-guest');
-    btn.innerText = "Loading...";
+    btn.innerText = "Entering Universe...";
     btn.disabled = true;
 
     const name = document.getElementById('guest-name').value.trim();
     const pfp = window.app.state.authSelectedPfp;
     
-    // Generate secure local UID
     const guestUid = 'anon_' + Date.now().toString(36) + Math.random().toString(36).substr(2);
 
     const guestProfile = {
@@ -372,13 +447,9 @@ window.app.handleGuestLogin = async (e) => {
     }
 
     window.app.closeAuthModal();
-    
-    // If they clicked auth from play.html or info.html, let them stay there instead of full reload if needed.
-    // For standard headers, reload is safest to apply profile.
     window.location.reload(); 
 };
 
-// --- HELPER FUNCTION: Fetch DB Profile after standard Email Login ---
 window.app.syncProfileAfterAuth = async (firebaseUser) => {
     const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
     const userDocRef = firestore.doc(window.app.db, "users", firebaseUser.uid);
