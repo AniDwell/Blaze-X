@@ -4,7 +4,8 @@ window.app.components.carousel = async () => {
     const container = document.getElementById('carousel-container');
     if (!container) return;
 
-    // Loading state (Spins until AniList data AND the first image are fully loaded)
+    // 1. SHOW LOADING SCREEN IMMEDIATELY
+    // This stays visible while the code searches AniList in the background
     container.innerHTML = `
         <div class="w-full aspect-[4/5] md:aspect-[21/9] bg-black flex items-center justify-center border-b border-white/5">
             <div class="tk-loader scale-50">
@@ -33,9 +34,11 @@ window.app.components.carousel = async () => {
             return;
         }
 
-        // --- TRENDING ENGINE & DATA FETCHING ---
+        // 2. WAIT FOR ALL ANILIST MATCHES (Loader stays on screen during this)
         const enrichedSlides = await Promise.all(rawSlides.map(async (slide) => {
             const cleanTitle = (slide.title || '').replace(/\(Dub\)|\(Sub\)|Episode \d+/gi, '').trim();
+            
+            // STRICTLY USE EXACT ID FROM JSON
             const exactId = slide.id; 
             
             let finalImage = slide.image || slide.cover || slide.poster || 'https://via.placeholder.com/1280x720/111/fff?text=No+Image';
@@ -63,20 +66,9 @@ window.app.components.carousel = async () => {
             return { ...slide, exactId, finalImage, finalRating, trendingScore };
         }));
 
-        // Sort by trending score and take top 5
+        // Sort by trending score (highest first) and take top 5
         enrichedSlides.sort((a, b) => b.trendingScore - a.trendingScore);
         const topSlides = enrichedSlides.slice(0, 5);
-
-        // --- IMAGE PRELOADER ---
-        // Forces the loader to keep spinning until the first background image is physically downloaded
-        if (topSlides.length > 0 && topSlides[0].finalImage) {
-            await new Promise((resolve) => {
-                const img = new Image();
-                img.onload = resolve;
-                img.onerror = resolve; // Resolve anyway so it doesn't get stuck forever
-                img.src = topSlides[0].finalImage;
-            });
-        }
 
         window.app.state.carouselItems = topSlides; 
         window.app.state.carouselCurrentIndex = 0;
@@ -84,7 +76,7 @@ window.app.components.carousel = async () => {
         let imageSlidesHtml = '';
         let dotsHtml = '';
 
-        // 1. Build Background Image Slides ONLY
+        // Build Background Image Slides
         topSlides.forEach((s, i) => {
             imageSlidesHtml += `
                 <div class="absolute inset-0 cursor-pointer z-0 group overflow-hidden bg-black" id="slide-bg-${i}" style="opacity: ${i === 0 ? '1' : '0'}; z-index: ${i === 0 ? '20' : '10'}; transition: opacity 0.8s ease-in-out;" onclick="window.location.href='info.html?id=${s.exactId}'">
@@ -101,7 +93,7 @@ window.app.components.carousel = async () => {
             `;
         });
 
-        // 2. Main DOM Construction with a SINGLE Dynamic UI Layer
+        // 3. RENDER FINAL UI (Removes loader)
         container.innerHTML = `
             <div class="relative w-full aspect-[4/5] md:aspect-[21/9] max-h-[75vh] overflow-hidden bg-black border-b border-white/5">
                 
@@ -120,7 +112,6 @@ window.app.components.carousel = async () => {
             </div>
         `;
 
-        // Initialize UI for first slide
         window.app.updateCarouselUI(0);
         startAutoRotate();
         
@@ -129,7 +120,7 @@ window.app.components.carousel = async () => {
     }
 };
 
-// --- DYNAMIC UI UPDATER ---
+// --- DYNAMIC UI UPDATER (Permanently guarantees exact ID injection) ---
 window.app.updateCarouselUI = (index) => {
     const uiLayer = document.getElementById('carousel-ui-layer');
     if (!uiLayer) return;
@@ -137,21 +128,16 @@ window.app.updateCarouselUI = (index) => {
     const data = window.app.state.carouselItems[index];
     if (!data) return;
 
+    // PERFECT ID LOCK
     const id = data.exactId || 'unknown';
-    
-    // UPDATED: Score badge uses white text on orange background
-    const ratingHtml = data.finalRating 
-        ? `<span class="bg-[#F47521] text-white px-2 py-1 rounded shadow-md flex items-center gap-1"><i class="fas fa-star"></i> ${data.finalRating}% SCORE</span>` 
-        : '';
+    const ratingHtml = data.finalRating ? `<span class="flex items-center gap-1"><i class="fas fa-star"></i> ${data.finalRating}% SCORE</span>` : '';
 
-    // Step 1: Fade out old UI
     uiLayer.style.opacity = '0';
 
-    // Step 2: Swap data and fade in after a short delay
     setTimeout(() => {
         uiLayer.innerHTML = `
-            <div class="flex flex-wrap items-center gap-2 md:gap-3 text-white text-[10px] md:text-xs font-black tracking-widest drop-shadow-md mb-2 md:mb-3 uppercase">
-                <span class="bg-[#F47521] px-2 py-1 rounded shadow-md">#${index + 1} Trending</span>
+            <div class="flex items-center gap-3 text-[#F47521] text-[10px] md:text-xs font-black tracking-widest drop-shadow-md mb-2 md:mb-3 uppercase">
+                <span class="bg-[#F47521]/10 border border-[#F47521]/30 px-2 py-0.5 rounded backdrop-blur-sm">#${index + 1} Trending</span>
                 ${ratingHtml}
             </div>
 
@@ -159,7 +145,7 @@ window.app.updateCarouselUI = (index) => {
             <p class="text-[11px] md:text-xs text-gray-300 line-clamp-3 md:line-clamp-4 mb-5 md:mb-6 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-relaxed font-medium">${data.description || 'No synopsis available.'}</p>
             
             <div class="flex gap-2.5 relative z-40">
-                <button onclick="window.location.href='info.html?id=${id}'" class="bg-[#F47521] text-white px-6 py-2 md:px-8 md:py-3 rounded shadow-[0_0_15px_rgba(244,117,33,0.4)] font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-white hover:text-[#F47521] transition-all flex items-center gap-2">
+                <button onclick="window.location.href='info.html?id=${id}'" class="bg-[#F47521] text-white px-6 py-2 md:px-8 md:py-3 rounded shadow-[0_0_15px_rgba(244,117,33,0.3)] font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-white hover:text-black transition-colors flex items-center gap-2">
                     <i class="fas fa-play"></i> Watch Now
                 </button>
                 
@@ -169,9 +155,8 @@ window.app.updateCarouselUI = (index) => {
             </div>
         `;
         uiLayer.style.opacity = '1';
-    }, 300); // 300ms matches the CSS transition-duration
+    }, 300);
 };
-
 
 // --- ROTATION & SLIDE CONTROLS ---
 window.app.goToCarouselSlide = (targetIndex) => {
@@ -189,7 +174,6 @@ function transitionSlide(oldIndex, newIndex) {
     const newSlide = document.getElementById(`slide-bg-${newIndex}`);
     const newDot = document.getElementById(`dot-${newIndex}`);
 
-    // Crossfade Images
     if (oldSlide) {
         oldSlide.style.opacity = '0';
         oldSlide.classList.replace('z-20', 'z-10');
@@ -199,11 +183,9 @@ function transitionSlide(oldIndex, newIndex) {
         newSlide.classList.replace('z-10', 'z-20');
     }
 
-    // Update Dots
     if (oldDot) oldDot.className = "carousel-dot w-2 h-2 bg-white/30 hover:bg-white/60 transition-all duration-300 cursor-pointer pointer-events-auto shadow-md shrink-0 rounded-sm";
     if (newDot) newDot.className = "carousel-dot w-2 h-8 bg-[#F47521] transition-all duration-300 cursor-pointer pointer-events-auto shadow-md shrink-0 rounded-sm";
     
-    // Fade and update the single UI Layer
     window.app.updateCarouselUI(newIndex);
 }
 
@@ -233,6 +215,7 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
     const rawData = window.app.state.carouselItems[index];
     if (!rawData) return;
     
+    // Grabs EXACT ID from state
     const formattedAnime = { 
         id: rawData.exactId, 
         title: rawData.title, 
