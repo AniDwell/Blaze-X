@@ -2,7 +2,6 @@
 
 // --- CUSTOM CSS ALERT SYSTEM ---
 window.app.showCustomAlert = (message, type = 'error', actionText = null, actionCallback = null) => {
-    // Remove existing alert if any
     const existing = document.getElementById('custom-toast-alert');
     if (existing) existing.remove();
 
@@ -11,7 +10,6 @@ window.app.showCustomAlert = (message, type = 'error', actionText = null, action
     
     let actionBtn = '';
     if (actionText && actionCallback) {
-        // Temporarily store callback in window to trigger it via HTML string
         window._tempAlertCallback = () => {
             actionCallback();
             document.getElementById('custom-toast-alert')?.remove();
@@ -32,7 +30,6 @@ window.app.showCustomAlert = (message, type = 'error', actionText = null, action
 
     document.body.insertAdjacentHTML('beforeend', alertHtml);
     
-    // Animate In
     setTimeout(() => {
         const toast = document.getElementById('custom-toast-alert');
         if(toast) {
@@ -41,7 +38,6 @@ window.app.showCustomAlert = (message, type = 'error', actionText = null, action
         }
     }, 10);
 
-    // Auto-remove after 5 seconds if no action button
     if (!actionText) {
         setTimeout(() => {
             const toast = document.getElementById('custom-toast-alert');
@@ -71,11 +67,10 @@ window.app.components.auth = () => {
     modal.id = 'auth-modal';
     modal.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md px-4 opacity-0 transition-opacity duration-300';
     
-    // Custom CSS for Furina's thought bubble tail
     const customStyles = `
         <style>
             .thought-bubble::after {
-                content: ''; position: absolute; bottom: -5px; left: 15px;
+                content: ''; position: absolute; bottom: -5px; left: 20px;
                 border-width: 6px 6px 0; border-style: solid; border-color: #ffffff transparent transparent transparent;
             }
         </style>
@@ -83,10 +78,10 @@ window.app.components.auth = () => {
 
     modal.innerHTML = `
         ${customStyles}
-        <div class="relative w-full max-w-md bg-[#0a0a0a] rounded-2xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.9)] mt-12 transform scale-95 transition-transform duration-300" id="auth-modal-box">
+        <div class="relative w-full max-w-md bg-[#0a0a0a] rounded-2xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.9)] mt-20 md:mt-28 transform scale-95 transition-transform duration-300" id="auth-modal-box">
             
-            <div class="absolute -top-14 left-0 md:-left-4 z-50 flex items-end pointer-events-none">
-                <img src="https://media.tenor.com/fYOO8YHxJsUAAAAi/genshin-impact-furina.gif" class="w-20 h-20 md:w-24 md:h-24 object-contain">
+            <div class="absolute -top-24 left-0 md:-top-32 md:-left-4 z-50 flex items-end pointer-events-none">
+                <img src="https://media.tenor.com/fYOO8YHxJsUAAAAi/genshin-impact-furina.gif" class="w-28 h-28 md:w-36 md:h-36 object-contain">
                 <div class="thought-bubble relative bg-white text-black font-black text-[9px] md:text-[10px] px-3 py-1.5 rounded-xl mb-12 -ml-3 shadow-[0_4px_10px_rgba(0,0,0,0.5)] uppercase tracking-wider">
                     Please Login!
                 </div>
@@ -96,11 +91,10 @@ window.app.components.auth = () => {
                 <i class="fas fa-times text-xl"></i>
             </button>
 
-            <div class="text-center pt-10 pb-4 flex flex-col items-center justify-center">
-                <div class="flex items-center justify-center gap-2 text-xl font-black text-white tracking-tight">
-                    Welcome to <img src="logo.png" class="h-5 md:h-6 object-contain pointer-events-none">
+            <div class="text-center pt-10 pb-6 flex flex-col items-center justify-center">
+                <div class="flex items-center justify-center gap-3 text-2xl font-black text-white tracking-tight">
+                    Welcome to <img src="logo.png" class="h-8 md:h-10 object-contain pointer-events-none">
                 </div>
-                <p class="text-gray-400 text-[11px] mt-1.5 font-medium uppercase tracking-widest">Sync your library across devices</p>
             </div>
 
             <div id="auth-tabs" class="flex border-b border-white/10 text-xs font-bold uppercase tracking-widest px-6">
@@ -224,12 +218,10 @@ window.app.closeAuthModal = () => {
 };
 
 window.app.switchAuthView = (view) => {
-    // Hide all forms
     ['view-login', 'view-register', 'view-forgot', 'view-guest'].forEach(v => {
         document.getElementById(v).classList.add('hidden');
     });
 
-    // Reset standard tabs
     const tabs = document.getElementById('auth-tabs');
     const social = document.getElementById('social-container');
     
@@ -239,12 +231,10 @@ window.app.switchAuthView = (view) => {
         document.getElementById('tab-login').className = `flex-1 pb-3 transition-colors ${view === 'login' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white border-b-2 border-transparent'}`;
         document.getElementById('tab-register').className = `flex-1 pb-3 transition-colors ${view === 'register' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white border-b-2 border-transparent'}`;
     } else {
-        // Hide tabs and social buttons for specialized views
         tabs.classList.add('hidden');
         social.classList.add('hidden');
     }
 
-    // Show target view
     document.getElementById(`view-${view}`).classList.remove('hidden');
 };
 
@@ -305,12 +295,11 @@ window.app.handleLogin = async (e) => {
         setTimeout(() => window.location.reload(), 1000);
         
     } catch (error) {
-        // Smart Error Handling: If user doesn't exist or invalid credentials, suggest Sign Up
         const errCode = error.code;
         if (errCode === 'auth/user-not-found' || errCode === 'auth/invalid-credential') {
             window.app.showCustomAlert("Account not found. Would you like to create one?", 'error', 'Go to Sign Up', () => {
                 window.app.switchAuthView('register');
-                document.getElementById('register-email').value = email; // Auto-fill email
+                document.getElementById('register-email').value = email; 
             });
         } else {
             window.app.showCustomAlert(error.message.replace('Firebase:', '').trim(), 'error');
