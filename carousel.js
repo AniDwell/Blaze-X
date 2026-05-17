@@ -4,7 +4,7 @@ window.app.components.carousel = async () => {
     const container = document.getElementById('carousel-container');
     if (!container) return;
 
-    // Loading state - no top margin for seamless alignment with header
+    // Loading state
     container.innerHTML = `
         <div class="w-full aspect-[4/5] md:aspect-[21/9] bg-black flex items-center justify-center border-b border-white/5">
             <div class="tk-loader scale-50">
@@ -33,18 +33,18 @@ window.app.components.carousel = async () => {
             return;
         }
 
-        const topSlides = rawSlides.slice(0, 5);
-        
-        // --- ANILIST INTEGRATION: Fetching Textless Covers & Trailer IDs ---
-        const enrichedSlides = await Promise.all(topSlides.map(async (slide) => {
+        // --- THE TRENDING ENGINE ---
+        // Fetch AniList data for the recent list to determine their live global popularity
+        const enrichedSlides = await Promise.all(rawSlides.map(async (slide) => {
             const cleanTitle = (slide.title || '').replace(/\(Dub\)|\(Sub\)|Episode \d+/gi, '').trim();
             
-            let finalPoster = slide.image || slide.cover || slide.poster || 'https://via.placeholder.com/800x1200/111/fff?text=No+Image';
+            let finalImage = slide.image || slide.cover || slide.poster || 'https://via.placeholder.com/1280x720/111/fff?text=No+Image';
             let finalRating = null;
-            let trailerId = null;
+            let trendingScore = 0;
 
             try {
-                const query = `query ($search: String) { Media (search: $search, type: ANIME, sort: SEARCH_MATCH) { coverImage { extraLarge } averageScore trailer { id site } } }`;
+                // Requesting 'trending' metric and both banner & poster images
+                const query = `query ($search: String) { Media (search: $search, type: ANIME, sort: SEARCH_MATCH) { trending averageScore bannerImage coverImage { extraLarge } } }`;
                 const aniRes = await fetch('https://graphql.anilist.co', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
@@ -53,56 +53,67 @@ window.app.components.carousel = async () => {
                 
                 const aniData = await aniRes.json();
                 if (aniData?.data?.Media) {
-                    if (aniData.data.Media.coverImage?.extraLarge) finalPoster = aniData.data.Media.coverImage.extraLarge;
+                    // Prefer banner for cinematic wide aspect ratio, fallback to poster
+                    finalImage = aniData.data.Media.bannerImage || aniData.data.Media.coverImage?.extraLarge || finalImage;
                     if (aniData.data.Media.averageScore) finalRating = aniData.data.Media.averageScore;
-                    if (aniData.data.Media.trailer?.site === "youtube") trailerId = aniData.data.Media.trailer.id;
+                    if (aniData.data.Media.trending) trendingScore = aniData.data.Media.trending;
                 }
             } catch (e) {
-                console.log("AniList fetch failed for:", cleanTitle);
+                console.log("AniList sync failed for:", cleanTitle);
             }
 
-            return { ...slide, finalPoster, finalRating, trailerId };
+            return { ...slide, finalImage, finalRating, trendingScore };
         }));
 
-        window.app.state.carouselItems = enrichedSlides; 
+        // Sort the array by highest trending score first
+        enrichedSlides.sort((a, b) => b.trendingScore - a.trendingScore);
+
+        // Take the Top 5 most popular anime
+        const topSlides = enrichedSlides.slice(0, 5);
+
+        window.app.state.carouselItems = topSlides; 
         window.app.state.carouselCurrentIndex = 0;
 
         let slidesHtml = '';
         let dotsHtml = '';
 
-        enrichedSlides.forEach((s, i) => {
-            const id = s.id || 'unknown';
+        topSlides.forEach((s, i) => {
+            // FIX: Ensure it grabs the correct ID or Slug for routing to info.html
+            const id = s.slug || s.id || s.animeId || 'unknown';
             const title = s.title || 'Unknown Title';
             const desc = s.description || 'No synopsis available.';
-            const img = s.finalPoster;
+            const img = s.finalImage;
             
             const ratingHtml = s.finalRating 
-                ? `<div class="flex items-center gap-1.5 mb-1.5 md:mb-2 text-[#F47521] text-[10px] md:text-xs font-black tracking-widest drop-shadow-md">
-                     <i class="fas fa-star"></i> ${s.finalRating}% SCORE
-                   </div>` 
+                ? `<span class="flex items-center gap-1"><i class="fas fa-star"></i> ${s.finalRating}% SCORE</span>` 
                 : '';
 
             slidesHtml += `
                 <div class="carousel-slide absolute inset-0 flex flex-col md:flex-row bg-black" id="slide-${i}" style="opacity: ${i === 0 ? '1' : '0'}; z-index: ${i === 0 ? '20' : '10'}; transition: opacity 0.5s ease-in-out;">
                     
-                    <div class="absolute inset-0 md:left-[40%] md:w-[60%] cursor-pointer z-0 group overflow-hidden bg-black" onclick="window.location.href='info.html?id=${id}'">
-                        <img src="${img}" class="absolute inset-0 w-full h-full object-cover object-center transition-transform duration-[10s] group-hover:scale-105 opacity-90 md:opacity-100">
+                    <div class="absolute inset-0 md:left-[30%] md:w-[70%] cursor-pointer z-0 group overflow-hidden bg-black" onclick="window.location.href='info.html?id=${id}'">
+                        <img src="${img}" class="absolute inset-0 w-full h-full object-cover object-center transition-transform duration-[10s] group-hover:scale-105 opacity-80 md:opacity-100">
                         
-                        <div class="absolute bottom-0 left-0 right-0 h-[55%] bg-gradient-to-t from-black via-black/90 to-transparent md:hidden"></div>
-                        <div class="absolute inset-0 bg-gradient-to-r from-black via-black/80 to-transparent hidden md:block w-[70%]"></div>
+                        <div class="absolute bottom-0 left-0 right-0 h-[65%] bg-gradient-to-t from-black via-black/90 to-transparent md:hidden"></div>
+                        <div class="absolute inset-0 bg-gradient-to-r from-black via-black/90 to-transparent hidden md:block w-[80%]"></div>
                     </div>
                     
-                    <div class="absolute bottom-8 left-4 right-8 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:left-12 md:w-[35%] z-30 pr-4">
-                        ${ratingHtml}
-                        <h2 class="text-3xl md:text-5xl font-black text-white mb-2 md:mb-3 drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] line-clamp-2 md:line-clamp-3 tracking-tight cursor-pointer leading-tight">${title}</h2>
-                        <p class="text-[11px] md:text-xs text-gray-300 line-clamp-3 md:line-clamp-4 mb-5 md:mb-6 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-relaxed">${desc}</p>
+                    <div class="absolute bottom-8 left-4 right-8 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:left-12 md:w-[40%] z-30 pr-4">
+                        
+                        <div class="flex items-center gap-3 text-[#F47521] text-[10px] md:text-xs font-black tracking-widest drop-shadow-md mb-2 md:mb-3 uppercase">
+                            <span class="bg-[#F47521]/10 border border-[#F47521]/30 px-2 py-0.5 rounded backdrop-blur-sm">#${i + 1} Trending</span>
+                            ${ratingHtml}
+                        </div>
+
+                        <h2 class="text-3xl md:text-5xl lg:text-6xl font-black text-white mb-2 md:mb-3 drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] line-clamp-2 tracking-tight cursor-pointer leading-tight hover:text-[#F47521] transition-colors" onclick="window.location.href='info.html?id=${id}'">${title}</h2>
+                        <p class="text-[11px] md:text-xs text-gray-300 line-clamp-3 md:line-clamp-4 mb-5 md:mb-6 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-relaxed font-medium">${desc}</p>
                         
                         <div class="flex gap-2.5 relative z-40">
-                            <button onclick="window.location.href='info.html?id=${id}'" class="bg-[#F47521] text-black px-6 py-2 md:px-7 md:py-2.5 rounded shadow-[0_0_15px_rgba(244,117,33,0.3)] font-bold text-[10px] md:text-xs tracking-wider uppercase hover:bg-[#ff9d5c] transition-colors">
-                                <i class="fas fa-play ml-0.5"></i> Play
+                            <button onclick="window.location.href='info.html?id=${id}'" class="bg-[#F47521] text-black px-6 py-2 md:px-8 md:py-3 rounded shadow-[0_0_15px_rgba(244,117,33,0.3)] font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-white transition-colors flex items-center gap-2">
+                                <i class="fas fa-play"></i> Watch Now
                             </button>
                             
-                            <button onclick="window.app.handleCarouselLibraryClick(event, ${i})" class="bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-2.5 rounded font-bold text-[10px] md:text-xs tracking-wider uppercase hover:bg-white/20 transition-colors">
+                            <button onclick="window.app.handleCarouselLibraryClick(event, ${i})" class="bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2">
                                 <i class="fas fa-plus"></i> Library
                             </button>
                         </div>
@@ -119,13 +130,10 @@ window.app.components.carousel = async () => {
             `;
         });
 
-        // No top margin - seamless alignment with header
+        // No preview layer, simplified HTML structure
         container.innerHTML = `
             <div class="relative w-full aspect-[4/5] md:aspect-[21/9] max-h-[75vh] overflow-hidden bg-black border-b border-white/5">
                 <div id="hero-slides" class="relative w-full h-full">${slidesHtml}</div>
-                
-                <div id="carousel-preview-layer" class="absolute inset-0 z-[60] opacity-0 pointer-events-none transition-opacity duration-500 bg-black flex flex-col md:flex-row"></div>
-                
                 <div class="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 flex flex-col justify-center gap-2.5 z-[70]" id="carousel-indicators">${dotsHtml}</div>
             </div>
         `;
@@ -135,60 +143,6 @@ window.app.components.carousel = async () => {
     } catch (err) {
         console.error("Carousel Script Error:", err);
     }
-};
-
-window.app.showPreview = (title, desc, posterUrl, rating, trailerId) => {
-    if (window.app.state.carouselInterval) clearInterval(window.app.state.carouselInterval);
-
-    const previewLayer = document.getElementById('carousel-preview-layer');
-    if (!previewLayer) return;
-
-    const ratingHtml = rating ? `<div class="flex items-center gap-1.5 mb-1.5 md:mb-2 text-[#F47521] text-[10px] md:text-xs font-black tracking-widest drop-shadow-md"><i class="fas fa-star"></i> ${rating}% SCORE</div>` : '';
-    
-    const videoHtml = trailerId ? `
-        <div class="absolute inset-0 w-full h-full overflow-hidden pointer-events-none z-0 bg-black">
-            <iframe id="preview-trailer-iframe" class="absolute top-1/2 left-1/2 w-[150vw] h-[150vh] md:w-[150%] md:h-[150%] -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-0 transition-opacity duration-1000" src="https://www.youtube.com/embed/${trailerId}?autoplay=1&mute=1" frameborder="0" allow="autoplay" allowfullscreen></iframe>
-        </div>
-    ` : '';
-
-    previewLayer.innerHTML = `
-        <div class="absolute inset-0 md:left-[40%] md:w-[60%] z-0 bg-black overflow-hidden">
-            <img id="preview-poster" src="${posterUrl}" class="absolute inset-0 w-full h-full object-cover object-center z-10 transition-opacity duration-1000">
-            ${videoHtml}
-            <div class="absolute bottom-0 left-0 right-0 h-[55%] bg-gradient-to-t from-black via-black/90 to-transparent md:hidden z-20"></div>
-            <div class="absolute inset-0 bg-gradient-to-r from-black via-black/80 to-transparent hidden md:block w-[70%] z-20"></div>
-        </div>
-        
-        <div class="absolute bottom-8 left-4 right-8 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:left-12 md:w-[35%] z-30 pr-4">
-            ${ratingHtml}
-            <h2 class="text-3xl md:text-5xl font-black text-white mb-2 md:mb-3 drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] line-clamp-2 md:line-clamp-3 tracking-tight leading-tight">${title}</h2>
-            <p class="text-[11px] md:text-xs text-gray-300 line-clamp-3 md:line-clamp-4 mb-5 md:mb-6 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-relaxed">${desc}</p>
-        </div>
-    `;
-
-    previewLayer.classList.remove('opacity-0');
-    previewLayer.classList.add('opacity-100');
-
-    const iframe = document.getElementById('preview-trailer-iframe');
-    const poster = document.getElementById('preview-poster');
-    if (iframe && poster) {
-        iframe.onload = () => {
-            setTimeout(() => {
-                iframe.classList.remove('opacity-0');
-                poster.classList.add('opacity-0');
-            }, 1500); 
-        };
-    }
-};
-
-window.app.hidePreview = () => {
-    const previewLayer = document.getElementById('carousel-preview-layer');
-    if (previewLayer) {
-        previewLayer.classList.remove('opacity-100');
-        previewLayer.classList.add('opacity-0');
-        setTimeout(() => { previewLayer.innerHTML = ''; }, 500); 
-    }
-    startAutoRotate(); 
 };
 
 window.app.goToCarouselSlide = (targetIndex) => {
@@ -247,7 +201,14 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
     }
     const rawData = window.app.state.carouselItems[index];
     if (!rawData) return;
-    const formattedAnime = { id: rawData.id, title: rawData.title, img: rawData.finalPoster };
+    
+    // Use correct ID mapping here too
+    const formattedAnime = { 
+        id: rawData.slug || rawData.id || rawData.animeId, 
+        title: rawData.title, 
+        img: rawData.finalImage 
+    };
+    
     if (profile.watchlist && profile.watchlist.some(item => item.id === formattedAnime.id)) return alert("This series is already in your Library!");
     
     if(!profile.watchlist) profile.watchlist = [];
