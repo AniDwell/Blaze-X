@@ -31,7 +31,6 @@ window.app.components.info = async () => {
         const cleanTitleForSearch = (baseAnime.title || baseAnime.name || '').replace(/\(Dub\)|\(Sub\)/gi, '').trim();
 
         try {
-            // Increased perPage to 12 to capture Original Creators and Authors
             const query = `query ($search: String) { 
                 Media (search: $search, type: ANIME, sort: SEARCH_MATCH) { 
                     title { romaji native english }
@@ -115,17 +114,17 @@ function renderAnimeInfoShell() {
     const genresStr = ani.genres ? ani.genres.join(' • ') : 'Anime Series';
 
     container.innerHTML = `
-        <div class="w-full flex flex-col bg-[#050505] min-h-screen pb-24">
+        <div class="w-full flex flex-col bg-[#050505] min-h-screen pb-24 relative">
             
-            <div class="relative w-full min-h-[40vh] md:min-h-[55vh] flex items-center py-10 border-b border-white/5 overflow-hidden">
-                
-                <div class="absolute inset-0 z-0">
-                    <img src="${data.banner}" class="w-full h-full object-cover object-top opacity-50 md:opacity-70 blur-[2px] scale-105">
-                    <div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/70 to-transparent"></div>
-                    <div class="absolute inset-0 bg-gradient-to-r from-[#050505]/90 via-[#050505]/30 to-transparent hidden md:block"></div>
-                </div>
+            <div class="absolute top-0 left-0 w-full h-[55vh] md:h-[65vh] z-0 pointer-events-none">
+                <img src="${data.banner}" class="w-full h-full object-cover object-top opacity-50 md:opacity-70">
+                <div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/70 to-transparent"></div>
+                <div class="absolute inset-0 bg-gradient-to-r from-[#050505]/80 via-[#050505]/10 to-transparent hidden md:block"></div>
+            </div>
 
-                <div class="relative z-10 w-full max-w-7xl mx-auto px-4 md:px-12 flex flex-col md:flex-row items-center md:items-start gap-8 md:gap-12 mt-4">
+            <div class="relative z-10 w-full min-h-[55vh] md:min-h-[65vh] flex items-center py-10 border-b border-white/5">
+                
+                <div class="w-full max-w-7xl mx-auto px-4 md:px-12 flex flex-col md:flex-row items-center md:items-start gap-8 md:gap-12 mt-4">
                     
                     <div class="w-[45%] max-w-[180px] md:w-1/4 md:max-w-[260px] flex-shrink-0 rounded-xl overflow-hidden shadow-[0_20px_40px_rgba(0,0,0,0.8)] border border-white/10">
                         <img src="${data.poster}" class="w-full h-full object-cover aspect-[2/3]">
@@ -155,7 +154,7 @@ function renderAnimeInfoShell() {
                 </div>
             </div>
 
-            <div class="w-full mt-4">
+            <div class="relative z-10 w-full mt-4">
                 <div class="flex items-center justify-center w-full max-w-2xl mx-auto border-b border-white/10 text-xs md:text-sm font-bold uppercase tracking-widest pt-4">
                     <button onclick="window.app.switchInfoTab('information')" id="tab-information" class="flex-1 text-center pb-3 transition-colors ${window.app.state.activeInfoTab === 'information' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white'}">Information</button>
                     <button onclick="window.app.switchInfoTab('episodes')" id="tab-episodes" class="flex-1 text-center pb-3 transition-colors ${window.app.state.activeInfoTab === 'episodes' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white'}">Episodes</button>
@@ -193,7 +192,6 @@ function renderDynamicTabContent() {
         const genresHtml = ani.genres ? ani.genres.map(g => `<span class="bg-white/5 border border-white/10 px-3 py-1.5 rounded text-[10px] md:text-xs text-white font-medium">${g}</span>`).join('') : 'N/A';
         const studios = ani.studios?.nodes?.map(s => s.name).join(', ') || 'Unknown';
         
-        // Expanded Staff Mapping
         const staffHtml = ani.staff?.nodes?.map(s => `
             <div class="bg-[#111] p-3 rounded-lg border border-white/5 shadow-inner flex items-center gap-3 md:gap-4">
                 <img src="${s.image?.large || 'https://via.placeholder.com/150/222/fff?text=?'}" class="w-12 h-12 md:w-14 md:h-14 rounded-full object-cover border border-white/10 shadow-md">
@@ -204,7 +202,6 @@ function renderDynamicTabContent() {
             </div>
         `).join('') || '<div class="text-gray-500 text-sm">No staff info available.</div>';
 
-        // Circular Score Logic based on rating value
         const scoreVal = ani.averageScore || 0;
         const ringColor = scoreVal >= 80 ? 'border-green-500' : scoreVal >= 60 ? 'border-[#F47521]' : 'border-red-500';
 
