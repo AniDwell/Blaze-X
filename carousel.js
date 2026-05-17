@@ -33,18 +33,20 @@ window.app.components.carousel = async () => {
             return;
         }
 
-        // --- THE TRENDING ENGINE ---
-        // Fetch AniList data for the recent list to determine their live global popularity
+        // --- TRENDING ENGINE & TEXTLESS POSTERS ---
         const enrichedSlides = await Promise.all(rawSlides.map(async (slide) => {
             const cleanTitle = (slide.title || '').replace(/\(Dub\)|\(Sub\)|Episode \d+/gi, '').trim();
+            
+            // STRICT ID EXTRACTION based on your JSON: [{"id":8630...}]
+            const exactId = slide.id; 
             
             let finalImage = slide.image || slide.cover || slide.poster || 'https://via.placeholder.com/1280x720/111/fff?text=No+Image';
             let finalRating = null;
             let trendingScore = 0;
 
             try {
-                // Requesting 'trending' metric and both banner & poster images
-                const query = `query ($search: String) { Media (search: $search, type: ANIME, sort: SEARCH_MATCH) { trending averageScore bannerImage coverImage { extraLarge } } }`;
+                // Strictly fetching 'coverImage' to get clean, textless vertical posters
+                const query = `query ($search: String) { Media (search: $search, type: ANIME, sort: SEARCH_MATCH) { trending averageScore coverImage { extraLarge } } }`;
                 const aniRes = await fetch('https://graphql.anilist.co', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
@@ -53,8 +55,8 @@ window.app.components.carousel = async () => {
                 
                 const aniData = await aniRes.json();
                 if (aniData?.data?.Media) {
-                    // Prefer banner for cinematic wide aspect ratio, fallback to poster
-                    finalImage = aniData.data.Media.bannerImage || aniData.data.Media.coverImage?.extraLarge || finalImage;
+                    // Force the use of the clean poster
+                    if (aniData.data.Media.coverImage?.extraLarge) finalImage = aniData.data.Media.coverImage.extraLarge;
                     if (aniData.data.Media.averageScore) finalRating = aniData.data.Media.averageScore;
                     if (aniData.data.Media.trending) trendingScore = aniData.data.Media.trending;
                 }
@@ -62,13 +64,11 @@ window.app.components.carousel = async () => {
                 console.log("AniList sync failed for:", cleanTitle);
             }
 
-            return { ...slide, finalImage, finalRating, trendingScore };
+            return { ...slide, exactId, finalImage, finalRating, trendingScore };
         }));
 
-        // Sort the array by highest trending score first
+        // Sort by trending score (highest first) and take top 5
         enrichedSlides.sort((a, b) => b.trendingScore - a.trendingScore);
-
-        // Take the Top 5 most popular anime
         const topSlides = enrichedSlides.slice(0, 5);
 
         window.app.state.carouselItems = topSlides; 
@@ -78,8 +78,8 @@ window.app.components.carousel = async () => {
         let dotsHtml = '';
 
         topSlides.forEach((s, i) => {
-            // FIX: Ensure it grabs the correct ID or Slug for routing to info.html
-            const id = s.slug || s.id || s.animeId || 'unknown';
+            // Using the strictly extracted ID for perfect routing
+            const id = s.exactId || 'unknown';
             const title = s.title || 'Unknown Title';
             const desc = s.description || 'No synopsis available.';
             const img = s.finalImage;
@@ -92,7 +92,7 @@ window.app.components.carousel = async () => {
                 <div class="carousel-slide absolute inset-0 flex flex-col md:flex-row bg-black" id="slide-${i}" style="opacity: ${i === 0 ? '1' : '0'}; z-index: ${i === 0 ? '20' : '10'}; transition: opacity 0.5s ease-in-out;">
                     
                     <div class="absolute inset-0 md:left-[30%] md:w-[70%] cursor-pointer z-0 group overflow-hidden bg-black" onclick="window.location.href='info.html?id=${id}'">
-                        <img src="${img}" class="absolute inset-0 w-full h-full object-cover object-center transition-transform duration-[10s] group-hover:scale-105 opacity-80 md:opacity-100">
+                        <img src="${img}" class="absolute inset-0 w-full h-full object-cover object-[center_top] transition-transform duration-[10s] group-hover:scale-105 opacity-80 md:opacity-100">
                         
                         <div class="absolute bottom-0 left-0 right-0 h-[65%] bg-gradient-to-t from-black via-black/90 to-transparent md:hidden"></div>
                         <div class="absolute inset-0 bg-gradient-to-r from-black via-black/90 to-transparent hidden md:block w-[80%]"></div>
@@ -130,7 +130,6 @@ window.app.components.carousel = async () => {
             `;
         });
 
-        // No preview layer, simplified HTML structure
         container.innerHTML = `
             <div class="relative w-full aspect-[4/5] md:aspect-[21/9] max-h-[75vh] overflow-hidden bg-black border-b border-white/5">
                 <div id="hero-slides" class="relative w-full h-full">${slidesHtml}</div>
@@ -202,9 +201,8 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
     const rawData = window.app.state.carouselItems[index];
     if (!rawData) return;
     
-    // Use correct ID mapping here too
     const formattedAnime = { 
-        id: rawData.slug || rawData.id || rawData.animeId, 
+        id: rawData.exactId, 
         title: rawData.title, 
         img: rawData.finalImage 
     };
