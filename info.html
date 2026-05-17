@@ -4,27 +4,67 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Blaze-X | Info</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <link rel="stylesheet" href="style.css">
+
+    <style>
+        .tk-loader { position: relative; width: 40px; height: 40px; }
+        .tk-dot { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 50%; background-color: #F47521; opacity: 0.6; animation: tk-bounce 2s infinite ease-in-out; }
+        .tk-dot-2 { animation-delay: -1.0s; }
+        @keyframes tk-bounce { 0%, 100% { transform: scale(0); } 50% { transform: scale(1); } }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
 </head>
-<body class="bg-[#050505] text-white overflow-x-hidden font-sans">
+<body class="bg-black text-white overflow-x-hidden font-sans">
 
     <div id="header-container"></div>
-    
     <div id="info-container" class="w-full min-h-screen pb-20"></div>
+
+    <script>
+        window.app = window.app || { state: {}, components: {}, api: {}, config: {} };
+        window.app.state.currentView = 'info';
+    </script>
 
     <script src="app.js"></script>
     <script src="header.js"></script>
     <script src="info.js"></script>
-    
+
     <script>
-        // Set view state and trigger component renders
-        window.app.state.currentView = 'info';
-        document.addEventListener('DOMContentLoaded', async () => {
-            if (window.app.components.header) window.app.components.header();
-            if (window.app.components.info) await window.app.components.info();
-        });
+        // Wait until all scripts, images, and network requests are fully ready
+        window.onload = async () => {
+            try {
+                // Check and load Header
+                if (window.app && typeof window.app.components.header === 'function') {
+                    window.app.components.header();
+                } else {
+                    console.error("Header component is missing from window.app.components");
+                }
+
+                // Check and load Info Page
+                if (window.app && typeof window.app.components.info === 'function') {
+                    await window.app.components.info();
+                } else {
+                    console.error("Info component is missing from window.app.components");
+                    document.getElementById('info-container').innerHTML = `
+                        <div class="mt-32 text-center text-red-500 font-bold tracking-widest uppercase">
+                            <i class="fas fa-exclamation-triangle text-3xl mb-4 block"></i>
+                            Failed to load info.js component. Check console.
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error("Fatal Page Error:", error);
+                document.getElementById('info-container').innerHTML = `
+                    <div class="mt-32 text-center text-red-500 font-bold">
+                        A critical error occurred while rendering the page.
+                    </div>
+                `;
+            }
+        };
     </script>
 </body>
 </html>
