@@ -4,7 +4,7 @@ window.app.components.info = async () => {
     const container = document.getElementById('info-container');
     if (!container) return;
 
-    // 1. Get Anime ID from the URL
+    // 1. Get Anime ID from the URL (e.g., info.html?id=8630)
     const urlParams = new URLSearchParams(window.location.search);
     const animeId = urlParams.get('id');
 
@@ -26,8 +26,13 @@ window.app.components.info = async () => {
     `;
 
     try {
-        // 2. Fetch data from your proxy
-        const response = await window.app.api.fetch(`/series/${animeId}`);
+        // 2. Safely Fetch data using standard JS (Bypasses missing app.api functions)
+        const baseUrl = (window.app && window.app.config && window.app.config.anikotoBase) 
+            ? window.app.config.anikotoBase 
+            : 'https://snowy-bonus-9c22.prashant-yash69.workers.dev';
+            
+        const rawResponse = await fetch(`${baseUrl}/series/${animeId}`);
+        const response = await rawResponse.json();
         
         // --- NEW JSON PARSER FIX ---
         // Safely extract the nested "anime" and "episodes" objects based on your API structure
@@ -62,7 +67,7 @@ window.app.components.info = async () => {
         }
 
         // 4. Smart Play Button Logic (Check User History)
-        const profile = window.app.state.activeProfile;
+        const profile = window.app.state && window.app.state.activeProfile ? window.app.state.activeProfile : null;
         let playBtnText = "Play E01";
         let targetEpisodeId = episodesList.length > 0 ? episodesList[0].id : '';
         
@@ -132,12 +137,12 @@ window.app.components.info = async () => {
                 <div class="flex flex-col gap-3">
         `;
 
-        // 6. Render Episodes List (Using the unwrapped episodesList array)
+        // 6. Render Episodes List
         if (episodesList.length > 0) {
             episodesList.forEach((ep, index) => {
                 const epNum = ep.number || (index + 1);
                 const epTitle = ep.title || `Episode ${epNum}`;
-                const epThumb = bannerImage; // The JSON doesn't provide ep-specific thumbs, falling back to banner
+                const epThumb = bannerImage; 
                 
                 html += `
                     <div onclick="window.location.href='play.html?id=${ep.id}&anime=${animeId}'" class="group flex items-center gap-4 p-2 md:p-3 rounded-lg hover:bg-white/5 cursor-pointer transition-colors border border-transparent hover:border-white/5">
@@ -217,10 +222,10 @@ window.app.toggleDesc = () => {
 };
 
 window.app.addToLibrary = async (id, title, img) => {
-    const profile = window.app.state.activeProfile;
+    const profile = window.app.state && window.app.state.activeProfile ? window.app.state.activeProfile : null;
     
     if (!profile || !profile.uid) {
-        if (window.app.components.auth) window.app.components.auth();
+        if (window.app.components && window.app.components.auth) window.app.components.auth();
         else alert("Please log in or create an account to save to your Library!");
         return;
     }
