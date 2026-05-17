@@ -4,7 +4,7 @@ window.app.components.carousel = async () => {
     const container = document.getElementById('carousel-container');
     if (!container) return;
 
-    // Loading state
+    // Loading state (Spins until AniList data AND the first image are fully loaded)
     container.innerHTML = `
         <div class="w-full aspect-[4/5] md:aspect-[21/9] bg-black flex items-center justify-center border-b border-white/5">
             <div class="tk-loader scale-50">
@@ -67,6 +67,17 @@ window.app.components.carousel = async () => {
         enrichedSlides.sort((a, b) => b.trendingScore - a.trendingScore);
         const topSlides = enrichedSlides.slice(0, 5);
 
+        // --- IMAGE PRELOADER ---
+        // Forces the loader to keep spinning until the first background image is physically downloaded
+        if (topSlides.length > 0 && topSlides[0].finalImage) {
+            await new Promise((resolve) => {
+                const img = new Image();
+                img.onload = resolve;
+                img.onerror = resolve; // Resolve anyway so it doesn't get stuck forever
+                img.src = topSlides[0].finalImage;
+            });
+        }
+
         window.app.state.carouselItems = topSlides; 
         window.app.state.carouselCurrentIndex = 0;
 
@@ -127,7 +138,11 @@ window.app.updateCarouselUI = (index) => {
     if (!data) return;
 
     const id = data.exactId || 'unknown';
-    const ratingHtml = data.finalRating ? `<span class="flex items-center gap-1"><i class="fas fa-star"></i> ${data.finalRating}% SCORE</span>` : '';
+    
+    // UPDATED: Score badge uses white text on orange background
+    const ratingHtml = data.finalRating 
+        ? `<span class="bg-[#F47521] text-white px-2 py-1 rounded shadow-md flex items-center gap-1"><i class="fas fa-star"></i> ${data.finalRating}% SCORE</span>` 
+        : '';
 
     // Step 1: Fade out old UI
     uiLayer.style.opacity = '0';
@@ -135,8 +150,8 @@ window.app.updateCarouselUI = (index) => {
     // Step 2: Swap data and fade in after a short delay
     setTimeout(() => {
         uiLayer.innerHTML = `
-            <div class="flex items-center gap-3 text-[#F47521] text-[10px] md:text-xs font-black tracking-widest drop-shadow-md mb-2 md:mb-3 uppercase">
-                <span class="bg-[#F47521]/10 border border-[#F47521]/30 px-2 py-0.5 rounded backdrop-blur-sm">#${index + 1} Trending</span>
+            <div class="flex flex-wrap items-center gap-2 md:gap-3 text-white text-[10px] md:text-xs font-black tracking-widest drop-shadow-md mb-2 md:mb-3 uppercase">
+                <span class="bg-[#F47521] px-2 py-1 rounded shadow-md">#${index + 1} Trending</span>
                 ${ratingHtml}
             </div>
 
@@ -144,7 +159,7 @@ window.app.updateCarouselUI = (index) => {
             <p class="text-[11px] md:text-xs text-gray-300 line-clamp-3 md:line-clamp-4 mb-5 md:mb-6 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-relaxed font-medium">${data.description || 'No synopsis available.'}</p>
             
             <div class="flex gap-2.5 relative z-40">
-                <button onclick="window.location.href='info.html?id=${id}'" class="bg-[#F47521] text-black px-6 py-2 md:px-8 md:py-3 rounded shadow-[0_0_15px_rgba(244,117,33,0.3)] font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-white transition-colors flex items-center gap-2">
+                <button onclick="window.location.href='info.html?id=${id}'" class="bg-[#F47521] text-white px-6 py-2 md:px-8 md:py-3 rounded shadow-[0_0_15px_rgba(244,117,33,0.4)] font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-white hover:text-[#F47521] transition-all flex items-center gap-2">
                     <i class="fas fa-play"></i> Watch Now
                 </button>
                 
