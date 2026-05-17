@@ -7,12 +7,11 @@ window.app.components.info = async () => {
     const urlParams = new URLSearchParams(window.location.search);
     const animeId = urlParams.get('id');
 
-    if (!animeId) {
-        container.innerHTML = `<div class="mt-32 text-center text-gray-400 font-bold uppercase"><i class="fas fa-search text-4xl mb-4 text-[#F47521]"></i><br>No Anime Selected<br><button onclick="window.location.href='index.html'" class="mt-6 text-xs text-white bg-white/10 px-6 py-2 rounded hover:bg-[#F47521]">Go Home</button></div>`;
+    if (!animeId || animeId === 'unknown' || animeId === 'undefined') {
+        container.innerHTML = `<div class="mt-32 text-center text-gray-400 font-bold uppercase"><i class="fas fa-search text-4xl mb-4 text-[#F47521]"></i><br>Invalid Anime ID in URL<br><button onclick="window.location.href='index.html'" class="mt-6 text-xs text-white bg-white/10 px-6 py-2 rounded hover:bg-[#F47521]">Go Home</button></div>`;
         return;
     }
 
-    // Dynamic Loader
     container.innerHTML = `<div class="w-full h-screen flex items-center justify-center -mt-10"><div class="tk-loader scale-75"><div class="tk-dot tk-dot-1"></div><div class="tk-dot tk-dot-2"></div></div></div>`;
 
     try {
@@ -21,7 +20,6 @@ window.app.components.info = async () => {
         const rawResponse = await fetch(`${baseUrl}/series/${animeId}`);
         const response = await rawResponse.json();
         
-        // --- API DATA PARSER ---
         const payload = response.data || response; 
         const baseAnime = payload.anime || payload; 
         const episodesList = payload.episodes || baseAnime.episodes || []; 
@@ -33,6 +31,7 @@ window.app.components.info = async () => {
         const cleanTitleForSearch = (baseAnime.title || baseAnime.name || '').replace(/\(Dub\)|\(Sub\)/gi, '').trim();
 
         try {
+            // Increased perPage to 12 to capture Original Creators and Authors
             const query = `query ($search: String) { 
                 Media (search: $search, type: ANIME, sort: SEARCH_MATCH) { 
                     title { romaji native english }
@@ -46,7 +45,7 @@ window.app.components.info = async () => {
                     averageScore 
                     genres 
                     studios(isMain: true) { nodes { name } } 
-                    staff(perPage: 9, sort: RELEVANCE) { 
+                    staff(perPage: 12, sort: RELEVANCE) { 
                         nodes { 
                             name { full } 
                             image { large }
@@ -64,7 +63,7 @@ window.app.components.info = async () => {
             if (aniJson?.data?.Media) aniData = aniJson.data.Media;
         } catch (e) { console.log("AniList sync failed."); }
 
-        // 3. Construct Global Page State (Prioritizing AniList data)
+        // 3. Construct Global Page State
         const finalTitle = aniData.title?.romaji || aniData.title?.english || baseAnime.title || baseAnime.name;
         const finalJpTitle = aniData.title?.native || baseAnime.alternative || 'N/A';
         const finalDesc = aniData.description || baseAnime.description || baseAnime.synopsis || 'No description available.';
@@ -80,7 +79,6 @@ window.app.components.info = async () => {
             aniList: aniData
         };
 
-        // DEFAULT TO INFORMATION TAB
         window.app.state.activeInfoTab = 'information'; 
         window.app.state.epSearchValue = '';
         window.app.state.epRangeFilter = '1-100';
@@ -100,7 +98,6 @@ window.app.components.info = async () => {
         window.app.state.currentAnimePage.smartPlayAction = targetEpisodeId;
         window.app.state.currentAnimePage.smartPlayText = playBtnText;
 
-        // 5. Render Shell
         renderAnimeInfoShell();
 
     } catch (error) {
@@ -108,9 +105,6 @@ window.app.components.info = async () => {
         container.innerHTML = `<div class="w-full h-screen flex flex-col items-center justify-center -mt-10"><i class="fas fa-exclamation-triangle text-5xl text-[#F47521] mb-4"></i><h2 class="text-2xl font-black text-white mb-2">Oops! Something went wrong.</h2><p class="text-gray-400 text-sm mb-6">${error.message}</p><button onclick="window.location.reload()" class="bg-white/10 px-6 py-2 rounded font-bold text-sm tracking-wide">Try Again</button></div>`;
     }
 };
-
-
-// --- UI PAINTER ENGINE ---
 
 function renderAnimeInfoShell() {
     const container = document.getElementById('info-container');
@@ -126,9 +120,9 @@ function renderAnimeInfoShell() {
             <div class="relative w-full min-h-[40vh] md:min-h-[55vh] flex items-center py-10 border-b border-white/5 overflow-hidden">
                 
                 <div class="absolute inset-0 z-0">
-                    <img src="${data.banner}" class="w-full h-full object-cover opacity-30 blur-sm scale-105">
+                    <img src="${data.banner}" class="w-full h-full object-cover object-top opacity-50 md:opacity-70 blur-[2px] scale-105">
                     <div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/70 to-transparent"></div>
-                    <div class="absolute inset-0 bg-gradient-to-r from-[#050505] via-[#050505]/60 to-transparent"></div>
+                    <div class="absolute inset-0 bg-gradient-to-r from-[#050505]/90 via-[#050505]/30 to-transparent hidden md:block"></div>
                 </div>
 
                 <div class="relative z-10 w-full max-w-7xl mx-auto px-4 md:px-12 flex flex-col md:flex-row items-center md:items-start gap-8 md:gap-12 mt-4">
@@ -153,7 +147,7 @@ function renderAnimeInfoShell() {
                             </button>
                         </div>
 
-                        <div class="relative w-full max-w-3xl">
+                        <div class="relative w-full max-w-3xl transition-all duration-300">
                             <p id="info-desc" class="text-xs md:text-sm text-gray-300 line-clamp-3 leading-relaxed drop-shadow-md">${cleanDesc}</p>
                             ${cleanDesc.length > 130 ? `<button onclick="window.app.togglePageDesc()" id="read-more-btn" class="text-[#F47521] text-[10px] md:text-xs font-bold uppercase tracking-wider mt-3 hover:text-white transition-colors">See More <i class="fas fa-chevron-down ml-1"></i></button>` : ''}
                         </div>
@@ -175,8 +169,6 @@ function renderAnimeInfoShell() {
     renderDynamicTabContent();
 }
 
-// --- TAB STATE MANAGEMENT & RENDERING ---
-
 window.app.switchInfoTab = (tabName) => {
     if (window.app.state.activeInfoTab === tabName) return;
     window.app.state.activeInfoTab = tabName;
@@ -192,7 +184,6 @@ function renderDynamicTabContent() {
     const data = window.app.state.currentAnimePage;
 
     if (window.app.state.activeInfoTab === 'information') {
-        // --- INFORMATION TAB WITH STAFF IMAGES ---
         const ani = data.aniList;
         if (!ani || Object.keys(ani).length === 0) {
             contentArea.innerHTML = `<div class="text-gray-500 py-10 text-center flex flex-col items-center"><i class="fas fa-satellite-dish text-3xl mb-4"></i> Extended AniList details not available for this series.</div>`;
@@ -202,27 +193,33 @@ function renderDynamicTabContent() {
         const genresHtml = ani.genres ? ani.genres.map(g => `<span class="bg-white/5 border border-white/10 px-3 py-1.5 rounded text-[10px] md:text-xs text-white font-medium">${g}</span>`).join('') : 'N/A';
         const studios = ani.studios?.nodes?.map(s => s.name).join(', ') || 'Unknown';
         
-        // Staff mapping with Images
+        // Expanded Staff Mapping
         const staffHtml = ani.staff?.nodes?.map(s => `
             <div class="bg-[#111] p-3 rounded-lg border border-white/5 shadow-inner flex items-center gap-3 md:gap-4">
                 <img src="${s.image?.large || 'https://via.placeholder.com/150/222/fff?text=?'}" class="w-12 h-12 md:w-14 md:h-14 rounded-full object-cover border border-white/10 shadow-md">
                 <div class="flex-1 min-w-0">
                     <div class="font-bold text-white text-xs md:text-sm truncate">${s.name.full}</div>
-                    <div class="text-[10px] md:text-xs text-gray-500 truncate mt-0.5">${s.primaryOccupations.join(', ')}</div>
+                    <div class="text-[10px] md:text-xs text-[#F47521] truncate mt-0.5">${s.primaryOccupations.join(', ')}</div>
                 </div>
             </div>
         `).join('') || '<div class="text-gray-500 text-sm">No staff info available.</div>';
 
+        // Circular Score Logic based on rating value
+        const scoreVal = ani.averageScore || 0;
+        const ringColor = scoreVal >= 80 ? 'border-green-500' : scoreVal >= 60 ? 'border-[#F47521]' : 'border-red-500';
+
         contentArea.innerHTML = `
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div class="lg:col-span-1 flex flex-col gap-5 bg-[#0a0a0a] p-6 rounded-xl border border-white/5 shadow-lg h-fit">
-                    <div class="flex items-center gap-4 border-b border-white/5 pb-4">
-                        <div class="w-12 h-12 rounded-full bg-[#F47521]/10 flex items-center justify-center text-[#F47521] text-xl">
-                            <i class="fas fa-star"></i>
+                    
+                    <div class="flex items-center gap-5 border-b border-white/5 pb-5">
+                        <div class="relative w-16 h-16 rounded-full border-4 ${scoreVal ? ringColor : 'border-gray-600'} flex flex-col items-center justify-center bg-[#111] shadow-lg flex-shrink-0">
+                            <span class="text-white font-black text-lg leading-none">${scoreVal || '?'}</span>
+                            <span class="text-[8px] text-gray-400 font-bold uppercase mt-0.5">Score</span>
                         </div>
                         <div>
-                            <span class="text-gray-500 text-[10px] font-bold uppercase block tracking-widest">Average Score</span>
-                            <span class="text-white font-black text-xl">${ani.averageScore || '?'}%</span>
+                            <span class="text-white font-bold text-sm block tracking-wide">Community Rating</span>
+                            <span class="text-gray-500 text-[10px] uppercase tracking-widest mt-1 block">Powered by AniList</span>
                         </div>
                     </div>
                     
@@ -233,7 +230,7 @@ function renderDynamicTabContent() {
                         <div><span class="text-gray-600 text-[10px] font-bold uppercase block mb-1 tracking-wider">Main Studio</span><span class="text-white font-medium text-xs md:text-sm truncate block">${studios}</span></div>
                     </div>
                     
-                    ${ani.synonyms && ani.synonyms.length > 0 ? `<div class="pt-2 border-t border-white/5"><span class="text-gray-600 text-[10px] font-bold uppercase block mb-2 tracking-wider">Alternative Titles</span><div class="text-gray-400 text-xs leading-relaxed space-y-1.5">${ani.synonyms.map(t => `<p>• ${t}</p>`).join('')}</div></div>` : ''}
+                    ${ani.synonyms && ani.synonyms.length > 0 ? `<div class="pt-3 border-t border-white/5"><span class="text-gray-600 text-[10px] font-bold uppercase block mb-2 tracking-wider">Alternative Titles</span><div class="text-gray-400 text-xs leading-relaxed space-y-1.5">${ani.synonyms.map(t => `<p>• ${t}</p>`).join('')}</div></div>` : ''}
                 </div>
 
                 <div class="lg:col-span-2 flex flex-col gap-8">
@@ -242,14 +239,13 @@ function renderDynamicTabContent() {
                         <div class="flex flex-wrap gap-2 md:gap-3">${genresHtml}</div>
                     </div>
                     <div>
-                        <h3 class="text-white text-base md:text-lg font-black mb-4 tracking-tight border-b-2 border-[#F47521] inline-block pb-1">Primary Staff</h3>
+                        <h3 class="text-white text-base md:text-lg font-black mb-4 tracking-tight border-b-2 border-[#F47521] inline-block pb-1">Authors & Key Staff</h3>
                         <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">${staffHtml}</div>
                     </div>
                 </div>
             </div>
         `;
     } else {
-        // --- EPISODES TAB ---
         const totalEps = data.episodes.length;
         let rangeOptions = '';
         if (totalEps > 0) {
@@ -284,8 +280,6 @@ function renderDynamicTabContent() {
         renderNumericEpisodeGrid();
     }
 }
-
-// --- EPISODE FILTERING ---
 
 window.app.updateEpFilterRange = (val) => {
     window.app.state.epRangeFilter = val;
@@ -349,16 +343,14 @@ function renderNumericEpisodeGrid() {
     gridDiv.innerHTML = gridHtml;
 }
 
-// --- GLOBAL UTILITIES ---
-
 window.app.togglePageDesc = () => {
     const descP = document.getElementById('info-desc');
     const btn = document.getElementById('read-more-btn');
     if (descP.classList.contains('line-clamp-3')) {
-        descP.className = "text-xs md:text-sm text-gray-300 leading-relaxed drop-shadow-md pr-4 pb-2";
+        descP.className = "text-xs md:text-sm text-gray-300 leading-relaxed drop-shadow-md pr-4 pb-2 transition-all duration-300";
         btn.innerHTML = `Show Less <i class="fas fa-chevron-up ml-1"></i>`;
     } else {
-        descP.className = "text-xs md:text-sm text-gray-300 line-clamp-3 leading-relaxed drop-shadow-md pr-4";
+        descP.className = "text-xs md:text-sm text-gray-300 line-clamp-3 leading-relaxed drop-shadow-md pr-4 transition-all duration-300";
         btn.innerHTML = `See More <i class="fas fa-chevron-down ml-1"></i>`;
     }
 };
