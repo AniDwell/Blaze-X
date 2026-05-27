@@ -2,69 +2,145 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blaze-X | Info</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Blaze-X - Info</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
 
     <style>
-        .tk-loader { position: relative; width: 40px; height: 40px; }
-        .tk-dot { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 50%; background-color: #F47521; opacity: 0.6; animation: tk-bounce 2s infinite ease-in-out; }
-        .tk-dot-2 { animation-delay: -1.0s; }
-        @keyframes tk-bounce { 0%, 100% { transform: scale(0); } 50% { transform: scale(1); } }
+        :root {
+            --primary: #F47521; /* Blaze-X Orange */
+            --bg-dark: #000000;
+            --text-light: #ffffff;
+        }
+
+        html, body {
+            height: 100%; width: 100%; margin: 0; padding: 0;
+            background-color: var(--bg-dark); color: var(--text-light);
+            overflow: hidden; font-family: 'Lato', sans-serif;
+            -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
+        }
+
+        /* Scrollbar & Utility Classes */
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+        
+        /* Animations */
+        .animate-fade-in { animation: fade-in 0.3s ease-out forwards; }
+        @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* UI Elements */
+        .glass-modal { background: rgba(20, 20, 20, 0.95); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .blur-backdrop { filter: blur(20px) brightness(0.4); transform: scale(1.1); }
+        img { user-drag: none; -webkit-user-drag: none; pointer-events: auto; }
+
+        /* TikTok-Style Loader Engine */
+        .tk-loader { position: relative; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
+        .tk-dot { position: absolute; width: 20px; height: 20px; border-radius: 50%; }
+        .tk-dot-1 { background-color: var(--primary); animation: tk-move-1 0.8s infinite ease-in-out alternate; }
+        .tk-dot-2 { background-color: #ffffff; animation: tk-move-2 0.8s infinite ease-in-out alternate; }
+        
+        @keyframes tk-move-1 {
+            0% { transform: translateX(-15px) scale(1); z-index: 2; }
+            100% { transform: translateX(15px) scale(0.8); z-index: 1; }
+        }
+        @keyframes tk-move-2 {
+            0% { transform: translateX(15px) scale(0.8); z-index: 1; }
+            100% { transform: translateX(-15px) scale(1); z-index: 2; }
+        }
     </style>
 </head>
-<body class="bg-black text-white overflow-x-hidden font-sans">
+<body oncontextmenu="return false;">
 
-    <div id="header-container"></div>
-    <div id="info-container" class="w-full min-h-screen pb-20"></div>
+    <div id="boot-loader" class="fixed inset-0 flex flex-col items-center justify-center bg-black z-[100] transition-opacity duration-300">
+        <div class="tk-loader">
+            <div class="tk-dot tk-dot-1"></div>
+            <div class="tk-dot tk-dot-2"></div>
+        </div>
+    </div>
+
+    <div id="modal-overlay" class="fixed inset-0 z-[70] hidden bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div id="modal-content" class="glass-modal w-full max-w-sm rounded-xl p-6 transform transition-all scale-95 opacity-0 shadow-2xl"></div>
+    </div>
+
+    <div id="app-container" class="hidden flex flex-col h-full w-full pt-[60px]">
+        
+        <div id="header-container" class="flex-none z-50 relative"></div>
+
+        <main id="main-content" class="flex-1 overflow-y-auto relative hide-scrollbar bg-black pb-20">
+            
+            <div id="info-container" class="w-full animate-fade-in">
+                </div>
+
+        </main>
+
+        <div id="bottomnav-container" class="flex-none absolute bottom-0 w-full z-50"></div>
+    </div>
 
     <script>
-        window.app = window.app || { state: {}, components: {}, api: {}, config: {} };
-        window.app.state.currentView = 'info';
-    </script>
-
-    <script src="app.js"></script>
-    <script src="header.js"></script>
-    <script src="info.js"></script>
-
-    <script>
-        // Wait until all scripts, images, and network requests are fully ready
-        window.onload = async () => {
-            try {
-                // Check and load Header
-                if (window.app && typeof window.app.components.header === 'function') {
-                    window.app.components.header();
-                } else {
-                    console.error("Header component is missing from window.app.components");
+        window.app = {
+            config: {
+                anikotoBase: 'https://anikoto-api-xi.vercel.app', 
+                megaPlayBase: 'https://megaplay.buzz/stream/s-2', 
+                defaultAvatars: ["https://iili.io/fWydBMG.md.png", "https://iili.io/fWydqns.md.png"]
+            },
+            
+            state: { 
+                activeProfile: null, 
+                currentView: 'info',
+                currentAnimePage: null,
+                activeInfoTab: 'information',
+                epSearchValue: '',
+                epRangeFilter: '1-100'
+            },
+            
+            components: {}, 
+            
+            // FIXED BOOT STRATEGY: Recursively evaluates delayed module loads safely
+            init: () => {
+                const savedUser = localStorage.getItem('blazex_user_profile');
+                if (savedUser) {
+                    try {
+                        window.app.state.activeProfile = JSON.parse(savedUser);
+                    } catch(e) {
+                        console.log("Local storage cache mapping configuration refreshed.");
+                    }
                 }
 
-                // Check and load Info Page
-                if (window.app && typeof window.app.components.info === 'function') {
-                    await window.app.components.info();
-                } else {
-                    console.error("Info component is missing from window.app.components");
-                    document.getElementById('info-container').innerHTML = `
-                        <div class="mt-32 text-center text-red-500 font-bold tracking-widest uppercase">
-                            <i class="fas fa-exclamation-triangle text-3xl mb-4 block"></i>
-                            Failed to load info.js component. Check console.
-                        </div>
-                    `;
+                // If module components haven't written to the global array registry yet, wait 50ms
+                if (!window.app.components.header || !window.app.components.info) {
+                    setTimeout(window.app.init, 50);
+                    return;
                 }
-            } catch (error) {
-                console.error("Fatal Page Error:", error);
-                document.getElementById('info-container').innerHTML = `
-                    <div class="mt-32 text-center text-red-500 font-bold">
-                        A critical error occurred while rendering the page.
-                    </div>
-                `;
+
+                // Smoothly lower opacity and dismantle loading screen blockages
+                document.getElementById('boot-loader').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('boot-loader').style.display = 'none';
+                    document.getElementById('app-container').classList.remove('hidden');
+                    
+                    // Render navigation interfaces and content blocks
+                    if(window.app.components.header) window.app.components.header();
+                    if(window.app.components.info) window.app.components.info();
+                    if(window.app.components.bottomnav) window.app.components.bottomnav();
+                }, 300);
             }
         };
+    </script>
+
+    <script type="module" src="header.js"></script>
+    <script src="info.js"></script>
+    <script src="auth.js"></script> 
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            window.app.init();
+        });
     </script>
 </body>
 </html>
