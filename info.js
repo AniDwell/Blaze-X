@@ -12,6 +12,7 @@ window.app.components.info = async () => {
         return;
     }
 
+    // Central Master Data Re-Feeder Routine to handle loops without page reloads
     window.app.loadInfoPageData = async (targetId) => {
         animeId = targetId;
         const newUrl = `${window.location.pathname}?id=${targetId}`;
@@ -39,37 +40,38 @@ window.app.components.info = async () => {
             
             const baseAnime = infoJson.data;
 
-            // 2. Fetch corresponding episode list using exact endpoint documentation formatting rules
+            // 2. Fetch corresponding episode list map configurations based on your API's exact format
             let episodesList = [];
             try {
                 const epsResponse = await fetch(`${baseUrl}/api/episodes/${animeId}`);
                 const epsJson = await epsResponse.json();
                 
-                if (epsJson && epsJson.success && epsJson.results) {
-                    // Match specific structure: {"success":true,"results":[{"totalEpisodes":X,"episodes":[...]}]}
-                    if (Array.isArray(epsJson.results) && epsJson.results[0]) {
-                        episodesList = epsJson.results[0].episodes || [];
-                    } else if (epsJson.results.episodes) {
-                        episodesList = epsJson.results.episodes;
+                // Matches your exact schema: {"success": true, "results": [ "totalEpisodes":X, "episodes":[...] ]}
+                if (epsJson && epsJson.success && Array.isArray(epsJson.results)) {
+                    const payloadContainer = epsJson.results[0];
+                    if (payloadContainer && Array.isArray(payloadContainer.episodes)) {
+                        episodesList = payloadContainer.episodes;
                     }
+                } else if (epsJson && epsJson.success && epsJson.results?.episodes) {
+                    episodesList = epsJson.results.episodes;
                 }
             } catch (e) {
-                console.log("No episode array tracking lists found for this entity.");
+                console.log("No matching episodes payload layout detected.");
             }
 
-            // 3. Fetch Next Episode Live Broadcast Countdown Meta Layer
+            // 3. Fetch Schedule Countdown Data if available
             let scheduleData = null;
             try {
                 const schedRes = await fetch(`${baseUrl}/api/schedule/${animeId}`);
                 const schedJson = await schedRes.json();
-                if (schedJson && schedJson.success && schedJson.results?.nextEpisodeSchedule) {
-                    scheduleData = schedJson.results.nextEpisodeSchedule;
+                if (schedJson && schedJson.success && schedJson.results) {
+                    scheduleData = schedJson.results.nextEpisodeSchedule || null;
                 }
             } catch (e) {
-                console.log("No schedule tracking module recorded for this target.");
+                console.log("No schedule tracking module available.");
             }
 
-            // --- ANILIST API GRAPHQL INTEGRATION LAYER ---
+            // --- ANILIST API SYNC BLOCK ---
             let aniData = {};
             const hasValidAniId = baseAnime.anilistId && !isNaN(baseAnime.anilistId);
             
@@ -101,9 +103,10 @@ window.app.components.info = async () => {
                 const json = await aniRes.json();
                 aniData = json?.data?.Media || {};
             } catch (e) {
-                console.log("GraphQL sync handovers initiated.");
+                console.log("GraphQL dynamic fallback state handled.");
             }
 
+            // Fallback allocations
             const finalTitle = baseAnime.title || aniData.title?.english || aniData.title?.romaji || 'Unknown Title';
             const finalJpTitle = baseAnime.japanese_title || aniData.title?.native || 'N/A';
             const finalDesc = baseAnime.description || aniData.description || 'No description available.';
@@ -134,7 +137,7 @@ window.app.components.info = async () => {
 
             const profile = window.app.state && window.app.state.activeProfile ? window.app.state.activeProfile : null;
             let playBtnText = "Play E01";
-            let targetEpisodeId = episodesList.length > 0 ? (episodesList[0].id || episodesList[0].episode_no) : '';
+            let targetEpisodeId = episodesList.length > 0 ? (episodesList[0].id || "1") : '1';
             
             if (profile && profile.history) {
                 const historyItem = profile.history.find(h => h.animeId === animeId);
@@ -149,7 +152,7 @@ window.app.components.info = async () => {
             renderAnimeInfoShell();
 
         } catch (error) {
-            console.error("Info Pipeline Crash Intercepted safely:", error);
+            console.error("Info System Breakdown Handled Securely:", error);
             container.innerHTML = `<div class="w-full h-screen flex flex-col items-center justify-center -mt-10"><i class="fas fa-exclamation-triangle text-5xl text-[#F47521] mb-4"></i><h2 class="text-2xl font-black text-white mb-2">Oops! Something went wrong.</h2><p class="text-gray-400 text-sm mb-6">${error.message}</p><button onclick="window.location.reload()" class="bg-white/10 px-6 py-2 rounded font-bold text-sm tracking-wide">Try Again</button></div>`;
         }
     };
@@ -169,8 +172,7 @@ function renderAnimeInfoShell() {
     if (ani && ani.genres) genresStr = ani.genres.join(' • ');
     else if (raw && raw.genres) genresStr = Array.isArray(raw.genres) ? raw.genres.join(' • ') : raw.genres;
 
-    const isUpcoming = (raw?.status && raw.status.toString().toLowerCase().includes('currently airing') && (!data.episodes || data.episodes.length === 0)) ||
-                       (raw?.status && raw.status.toString().toLowerCase().includes('upcoming')) || 
+    const isUpcoming = (raw?.status && raw.status.toString().toLowerCase().includes('upcoming')) || 
                        (ani?.status && ani.status.toString().toLowerCase().includes('not_yet_released'));
 
     const upcomingBadge = isUpcoming ? `<span class="bg-red-500 text-white text-[10px] font-black px-2.5 py-0.5 rounded shadow-sm uppercase tracking-wider animate-pulse"><i class="fas fa-clock mr-1"></i> Upcoming</span>` : '';
@@ -206,8 +208,8 @@ function renderAnimeInfoShell() {
                         <p class="text-[10px] md:text-xs text-[#F47521] font-bold tracking-widest mb-8 uppercase">${genresStr}</p>
                         
                         <div class="flex flex-wrap justify-center md:justify-start gap-3 md:gap-4 mb-8 w-full">
-                            ${!isUpcoming && data.smartPlayAction ? `
-                            <button onclick="window.location.href='play.html?id=${data.smartPlayAction}&anime=${data.id}'" class="bg-[#F47521] text-white px-8 py-3.5 rounded-lg shadow-md font-black text-xs md:text-sm uppercase tracking-wider hover:bg-white hover:text-black transition-colors flex items-center gap-2">
+                            ${!isUpcoming ? `
+                            <button onclick="window.app.handlePlayClick('${data.smartPlayAction}', '${data.id}')" class="bg-[#F47521] text-white px-8 py-3.5 rounded-lg shadow-md font-black text-xs md:text-sm uppercase tracking-wider hover:bg-white hover:text-black transition-colors flex items-center gap-2">
                                 <i class="fas fa-play"></i> ${data.smartPlayText}
                             </button>` : ''}
                             
@@ -246,6 +248,7 @@ function renderAnimeInfoShell() {
     setupDropdownListener();
 }
 
+// Cross-references third-party relations against your live search API endpoint arrays
 async function injectVerifiedAlternativePills() {
     const data = window.app.state.currentAnimePage;
     const slider = document.getElementById('relations-horizontal-slider');
@@ -264,10 +267,10 @@ async function injectVerifiedAlternativePills() {
             const response = await fetch(`${baseUrl}/api/search?keyword=${encodeURIComponent(relTitle)}`);
             const json = await response.json();
 
-            // Match based on documentation response wrapper: {"success": true, "results": [...]}
-            if (json.success && json.results && json.results.length > 0) {
-                const targetMatch = json.results.find(item => item.id && (item.id === rel.id || String(item.title).toLowerCase() === String(relTitle).toLowerCase()));
-                const activeId = targetMatch ? targetMatch.id : json.results[0].id;
+            // Matches the AniList ID dynamically to confirm stream server registration entries
+            if (json.success && Array.isArray(json.results) && json.results.length > 0) {
+                const matchIndex = json.results.find(item => String(item.id).toLowerCase() === String(rel.id).toLowerCase() || String(item.title).toLowerCase() === String(relTitle).toLowerCase());
+                const targetApiId = matchIndex ? matchIndex.id : json.results[0].id;
 
                 const bgImage = rel.bannerImage || rel.coverImage?.extraLarge || '';
                 const formatBadge = rel.format ? `<span class="bg-[#F47521] text-white text-[9px] px-1.5 py-0.5 rounded font-black tracking-wide uppercase">${rel.format}</span>` : '';
@@ -275,7 +278,7 @@ async function injectVerifiedAlternativePills() {
 
                 const blockDiv = document.createElement('div');
                 blockDiv.className = `relative w-[260px] md:w-[320px] h-20 rounded-xl overflow-hidden border border-white/5 hover:border-[#F47521]/50 cursor-pointer transition-all flex items-center px-4 group shadow-lg flex-shrink-0`;
-                blockDiv.onclick = () => window.app.loadInfoPageData(activeId);
+                blockDiv.onclick = () => window.app.loadInfoPageData(targetApiId);
                 
                 blockDiv.innerHTML = `
                     <div class="absolute inset-0 z-0 bg-black">
@@ -296,7 +299,7 @@ async function injectVerifiedAlternativePills() {
                 validPillsCount++;
             }
         } catch (e) {
-            console.log("Relation filtering skipped.");
+            console.log("Alternative mapping failure.");
         }
     }
 
@@ -305,6 +308,14 @@ async function injectVerifiedAlternativePills() {
     }
 }
 
+window.app.switchInfoTab = (tabName) => {
+    if (window.app.state.activeInfoTab === tabName) return;
+    window.app.state.activeInfoTab = tabName;
+    document.getElementById('tab-information').className = `flex-1 text-center pb-3 transition-colors ${tabName === 'information' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white'}`;
+    document.getElementById('tab-episodes').className = `flex-1 text-center pb-3 transition-colors ${tabName === 'episodes' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white'}`;
+    renderDynamicTabContent();
+};
+
 function renderDynamicTabContent() {
     const contentArea = document.getElementById('dynamic-tab-content-area');
     const data = window.app.state.currentAnimePage;
@@ -312,36 +323,27 @@ function renderDynamicTabContent() {
     const raw = data.rawPayload;
 
     if (window.app.state.activeInfoTab === 'information') {
-        // Parse clickable studios array or text string maps
-        let studioNodes = [];
-        if (raw?.studios) {
-            studioNodes = Array.isArray(raw.studios) ? raw.studios : [raw.studios];
-        } else if (ani?.studios?.nodes) {
-            studioNodes = ani.studios.nodes.map(s => s.name);
-        }
-        const studioButtons = studioNodes.map(s => `
-            <button onclick="window.location.href='results.html?producer=${encodeURIComponent(s.trim())}'" class="bg-white/5 border border-white/10 rounded px-3 py-1.5 font-bold hover:border-[#F47521] hover:text-[#F47521] transition-colors uppercase tracking-wider text-[10px] h-fit shadow-sm">
-                <i class="fas fa-film mr-1.5 opacity-60"></i>${s.trim()}
-            </button>
-        `).join('') || '<span class="text-gray-400 font-medium">N/A</span>';
+        // Safe mapping helpers for comma lists or singular keys
+        const unpackArrayString = (field) => Array.isArray(field) ? field.join(', ') : (field || 'N/A');
 
-        // Parse clickable producers array string models
-        let producerNodes = [];
-        if (raw?.producers) {
-            producerNodes = Array.isArray(raw.producers) ? raw.producers : [raw.producers];
-        }
-        const producerButtons = producerNodes.map(p => `
-            <button onclick="window.location.href='results.html?producer=${encodeURIComponent(p.trim())}'" class="bg-white/5 border border-white/10 rounded px-3 py-1.5 font-bold hover:border-[#F47521] hover:text-[#F47521] transition-colors uppercase tracking-wider text-[10px] h-fit shadow-sm">
-                <i class="fas fa-building mr-1.5 opacity-60"></i>${p.trim()}
-            </button>
-        `).join('') || '<span class="text-gray-400 font-medium">N/A</span>';
+        const formatStr = unpackArrayString(raw?.type || ani?.format);
+        const statusStr = unpackArrayString(raw?.status || ani?.status?.toLowerCase().replace('_', ' '));
+        const airedTimeline = unpackArrayString(raw?.aired);
+        const premSeason = unpackArrayString(raw?.premiered);
+        const trackDuration = unpackArrayString(raw?.duration);
+        const totalEpsCount = unpackArrayString(raw?.episodes || data.episodes?.length);
 
-        const formatStr = raw?.type ? (Array.isArray(raw.type) ? raw.type.join(', ') : raw.type) : (ani?.format || 'N/A');
-        const statusStr = raw?.status ? (Array.isArray(raw.status) ? raw.status.join(', ') : raw.status) : (ani?.status?.toLowerCase().replace('_', ' ') || 'N/A');
-        const airedTimeline = raw?.aired ? (Array.isArray(raw.aired) ? raw.aired.join(', ') : raw.aired) : 'N/A';
-        const premSeason = raw?.premiered ? (Array.isArray(raw.premiered) ? raw.premiered.join(', ') : raw.premiered) : 'N/A';
-        const trackDuration = raw?.duration ? (Array.isArray(raw.duration) ? raw.duration.join(', ') : raw.duration) : 'N/A';
-        const totalEpsCount = raw?.episodes ? (Array.isArray(raw.episodes) ? raw.episodes.join(', ') : raw.episodes) : (data.episodes?.length || 'N/A');
+        // Transform Studio strings into functional click targets routing to results.html
+        const rawStudioStr = ani?.studios?.nodes?.map(s => s.name).join(', ') || unpackArrayString(raw?.studios);
+        const studioButtonsHtml = rawStudioStr !== 'N/A' 
+            ? rawStudioStr.split(',').map(s => `<button onclick="window.location.href='results.html?producer=${encodeURIComponent(s.trim())}'" class="bg-white/5 border border-white/10 px-3 py-1.5 rounded text-white text-[11px] font-bold uppercase hover:bg-[#F47521] hover:text-black transition-colors shadow-sm text-left truncate max-w-full">${s.trim()}</button>`).join('')
+            : '<span class="text-white font-medium">N/A</span>';
+
+        // Transform Producer strings into clickable routing buttons
+        const rawProducerStr = unpackArrayString(raw?.producers);
+        const producerButtonsHtml = rawProducerStr !== 'N/A'
+            ? rawProducerStr.split(',').map(p => `<button onclick="window.location.href='results.html?producer=${encodeURIComponent(p.trim())}'" class="bg-white/5 border border-white/10 px-3 py-1.5 rounded text-white text-[11px] font-bold uppercase hover:bg-[#F47521] hover:text-black transition-colors shadow-sm text-left truncate max-w-full">${p.trim()}</button>`).join('')
+            : '<span class="text-white font-medium">N/A</span>';
 
         let synonymsList = [];
         if (ani?.synonyms) synonymsList = [...ani.synonyms];
@@ -356,24 +358,28 @@ function renderDynamicTabContent() {
                     <div class="text-[10px] md:text-xs text-[#F47521] truncate mt-0.5">${s.primaryOccupations.join(', ')}</div>
                 </div>
             </div>
-        `).join('') || '<div class="text-gray-500 text-xs">No key staff documentation cached.</div>';
+        `).join('') || '<div class="text-gray-500 text-xs">No configuration entries recorded for key staff.</div>';
 
         contentArea.innerHTML = `
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div class="lg:col-span-1 flex flex-col gap-5 bg-[#0a0a0a] p-6 rounded-xl border border-white/5 shadow-lg h-fit text-xs">
                     <h4 class="text-white font-black uppercase tracking-widest text-[#F47521] border-b border-white/5 pb-2">Full Specifications</h4>
                     <div class="flex flex-col gap-4">
-                        <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-1">Studios</span><div class="flex flex-wrap gap-1.5 mt-0.5">${studioButtons}</div></div>
-                        <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-1">Producers</span><div class="flex flex-wrap gap-1.5 mt-0.5">${producerButtons}</div></div>
-                        <div class="pt-2 border-t border-white/5 flex flex-col gap-4">
-                            <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Format Type</span><span class="text-white capitalize font-medium">${formatStr}</span></div>
-                            <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Current Status</span><span class="text-white capitalize font-medium">${statusStr}</span></div>
-                            <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Total Episodes Matrix</span><span class="text-white font-medium">${totalEpsCount} Units</span></div>
-                            <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Runtime Duration</span><span class="text-white font-medium">${trackDuration}</span></div>
-                            <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Premiered Season</span><span class="text-white uppercase font-medium">${premSeason}</span></div>
-                            <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Aired Window</span><span class="text-white font-medium">${airedTimeline}</span></div>
-                            <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Source Material</span><span class="text-white capitalize font-medium">${ani?.source?.toLowerCase().replace('_', ' ') || 'N/A'}</span></div>
+                        <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Format Type</span><span class="text-white capitalize font-medium">${formatStr}</span></div>
+                        <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Current Status</span><span class="text-white capitalize font-medium">${statusStr}</span></div>
+                        <div>
+                            <span class="text-gray-500 font-bold uppercase tracking-wider block mb-2">Production Studios</span>
+                            <div class="flex flex-wrap gap-1.5 w-full">${studioButtonsHtml}</div>
                         </div>
+                        <div>
+                            <span class="text-gray-500 font-bold uppercase tracking-wider block mb-2">Industrial Producers</span>
+                            <div class="flex flex-wrap gap-1.5 w-full">${producerButtonsHtml}</div>
+                        </div>
+                        <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Total Episodes Count</span><span class="text-white font-medium">${totalEpsCount} Units</span></div>
+                        <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Runtime Duration</span><span class="text-white font-medium">${trackDuration}</span></div>
+                        <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Premiered Season</span><span class="text-white uppercase font-medium">${premSeason}</span></div>
+                        <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Aired Window</span><span class="text-white font-medium">${airedTimeline}</span></div>
+                        <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Source Material</span><span class="text-white capitalize font-medium">${ani?.source?.toLowerCase().replace('_', ' ') || 'N/A'}</span></div>
                     </div>
 
                     ${uniqueSynonyms.length > 0 ? `
@@ -392,33 +398,23 @@ function renderDynamicTabContent() {
             </div>
         `;
     } else {
-        const isUpcoming = (raw?.status && raw.status.toString().toLowerCase().includes('currently airing') && (!data.episodes || data.episodes.length === 0)) ||
-                           (raw?.status && raw.status.toString().toLowerCase().includes('upcoming')) || 
+        const isUpcoming = (raw?.status && raw.status.toString().toLowerCase().includes('upcoming')) || 
                            (ani?.status && ani.status.toString().toLowerCase().includes('not_yet_released'));
 
         if (isUpcoming) {
-            const expectedDate = raw?.aired || premSeason || "TBA 2026";
-            
-            // Render explicit live countdown date format strings: {"success":true,"results":{"nextEpisodeSchedule":"2025-02-08 16:30:00"}}
-            let liveCountdownHtml = '';
-            if (data.scheduleCountdown) {
-                liveCountdownHtml = `
-                    <p class="text-sm font-black text-[#F47521] bg-[#F47521]/10 px-4 py-2 border border-[#F47521]/20 rounded-md tracking-wider max-w-sm mx-auto uppercase mt-2">
-                        <i class="fas fa-satellite-dish mr-1.5 animate-pulse"></i> BroadCast: ${data.scheduleCountdown}
-                    </p>
-                `;
-            }
+            const expectedDate = unpackArrayString(raw?.aired || premSeason || "TBA 2026");
+            const liveCountdown = data.scheduleCountdown ? `<p class="text-sm font-black text-[#F47521] bg-[#F47521]/10 px-4 py-2 border border-[#F47521]/20 rounded-md tracking-wider max-w-sm mx-auto uppercase"><i class="fas fa-satellite-dish mr-1.5"></i> Next Ep Live: ${data.scheduleCountdown}</p>` : '';
 
             contentArea.innerHTML = `
                 <div class="w-full text-center py-16 bg-[#0a0a0a] rounded-xl border border-white/5 p-6 flex flex-col gap-4 max-w-2xl mx-auto shadow-xl">
-                    <i class="fas fa-hourglass-start text-4xl text-[#F47521] animate-spin"></i>
+                    <i class="fas fa-hourglass-start text-4xl text-[#F47521] animate-bounce"></i>
                     <h3 class="text-xl font-black text-white tracking-tight uppercase">Upcoming Transmission</h3>
                     <p class="text-gray-400 text-xs max-w-md mx-auto leading-relaxed">This series has been successfully indexed on Blaze-X but hasn't broadcasted episodes yet.</p>
                     <div class="my-2">
                         <span class="text-gray-600 uppercase font-black text-[10px] tracking-widest block mb-1">Expected Timeline</span>
                         <p class="text-white text-sm font-bold capitalize">${expectedDate}</p>
                     </div>
-                    ${liveCountdownHtml}
+                    ${liveCountdown}
                 </div>
             `;
             return;
@@ -471,10 +467,10 @@ window.app.searchAndRouteToAnime = async (titleKeyword) => {
         const response = await fetch(`${baseUrl}/api/search?keyword=${encodeURIComponent(titleKeyword)}`);
         const json = await response.json();
         
-        if (json.success && json.results && json.results.length > 0) {
+        if (json.success && Array.isArray(json.results) && json.results.length > 0) {
             window.app.loadInfoPageData(json.results[0].id);
         } else {
-            if (window.app.showCustomAlert) window.app.showCustomAlert("This season is not available on streaming index streams yet.", "error");
+            if (window.app.showCustomAlert) window.app.showCustomAlert("This season is not available on streaming indexes yet.", "error");
             else alert("This season is not available yet.");
         }
     } catch(e) {
@@ -554,7 +550,9 @@ function renderNumericEpisodeGrid() {
     let gridHtml = '';
     episodesToRender.forEach((ep) => {
         const epNumber = ep.episode_no;
-        const targetId = ep.id;
+        
+        // Formulates secure video player paths appending parameter structures correctly
+        const computedEpUrlId = `${data.id}?ep=${ep.data_id || epNumber}`;
         
         const epTitleLower = (ep.title || '').toLowerCase();
         const isActuallyFiller = epTitleLower.includes('filler') || epTitleLower.includes('recap'); 
@@ -563,7 +561,7 @@ function renderNumericEpisodeGrid() {
         const hoverClasses = isActuallyFiller ? 'border-red-500/30 text-gray-400 hover:bg-red-500 hover:text-white hover:border-red-500 shadow-sm' : 'border-white/5 text-gray-300 hover:bg-[#F47521] hover:text-black hover:border-[#F47521] shadow-sm';
 
         gridHtml += `
-            <button onclick="window.location.href='play.html?id=${targetId}&anime=${data.id}'" class="relative w-full aspect-square flex items-center justify-center rounded border transition-all duration-200 group bg-white/5 ${hoverClasses}">
+            <button onclick="window.app.handlePlayClick('${computedEpUrlId}', '${data.id}')" class="relative w-full aspect-square flex items-center justify-center rounded border transition-all duration-200 group bg-white/5 ${hoverClasses}">
                 <span class="font-bold text-xs md:text-sm">${epNumber}</span>
                 ${fillerIconDot}
             </button>
@@ -609,4 +607,45 @@ window.app.addToLibrary = async (id, title, img) => {
         const userFirestoreRef = firestore.doc(window.app.db, "users", profile.uid);
         await firestore.updateDoc(userFirestoreRef, { watchlist: firestore.arrayUnion(formattedAnimeEntry) });
     } catch (error) { console.error("Firebase library sync failed:", error); }
+};
+
+window.app.handlePlayClick = async (episodeUrlId, animeId) => {
+    try {
+        if (window.app.state && window.app.state.activeProfile && window.app.state.activeProfile.uid) {
+            window.location.href = `play.html?id=${encodeURIComponent(episodeUrlId)}&anime=${animeId}`;
+            return;
+        }
+
+        const randomNum = Math.floor(Math.random() * 90000) + 10000;
+        const generatedName = `Guest-${randomNum}`;
+        const generatedPfp = `pfp${Math.floor(Math.random() * 10) + 1}.jpeg`; 
+        const guestUid = 'anon_' + Date.now().toString(36) + Math.random().toString(36).substr(2);
+
+        const newProfile = {
+            uid: guestUid,
+            name: generatedName,
+            email: "Guest Account",
+            pfp: generatedPfp,
+            history: [],
+            watchlist: [],
+            createdAt: new Date().toISOString()
+        };
+
+        window.app.state.activeProfile = newProfile;
+        localStorage.setItem('blazex_user_profile', JSON.stringify(newProfile));
+
+        try {
+            const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+            const userRef = firestore.doc(window.app.db, "users", guestUid);
+            await firestore.setDoc(userRef, newProfile);
+        } catch (dbError) {
+            console.log("DB save failed: ", dbError);
+        }
+
+        window.location.href = `play.html?id=${encodeURIComponent(episodeUrlId)}&anime=${animeId}`;
+
+    } catch (err) {
+        console.error("Play redirect error:", err);
+        window.location.href = `play.html?id=${encodeURIComponent(episodeUrlId)}&anime=${animeId}`;
+    }
 };
