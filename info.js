@@ -17,7 +17,7 @@ window.app.components.info = async () => {
         return;
     }
 
-    // Master state reloader routine to allow smooth cross-season routing transitions without page refreshes
+    // Master Trigger function to navigate and load data without full-page reloads
     window.app.loadInfoPageData = async (targetId) => {
         animeId = targetId;
         const newUrl = `${window.location.pathname}?id=${targetId}`;
@@ -45,7 +45,7 @@ window.app.components.info = async () => {
             
             const baseAnime = infoJson.data;
 
-            // 2. Fetch corresponding episode list map configurations based on your API array rules
+            // 2. Fetch corresponding episode lists safely using your API array schema rules
             let episodesList = [];
             try {
                 const epsResponse = await fetch(`${baseUrl}/api/episodes/${animeId}`);
@@ -185,6 +185,21 @@ function renderAnimeInfoShell() {
     const scoreVal = (ani && ani.averageScore) ? `${ani.averageScore}%` : (raw && raw.mal ? `${raw.mal}/10` : null);
     const scoreBadge = scoreVal ? `<span class="flex items-center gap-1"><i class="fas fa-star"></i> ${scoreVal} SCORE</span>` : '';
 
+    // --- CRUNCH RECOMMENDATIONS GENERATION MAP ---
+    let recommendationsHtml = '';
+    if (raw && raw.recommendations && raw.recommendations.length > 0) {
+        raw.recommendations.forEach(rec => {
+            recommendationsHtml += `
+                <div onclick="window.app.loadInfoPageData('${rec.id}')" class="w-[110px] md:w-[140px] flex-shrink-0 cursor-pointer group snap-start">
+                    <div class="w-full aspect-[2/3] rounded-lg overflow-hidden border border-white/5 group-hover:border-[#F47521]/50 shadow-md relative bg-[#111] mb-2 transition-all">
+                        <img src="${rec.image || rec.poster}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                    </div>
+                    <h5 class="text-white font-bold text-[11px] md:text-xs line-clamp-2 leading-tight group-hover:text-[#F47521] transition-colors">${rec.title}</h5>
+                </div>
+            `;
+        });
+    }
+
     container.innerHTML = `
         <div class="w-full flex flex-col bg-[#050505] min-h-screen pb-24">
             
@@ -230,7 +245,7 @@ function renderAnimeInfoShell() {
                 </div>
             </div>
 
-            <div class="w-full max-w-7xl mx-auto px-4 md:px-12 mt-8 flex flex-col gap-6">
+            <div class="w-full max-w-7xl mx-auto px-4 md:px-12 mt-8 flex flex-col gap-8">
                 
                 <div id="verified-relations-pill-box" class="w-full hidden">
                     <h3 class="text-white text-xs font-black mb-3 uppercase tracking-widest text-gray-400">Seasons & Alternative Media</h3>
@@ -242,23 +257,32 @@ function renderAnimeInfoShell() {
                     <button onclick="window.app.switchInfoTab('episodes')" id="tab-episodes" class="flex-1 text-center pb-3 transition-colors ${window.app.state.activeInfoTab === 'episodes' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white'}">Episodes</button>
                 </div>
                 
-                <div id="dynamic-tab-content-area" class="py-4"></div>
+                <div id="dynamic-tab-content-area" class="py-2"></div>
+
+                ${recommendationsHtml !== '' ? `
+                <div class="w-full border-t border-white/5 pt-8 mt-4">
+                    <h3 class="text-white text-sm md:text-base font-black uppercase tracking-widest text-gray-300 mb-4"><i class="fas fa-heart text-[#F47521] mr-1.5"></i> If You Liked This, Watch These</h3>
+                    <div class="w-full flex gap-3.5 overflow-x-auto pb-4 hide-scrollbar snap-x pointer-events-auto">
+                        ${recommendationsHtml}
+                    </div>
+                </div>` : ''}
+
             </div>
         </div>
     `;
 
-    window.app.renderActiveTabContent();
+    window.app.renderInfoInlineTabContent();
     injectVerifiedAlternativePills();
     setupDropdownListener();
 }
 
-// Routes tab loading tasks to the detached sub-modules
-window.app.renderActiveTabContent = () => {
+// INLINE ROUTER: Loads tab view codes directly into page container
+window.app.renderInfoInlineTabContent = () => {
     const activeTab = window.app.state.activeInfoTab;
-    if (activeTab === 'information' && window.app.components.informationtab) {
-        window.app.components.informationtab();
-    } else if (activeTab === 'episodes' && window.app.components.episodestab) {
-        window.app.components.episodestab();
+    if (activeTab === 'information') {
+        if (window.app.components.informationtab) window.app.components.informationtab();
+    } else if (activeTab === 'episodes') {
+        if (window.app.components.episodestab) window.app.components.episodestab();
     }
 };
 
@@ -267,7 +291,7 @@ window.app.switchInfoTab = (tabName) => {
     window.app.state.activeInfoTab = tabName;
     document.getElementById('tab-information').className = `flex-1 text-center pb-3 transition-colors ${tabName === 'information' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white'}`;
     document.getElementById('tab-episodes').className = `flex-1 text-center pb-3 transition-colors ${tabName === 'episodes' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white'}`;
-    window.app.renderActiveTabContent();
+    window.app.renderInfoInlineTabContent();
 };
 
 async function injectVerifiedAlternativePills() {
@@ -297,7 +321,7 @@ async function injectVerifiedAlternativePills() {
                 const statusStr = rel.status ? rel.status.toLowerCase().replace('_', ' ') : '';
 
                 const blockDiv = document.createElement('div');
-                blockDiv.className = `relative w-[260px] md:w-[320px] h-20 rounded-xl overflow-hidden border border-white/5 hover:border-[#F47521]/50 cursor-pointer transition-all flex items-center px-4 group shadow-lg flex-shrink-0`;
+                blockDiv.className = `relative w-[260px] md:w-[320px] h-20 rounded-xl overflow-hidden border border-white/5 hover:border-[#F47521]/50 cursor-pointer transition-all flex items-center px-4 group shadow-lg flex-shrink-0 snap-start`;
                 blockDiv.onclick = () => window.app.loadInfoPageData(targetApiId);
                 
                 blockDiv.innerHTML = `
