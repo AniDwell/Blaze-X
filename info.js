@@ -12,7 +12,7 @@ window.app.components.info = async () => {
         return;
     }
 
-    // Synchronized Loader layout
+    // Synchronized Dot Loader screen
     container.innerHTML = `
         <div class="w-full h-[60vh] flex items-center justify-center">
             <div class="tk-loader scale-75">
@@ -25,82 +25,79 @@ window.app.components.info = async () => {
     try {
         const baseUrl = 'https://anikoto-api-xi.vercel.app';
         
-        // 1. Fetch metadata elements from /api/info
+        // 1. Fetch metadata directly from /api/info
         const infoResponse = await fetch(`${baseUrl}/api/info?id=${animeId}`);
         const infoJson = await infoResponse.json();
         
-        if (!infoJson.success || !infoJson.results || !infoJson.results.data) {
-            throw new Error("Target anime metadata could not be found on the server.");
+        // FIXED: Reading data parameter structure directly from your live payload
+        if (!infoJson || !infoJson.success || !infoJson.data) {
+            throw new Error("Target anime metadata could not be parsed from server payload.");
         }
         
-        const baseAnime = infoJson.results.data;
+        const baseAnime = infoJson.data;
 
-        // 2. Fetch episode structures safely
+        // 2. Fetch corresponding episode map configurations
         let episodesList = [];
         try {
             const epsResponse = await fetch(`${baseUrl}/api/episodes/${animeId}`);
             const epsJson = await epsResponse.json();
             
-            // Failsafe check: Ensure results and episodes exist before reading them
-            if (epsJson && epsJson.success && epsJson.results) {
-                episodesList = epsJson.results.episodes || (Array.isArray(epsJson.results) ? epsJson.results : []);
+            if (epsJson && epsJson.success) {
+                // Handle different array fallback configurations safely
+                if (epsJson.results && epsJson.results.episodes) {
+                    episodesList = epsJson.results.episodes;
+                } else if (Array.isArray(epsJson.results)) {
+                    episodesList = epsJson.results;
+                } else if (Array.isArray(epsJson.data)) {
+                    episodesList = epsJson.data;
+                }
             }
         } catch (e) {
-            console.log("No episodes or failed to parse episodes for this anime.");
+            console.log("No live episode tracking schemas found for this context layer.");
         }
 
-        // --- ENHANCED ANILIST SYNC WITH ADVANCED RELATIONS MAP EXTRACTION ---
+        // --- ENHANCED ANILIST BULLETPROOF ID SYNC ---
         let aniData = {};
-        const baseRawTitle = baseAnime.title || '';
         
-        const query = `query ($search: String) { 
-            Media (search: $search, type: ANIME, sort: SEARCH_MATCH) { 
-                id
-                title { romaji native english }
-                bannerImage coverImage { extraLarge } 
-                description synonyms format source status averageScore trending genres 
-                studios(isMain: true) { nodes { name } } 
-                staff(perPage: 12, sort: RELEVANCE) { nodes { name { full } image { large } primaryOccupations } }
-                relations {
-                    nodes {
-                        id
-                        type
-                        format
-                        status
-                        bannerImage
-                        coverImage { extraLarge }
-                        title { romaji english }
-                    }
-                }
-            } 
-        }`;
+        // Check if query template selection matches by ID or title keyword string parsing mappings
+        const hasValidAniId = baseAnime.anilistId && !isNaN(baseAnime.anilistId);
+        
+        const query = hasValidAniId 
+            ? `query ($id: Int) { 
+                Media (id: $id, type: ANIME) { 
+                    id title { romaji native english } bannerImage coverImage { extraLarge } description synonyms format source status averageScore trending genres 
+                    studios(isMain: true) { nodes { name } } 
+                    staff(perPage: 12, sort: RELEVANCE) { nodes { name { full } image { large } primaryOccupations } }
+                    relations { nodes { id type format status bannerImage coverImage { extraLarge } title { romaji english } } }
+                } 
+              }`
+            : `query ($search: String) { 
+                Media (search: $search, type: ANIME, sort: SEARCH_MATCH) { 
+                    id title { romaji native english } bannerImage coverImage { extraLarge } description synonyms format source status averageScore trending genres 
+                    studios(isMain: true) { nodes { name } } 
+                    staff(perPage: 12, sort: RELEVANCE) { nodes { name { full } image { large } primaryOccupations } }
+                    relations { nodes { id type format status bannerImage coverImage { extraLarge } title { romaji english } } }
+                } 
+              }`;
 
-        async function tryAniListFetch(searchTitle) {
-            try {
-                const res = await fetch('https://graphql.anilist.co', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                    body: JSON.stringify({ query, variables: { search: searchTitle } })
-                });
-                const json = await res.json();
-                return json?.data?.Media || null;
-            } catch (e) { return null; }
+        try {
+            const variables = hasValidAniId ? { id: parseInt(baseAnime.anilistId) } : { search: baseAnime.title.replace(/\(Dub\)|\(Sub\)/gi, '').trim() };
+            
+            const aniRes = await fetch('https://graphql.anilist.co', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ query, variables })
+            });
+            const json = await aniRes.json();
+            aniData = json?.data?.Media || {};
+        } catch (e) {
+            console.log("GraphQL parsing aborted.");
         }
 
-        let cleanTitle = baseRawTitle.replace(/\(Dub\)|\(Sub\)/gi, '').trim();
-        aniData = await tryAniListFetch(cleanTitle) || {};
-
-        if (Object.keys(aniData).length === 0) {
-            let aggressiveTitle = cleanTitle.split(':')[0].split('-')[0].replace(/Season \d+/gi, '').replace(/Part \d+/gi, '').trim();
-            if (aggressiveTitle !== cleanTitle && aggressiveTitle.length > 0) {
-                aniData = await tryAniListFetch(aggressiveTitle) || {};
-            }
-        }
-
-        // Defensive parameter assignment: Safe cascading fallbacks
+        // 3. Populate unified component states with defensive fallbacks
         const finalTitle = baseAnime.title || aniData.title?.english || aniData.title?.romaji || 'Unknown Title';
         const finalJpTitle = baseAnime.japanese_title || aniData.title?.native || 'N/A';
-        const finalDesc = aniData.description || baseAnime.animeInfo?.Overview || 'No description available.';
+        const finalDesc = baseAnime.description || aniData.description || 'No description available.';
         const finalBanner = aniData.bannerImage || aniData.coverImage?.extraLarge || baseAnime.poster || 'https://via.placeholder.com/1280x720/111/fff?text=No+Background';
 
         let extractedRelations = [];
@@ -117,14 +114,15 @@ window.app.components.info = async () => {
             banner: finalBanner,
             episodes: episodesList,
             relations: extractedRelations,
-            aniList: aniData
+            aniList: aniData,
+            rawPayload: baseAnime // Cache raw array values for text indicators fallback blocks
         };
 
         window.app.state.activeInfoTab = 'information'; 
         window.app.state.epSearchValue = '';
         window.app.state.epRangeFilter = '1-100';
 
-        // Historical progression setup
+        // Historical state markers mapping validation
         const profile = window.app.state && window.app.state.activeProfile ? window.app.state.activeProfile : null;
         let playBtnText = "Play E01";
         let targetEpisodeId = episodesList.length > 0 ? (episodesList[0].id || episodesList[0].episode_no) : '';
@@ -142,7 +140,7 @@ window.app.components.info = async () => {
         renderAnimeInfoShell();
 
     } catch (error) {
-        console.error("Info Page Defended Crash Error Log:", error);
+        console.error("Info Core Layout Crash Intercepted Safely:", error);
         container.innerHTML = `<div class="w-full h-screen flex flex-col items-center justify-center -mt-10"><i class="fas fa-exclamation-triangle text-5xl text-[#F47521] mb-4"></i><h2 class="text-2xl font-black text-white mb-2">Oops! Something went wrong.</h2><p class="text-gray-400 text-sm mb-6">${error.message}</p><button onclick="window.location.reload()" class="bg-white/10 px-6 py-2 rounded font-bold text-sm tracking-wide">Try Again</button></div>`;
     }
 };
@@ -151,12 +149,20 @@ function renderAnimeInfoShell() {
     const container = document.getElementById('info-container');
     const data = window.app.state.currentAnimePage;
     const ani = data.aniList;
+    const raw = data.rawPayload;
 
     const cleanDesc = (data.synopsis || '').replace(/<[^>]*>?/gm, '');
-    const genresStr = ani.genres ? ani.genres.join(' • ') : 'Anime Series';
+    
+    // Read genre maps safely from either AniList or your core API payload array strings
+    let genresStr = 'Anime Series';
+    if (ani && ani.genres) genresStr = ani.genres.join(' • ');
+    else if (raw && raw.genres) genresStr = Array.isArray(raw.genres) ? raw.genres.join(' • ') : raw.genres;
 
-    const trendingBadge = ani.trending ? `<span class="bg-[#F47521]/10 border border-[#F47521]/30 px-2 py-0.5 rounded backdrop-blur-sm">#${ani.trending} Trending</span>` : '';
-    const scoreBadge = ani.averageScore ? `<span class="flex items-center gap-1"><i class="fas fa-star"></i> ${ani.averageScore}% SCORE</span>` : '';
+    const trendingBadge = ani && ani.trending ? `<span class="bg-[#F47521]/10 border border-[#F47521]/30 px-2 py-0.5 rounded backdrop-blur-sm">#${ani.trending} Trending</span>` : '';
+    
+    // Read user ratings cleanly
+    const scoreVal = (ani && ani.averageScore) ? `${ani.averageScore}%` : (raw && raw.mal ? `${raw.mal}/10` : null);
+    const scoreBadge = scoreVal ? `<span class="flex items-center gap-1"><i class="fas fa-star"></i> ${scoreVal} SCORE</span>` : '';
 
     container.innerHTML = `
         <div class="w-full flex flex-col bg-[#050505] min-h-screen pb-24">
@@ -226,10 +232,11 @@ window.app.switchInfoTab = (tabName) => {
 function renderDynamicTabContent() {
     const contentArea = document.getElementById('dynamic-tab-content-area');
     const data = window.app.state.currentAnimePage;
+    const ani = data.aniList;
+    const raw = data.rawPayload;
 
     if (window.app.state.activeInfoTab === 'information') {
-        const ani = data.aniList;
-        const studios = ani?.studios?.nodes?.map(s => s.name).join(', ') || 'Unknown';
+        const studios = ani?.studios?.nodes?.map(s => s.name).join(', ') || (raw?.studios ? (Array.isArray(raw.studios) ? raw.studios.join(', ') : raw.studios) : 'Unknown');
         const staffHtml = ani?.staff?.nodes?.map(s => `
             <div class="bg-[#111] p-3 rounded-lg border border-white/5 shadow-inner flex items-center gap-3 md:gap-4 hover:border-white/20 transition-colors">
                 <img src="${s.image?.large || 'https://via.placeholder.com/150/222/fff?text=?'}" class="w-10 h-10 md:w-12 md:h-12 rounded-full object-cover border border-white/10 shadow-md">
@@ -240,6 +247,7 @@ function renderDynamicTabContent() {
             </div>
         `).join('') || '<div class="col-span-2 text-gray-500 text-sm">No staff info available.</div>';
 
+        // Long Rectangular Pills generation for Seasons/OVAs
         let relationsHtml = '';
         if (data.relations && data.relations.length > 0) {
             data.relations.forEach(rel => {
@@ -273,12 +281,11 @@ function renderDynamicTabContent() {
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div class="lg:col-span-1 flex flex-col gap-5 bg-[#0a0a0a] p-6 rounded-xl border border-white/5 shadow-lg h-fit">
                     <div class="grid grid-cols-2 gap-4">
-                        <div><span class="text-gray-600 text-[10px] font-bold uppercase block mb-1 tracking-wider">Status</span><span class="text-white font-medium capitalize text-xs md:text-sm">${ani?.status ? ani.status.toLowerCase().replace('_', ' ') : 'Unknown'}</span></div>
-                        <div><span class="text-gray-600 text-[10px] font-bold uppercase block mb-1 tracking-wider">Format</span><span class="text-white font-medium text-xs md:text-sm">${ani?.format || 'TV'}</span></div>
+                        <div><span class="text-gray-600 text-[10px] font-bold uppercase block mb-1 tracking-wider">Status</span><span class="text-white font-medium capitalize text-xs md:text-sm">${raw?.status ? (Array.isArray(raw.status) ? raw.status[0] : raw.status) : (ani?.status ? ani.status.toLowerCase().replace('_', ' ') : 'Unknown')}</span></div>
+                        <div><span class="text-gray-600 text-[10px] font-bold uppercase block mb-1 tracking-wider">Format</span><span class="text-white font-medium text-xs md:text-sm">${raw?.type ? (Array.isArray(raw.type) ? raw.type[0] : raw.type) : (ani?.format || 'TV')}</span></div>
                         <div><span class="text-gray-600 text-[10px] font-bold uppercase block mb-1 tracking-wider">Source</span><span class="text-white font-medium capitalize text-xs md:text-sm">${ani?.source ? ani.source.toLowerCase().replace('_', ' ') : 'N/A'}</span></div>
                         <div><span class="text-gray-600 text-[10px] font-bold uppercase block mb-1 tracking-wider">Main Studio</span><span class="text-white font-medium text-xs md:text-sm truncate block">${studios}</span></div>
                     </div>
-                    ${ani?.synonyms && ani.synonyms.length > 0 ? `<div class="pt-3 border-t border-white/5"><span class="text-gray-600 text-[10px] font-bold uppercase block mb-2 tracking-wider">Alternative Titles</span><div class="text-gray-400 text-xs leading-relaxed space-y-1.5">${ani.synonyms.map(t => `<p>• ${t}</p>`).join('')}</div></div>` : ''}
                 </div>
 
                 <div class="lg:col-span-2 flex flex-col gap-8">
@@ -344,7 +351,7 @@ window.app.searchAndRouteToAnime = async (titleKeyword) => {
         if (json.success && json.results && json.results.length > 0) {
             window.location.href = `info.html?id=${json.results[0].id}`;
         } else {
-            if (window.app.showCustomAlert) window.app.showCustomAlert("This season is not listed on the streamer index yet.", "error");
+            if (window.app.showCustomAlert) window.app.showCustomAlert("This season is not available on streaming indexes yet.", "error");
             else alert("This season is not available yet.");
         }
     } catch(e) {
