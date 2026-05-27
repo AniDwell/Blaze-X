@@ -12,7 +12,7 @@ window.app.components.info = async () => {
         return;
     }
 
-    // MATCHING LOADING SCREEN: Same loader mechanism synchronized layout
+    // Synchronized Loader layout matching app shell standard configurations
     container.innerHTML = `
         <div class="w-full h-[60vh] flex items-center justify-center">
             <div class="tk-loader scale-75">
@@ -23,10 +23,9 @@ window.app.components.info = async () => {
     `;
 
     try {
-        // MATCHING BASE API URL: Strictly point to your production vercel instance
         const baseUrl = 'https://anikoto-api-xi.vercel.app';
         
-        // Step 1: Fetch explicit layout meta elements from /api/info
+        // 1. Fetch metadata elements from /api/info
         const infoResponse = await fetch(`${baseUrl}/api/info?id=${animeId}`);
         const infoJson = await infoResponse.json();
         
@@ -36,27 +35,39 @@ window.app.components.info = async () => {
         
         const baseAnime = infoJson.results.data;
 
-        // Step 2: Fetch target episode structures mapping list sequentially from /api/episodes/
+        // 2. Fetch episode structures array maps list sequentially from /api/episodes/
         const epsResponse = await fetch(`${baseUrl}/api/episodes/${animeId}`);
         const epsJson = await epsResponse.json();
         
-        // Safe mapping fallbacks if raw payload arrays match alternative indices
         let episodesList = [];
         if (epsJson.success && epsJson.results) {
             episodesList = epsJson.results.episodes || (Array.isArray(epsJson.results) ? epsJson.results : []);
         }
 
-        // --- ENHANCED ANILIST SYNC WITH AGGRESSIVE KEYWORD FALLBACK ---
+        // --- ENHANCED ANILIST SYNC WITH ADVANCED RELATIONS MAP EXTRACTION ---
         let aniData = {};
         const baseRawTitle = baseAnime.title || '';
         
+        // Extended the GraphQL fields parameters string template block to parse target media relations
         const query = `query ($search: String) { 
             Media (search: $search, type: ANIME, sort: SEARCH_MATCH) { 
+                id
                 title { romaji native english }
                 bannerImage coverImage { extraLarge } 
                 description synonyms format source status averageScore trending genres 
                 studios(isMain: true) { nodes { name } } 
                 staff(perPage: 12, sort: RELEVANCE) { nodes { name { full } image { large } primaryOccupations } }
+                relations {
+                    nodes {
+                        id
+                        type
+                        format
+                        status
+                        bannerImage
+                        coverImage { extraLarge }
+                        title { romaji english }
+                    }
+                }
             } 
         }`;
 
@@ -72,11 +83,9 @@ window.app.components.info = async () => {
             } catch (e) { return null; }
         }
 
-        // Attempt 1: Standard cleaning process
         let cleanTitle = baseRawTitle.replace(/\(Dub\)|\(Sub\)/gi, '').trim();
         aniData = await tryAniListFetch(cleanTitle) || {};
 
-        // Attempt 2: Aggressive cleanup split parsing structures
         if (Object.keys(aniData).length === 0) {
             let aggressiveTitle = cleanTitle.split(':')[0].split('-')[0].replace(/Season \d+/gi, '').replace(/Part \d+/gi, '').trim();
             if (aggressiveTitle !== cleanTitle && aggressiveTitle.length > 0) {
@@ -84,13 +93,17 @@ window.app.components.info = async () => {
             }
         }
 
-        // Normalize string data values securely
+        // Fallback checks parameters assignment processes
         const finalTitle = baseAnime.title || aniData.title?.english || aniData.title?.romaji || 'Unknown Title';
         const finalJpTitle = baseAnime.japanese_title || aniData.title?.native || 'N/A';
         const finalDesc = aniData.description || baseAnime.animeInfo?.Overview || 'No description available.';
-        
-        // Enforce true remote high-res layout images
         const finalBanner = aniData.bannerImage || aniData.coverImage?.extraLarge || baseAnime.poster || 'https://via.placeholder.com/1280x720/111/fff?text=No+Background';
+
+        // Filter and process target relational media mappings (Only keep ANIME entries)
+        let extractedRelations = [];
+        if (aniData.relations && aniData.relations.nodes) {
+            extractedRelations = aniData.relations.nodes.filter(node => node.type === 'ANIME');
+        }
 
         window.app.state.currentAnimePage = {
             id: animeId,
@@ -100,6 +113,7 @@ window.app.components.info = async () => {
             poster: aniData.coverImage?.extraLarge || baseAnime.poster || 'https://via.placeholder.com/800x1200/111/fff?text=No+Poster',
             banner: finalBanner,
             episodes: episodesList,
+            relations: extractedRelations,
             aniList: aniData
         };
 
@@ -107,7 +121,7 @@ window.app.components.info = async () => {
         window.app.state.epSearchValue = '';
         window.app.state.epRangeFilter = '1-100';
 
-        // 4. Smart Dynamic Progression History Handler
+        // Historical progression states validation
         const profile = window.app.state && window.app.state.activeProfile ? window.app.state.activeProfile : null;
         let playBtnText = "Play E01";
         let targetEpisodeId = episodesList.length > 0 ? (episodesList[0].id || episodesList[0].episode_no) : '';
@@ -125,7 +139,7 @@ window.app.components.info = async () => {
         renderAnimeInfoShell();
 
     } catch (error) {
-        console.error("Info Page Engine Error Context:", error);
+        console.error("Info Page Engine Context Failure:", error);
         container.innerHTML = `<div class="w-full h-screen flex flex-col items-center justify-center -mt-10"><i class="fas fa-exclamation-triangle text-5xl text-[#F47521] mb-4"></i><h2 class="text-2xl font-black text-white mb-2">Oops! Something went wrong.</h2><p class="text-gray-400 text-sm mb-6">${error.message}</p><button onclick="window.location.reload()" class="bg-white/10 px-6 py-2 rounded font-bold text-sm tracking-wide">Try Again</button></div>`;
     }
 };
@@ -228,6 +242,38 @@ function renderDynamicTabContent() {
             </div>
         `).join('') || '<div class="col-span-2 text-gray-500 text-sm">No staff info available.</div>';
 
+        // --- NEW SEASONS & OVA RECTANGULAR PILLS GENERATOR ---
+        let relationsHtml = '';
+        if (data.relations && data.relations.length > 0) {
+            data.relations.forEach(rel => {
+                const relTitle = rel.title?.english || rel.title?.romaji || 'Alternative Season';
+                const bgImage = rel.bannerImage || rel.coverImage?.extraLarge || '';
+                const formatBadge = rel.format ? `<span class="bg-[#F47521] text-white text-[9px] px-1.5 py-0.5 rounded font-black tracking-wide uppercase">${rel.format}</span>` : '';
+                const statusStr = rel.status ? rel.status.toLowerCase().replace('_', ' ') : '';
+                
+                // Directly triggers window.app.searchAndRouteToAnime inside your search registry parameters map on click
+                relationsHtml += `
+                    <div onclick="window.app.searchAndRouteToAnime('${relTitle.replace(/'/g, "\\'")}')" class="relative w-full h-20 rounded-xl overflow-hidden border border-white/5 hover:border-[#F47521]/50 cursor-pointer transition-all flex items-center px-4 group shadow-md flex-shrink-0">
+                        <div class="absolute inset-0 z-0 bg-black">
+                            <img src="${bgImage}" class="w-full h-full object-cover opacity-35 group-hover:scale-105 transition-transform duration-500 object-center">
+                            <div class="absolute inset-0 bg-gradient-to-r from-black/90 via-black/40 to-transparent"></div>
+                        </div>
+                        
+                        <div class="relative z-10 flex flex-col gap-1 min-w-0 pr-4">
+                            <div class="flex items-center gap-2">
+                                ${formatBadge}
+                                <span class="text-gray-400 font-bold capitalize text-[10px] tracking-wider">${statusStr}</span>
+                            </div>
+                            <h4 class="text-white font-black text-sm md:text-base truncate drop-shadow-md tracking-tight">${relTitle}</h4>
+                        </div>
+                        <i class="fas fa-chevron-right text-gray-500 group-hover:text-[#F47521] ml-auto relative z-10 transition-colors text-sm"></i>
+                    </div>
+                `;
+            });
+        } else {
+            relationsHtml = `<div class="text-gray-500 text-xs py-2">No alternative seasons or OVAs found for this entry.</div>`;
+        }
+
         contentArea.innerHTML = `
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div class="lg:col-span-1 flex flex-col gap-5 bg-[#0a0a0a] p-6 rounded-xl border border-white/5 shadow-lg h-fit">
@@ -239,7 +285,13 @@ function renderDynamicTabContent() {
                     </div>
                     ${ani.synonyms && ani.synonyms.length > 0 ? `<div class="pt-3 border-t border-white/5"><span class="text-gray-600 text-[10px] font-bold uppercase block mb-2 tracking-wider">Alternative Titles</span><div class="text-gray-400 text-xs leading-relaxed space-y-1.5">${ani.synonyms.map(t => `<p>• ${t}</p>`).join('')}</div></div>` : ''}
                 </div>
+
                 <div class="lg:col-span-2 flex flex-col gap-8">
+                    <div>
+                        <h3 class="text-white text-base md:text-lg font-black mb-4 tracking-tight border-b-2 border-[#F47521] inline-block pb-1">Seasons & Alternative Media</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">${relationsHtml}</div>
+                    </div>
+
                     <div>
                         <h3 class="text-white text-base md:text-lg font-black mb-4 tracking-tight border-b-2 border-[#F47521] inline-block pb-1">Authors & Key Staff</h3>
                         <div class="grid grid-cols-2 gap-3 md:gap-4">${staffHtml}</div>
@@ -288,6 +340,32 @@ function renderDynamicTabContent() {
         renderNumericEpisodeGrid();
     }
 }
+
+// --- AUTOMATED SEARCH ROUTER ENGINE ---
+// Searches your internal API using the relation title, finds the true target ID, and jumps to its info.html layer instantly
+window.app.searchAndRouteToAnime = async (titleKeyword) => {
+    try {
+        const toast = window.app.showCustomAlert ? window.app.showCustomAlert : alert;
+        const baseUrl = 'https://anikoto-api-xi.vercel.app';
+        
+        // Use the official /api/search?keyword= schema from documentation
+        const response = await fetch(`${baseUrl}/api/search?keyword=${encodeURIComponent(titleKeyword)}`);
+        const json = await response.json();
+        
+        if (json.success && json.results && json.results.length > 0) {
+            const matchedAnimeId = json.results[0].id;
+            window.location.href = `info.html?id=${matchedAnimeId}`;
+        } else {
+            if (window.app.showCustomAlert) {
+                window.app.showCustomAlert("This season is not available on streaming index streams yet.", "error");
+            } else {
+                alert("This season is not available yet.");
+            }
+        }
+    } catch(e) {
+        console.error("Relational media sync parsing aborted.", e);
+    }
+};
 
 window.app.toggleDropdown = () => {
     const menu = document.getElementById('custom-dropdown-menu');
@@ -418,7 +496,6 @@ window.app.addToLibrary = async (id, title, img) => {
     } catch (error) { console.error("Firebase library sync failed:", error); }
 };
 
-// --- GUEST PROFILE GENERATOR & PLAY REDIRECT ---
 window.app.handlePlayClick = async (episodeId, animeId) => {
     if (!episodeId || episodeId === '') {
         alert('No episodes available yet!');
