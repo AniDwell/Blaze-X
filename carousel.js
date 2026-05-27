@@ -15,7 +15,6 @@ window.app.components.carousel = async () => {
     `;
 
     try {
-        // --- UPDATED BASE URL TO YOUR VERCEL API ---
         const baseUrl = 'https://anikoto-api-xi.vercel.app';
         
         // Fetching from the official latest episodes route
@@ -44,9 +43,18 @@ window.app.components.carousel = async () => {
             let finalImage = slide.image || 'https://via.placeholder.com/1280x720/111/fff?text=No+Image';
             let finalRating = null;
             let trendingScore = 0;
+            let finalDescription = 'No synopsis available.';
 
             try {
-                const query = `query ($search: String) { Media (search: $search, type: ANIME, sort: SEARCH_MATCH) { trending averageScore coverImage { extraLarge } } }`;
+                // FIXED: Explicitly added description to the GraphQL query string extraction layout block
+                const query = `query ($search: String) { 
+                    Media (search: $search, type: ANIME, sort: SEARCH_MATCH) { 
+                        trending 
+                        averageScore 
+                        description
+                        coverImage { extraLarge } 
+                    } 
+                }`;
                 const aniRes = await fetch('https://graphql.anilist.co', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
@@ -54,16 +62,22 @@ window.app.components.carousel = async () => {
                 });
                 
                 const aniData = await aniRes.json();
-                if (aniData?.data?.Media) {
-                    if (aniData.data.Media.coverImage?.extraLarge) finalImage = aniData.data.Media.coverImage.extraLarge;
-                    if (aniData.data.Media.averageScore) finalRating = aniData.data.Media.averageScore;
-                    if (aniData.data.Media.trending) trendingScore = aniData.data.Media.trending;
+                const media = aniData?.data?.Media;
+                if (media) {
+                    if (media.coverImage?.extraLarge) finalImage = media.coverImage.extraLarge;
+                    if (media.averageScore) finalRating = media.averageScore;
+                    if (media.trending) trendingScore = media.trending;
+                    
+                    // Sanitize raw HTML elements and tags from AniList markdown responses smoothly
+                    if (media.description) {
+                        finalDescription = media.description.replace(/<[^>]*>?/gm, '').trim();
+                    }
                 }
             } catch (e) {
                 console.log("AniList sync failed for:", cleanTitle);
             }
 
-            return { ...slide, exactId, finalImage, finalRating, trendingScore };
+            return { ...slide, exactId, finalImage, finalRating, trendingScore, finalDescription };
         }));
 
         // Sort by trending score (highest first) and take top 5
@@ -78,7 +92,6 @@ window.app.components.carousel = async () => {
 
         // Build Background Image Slides
         topSlides.forEach((s, i) => {
-            // CLICKABLE BACKGROUND IMAGE - Routes to Info page instantly
             imageSlidesHtml += `
                 <div class="absolute inset-0 cursor-pointer z-0 group overflow-hidden bg-black" id="slide-bg-${i}" style="opacity: ${i === 0 ? '1' : '0'}; z-index: ${i === 0 ? '20' : '10'}; transition: opacity 0.8s ease-in-out;" onclick="window.app.handleCarouselImageClick()">
                     <img src="${s.finalImage}" class="absolute inset-0 w-full h-full object-cover object-[center_top] transition-transform duration-[10s] group-hover:scale-105">
@@ -129,7 +142,6 @@ window.app.updateCarouselUI = (index) => {
     const data = window.app.state.carouselItems[index];
     if (!data) return;
 
-    // PERFECT ID LOCK
     const id = data.exactId || 'unknown';
     const ratingHtml = data.finalRating ? `<span class="flex items-center gap-1"><i class="fas fa-star"></i> ${data.finalRating}% SCORE</span>` : '';
 
@@ -144,7 +156,7 @@ window.app.updateCarouselUI = (index) => {
 
             <h2 class="text-3xl md:text-5xl lg:text-6xl font-black text-white mb-2 md:mb-3 drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] line-clamp-2 tracking-tight cursor-pointer leading-tight hover:text-[#F47521] transition-colors" onclick="window.app.handleCarouselImageClick()">${data.title || 'Unknown'}</h2>
             
-            <p class="text-[11px] md:text-xs text-gray-300 line-clamp-3 md:line-clamp-4 mb-5 md:mb-6 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-relaxed font-medium pointer-events-none">${data.description || 'No synopsis available.'}</p>
+            <p class="text-[11px] md:text-xs text-gray-300 line-clamp-3 md:line-clamp-4 mb-5 md:mb-6 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-relaxed font-medium pointer-events-none">${data.finalDescription}</p>
             
             <div class="flex gap-2.5 relative z-40">
                 <button onclick="window.app.handleCarouselImageClick()" class="bg-[#F47521] text-white px-6 py-2 md:px-8 md:py-3 rounded shadow-[0_0_15px_rgba(244,117,33,0.3)] font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-white hover:text-black transition-colors flex items-center gap-2">
@@ -165,7 +177,6 @@ window.app.handleCarouselImageClick = () => {
     const currentIndex = window.app.state.carouselCurrentIndex;
     const currentSlideData = window.app.state.carouselItems[currentIndex];
     
-    // Grabs the exact locked ID from the currently visible slide
     if (currentSlideData && currentSlideData.exactId) {
         window.location.href = `info.html?id=${currentSlideData.exactId}`;
     } else {
@@ -230,7 +241,6 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
     const rawData = window.app.state.carouselItems[index];
     if (!rawData) return;
     
-    // Grabs EXACT ID from state
     const formattedAnime = { 
         id: rawData.exactId, 
         title: rawData.title, 
