@@ -12,22 +12,43 @@ window.app.components.info = async () => {
         return;
     }
 
-    container.innerHTML = `<div class="w-full h-[60vh] flex items-center justify-center"><div class="tk-loader scale-75"><div class="tk-dot tk-dot-1"></div><div class="tk-dot tk-dot-2"></div></div></div>`;
+    // MATCHING LOADING SCREEN: Same loader mechanism synchronized layout
+    container.innerHTML = `
+        <div class="w-full h-[60vh] flex items-center justify-center">
+            <div class="tk-loader scale-75">
+                <div class="tk-dot tk-dot-1"></div>
+                <div class="tk-dot tk-dot-2"></div>
+            </div>
+        </div>
+    `;
 
     try {
-        const baseUrl = (window.app && window.app.config && window.app.config.anikotoBase) ? window.app.config.anikotoBase : 'https://snowy-bonus-9c22.prashant-yash69.workers.dev';
-        const rawResponse = await fetch(`${baseUrl}/series/${animeId}`);
-        const response = await rawResponse.json();
+        // MATCHING BASE API URL: Strictly point to your production vercel instance
+        const baseUrl = 'https://anikoto-api-xi.vercel.app';
         
-        const payload = response.data || response; 
-        const baseAnime = payload.anime || payload; 
-        const episodesList = payload.episodes || baseAnime.episodes || []; 
+        // Step 1: Fetch explicit layout meta elements from /api/info
+        const infoResponse = await fetch(`${baseUrl}/api/info?id=${animeId}`);
+        const infoJson = await infoResponse.json();
+        
+        if (!infoJson.success || !infoJson.results || !infoJson.results.data) {
+            throw new Error("Target anime metadata could not be fetched from backend.");
+        }
+        
+        const baseAnime = infoJson.results.data;
 
-        if (!baseAnime || (!baseAnime.title && !baseAnime.name)) throw new Error("Invalid anime data received.");
+        // Step 2: Fetch target episode structures mapping list sequentially from /api/episodes/
+        const epsResponse = await fetch(`${baseUrl}/api/episodes/${animeId}`);
+        const epsJson = await epsResponse.json();
+        
+        // Safe mapping fallbacks if raw payload arrays match alternative indices
+        let episodesList = [];
+        if (epsJson.success && epsJson.results) {
+            episodesList = epsJson.results.episodes || (Array.isArray(epsJson.results) ? epsJson.results : []);
+        }
 
-        // --- ENHANCED ANILIST SYNC (With Aggressive Fallback) ---
+        // --- ENHANCED ANILIST SYNC WITH AGGRESSIVE KEYWORD FALLBACK ---
         let aniData = {};
-        const baseRawTitle = baseAnime.title || baseAnime.name || '';
+        const baseRawTitle = baseAnime.title || '';
         
         const query = `query ($search: String) { 
             Media (search: $search, type: ANIME, sort: SEARCH_MATCH) { 
@@ -51,30 +72,32 @@ window.app.components.info = async () => {
             } catch (e) { return null; }
         }
 
-        // Attempt 1: Standard clean
+        // Attempt 1: Standard cleaning process
         let cleanTitle = baseRawTitle.replace(/\(Dub\)|\(Sub\)/gi, '').trim();
         aniData = await tryAniListFetch(cleanTitle) || {};
 
-        // Attempt 2: Aggressive clean (If Attempt 1 failed, strip colons, dashes, and "Season" tags)
+        // Attempt 2: Aggressive cleanup split parsing structures
         if (Object.keys(aniData).length === 0) {
             let aggressiveTitle = cleanTitle.split(':')[0].split('-')[0].replace(/Season \d+/gi, '').replace(/Part \d+/gi, '').trim();
-            if (aggressiveTitle !== cleanTitle) {
+            if (aggressiveTitle !== cleanTitle && aggressiveTitle.length > 0) {
                 aniData = await tryAniListFetch(aggressiveTitle) || {};
             }
         }
 
-        // 3. Construct Global Page State
-        const finalTitle = baseAnime.title || baseAnime.name || aniData.title?.english || aniData.title?.romaji || 'Unknown Title';
-        const finalJpTitle = aniData.title?.native || baseAnime.alternative || 'N/A';
-        const finalDesc = aniData.description || baseAnime.description || baseAnime.synopsis || 'No description available.';
-        const finalBanner = aniData.bannerImage || aniData.coverImage?.extraLarge || baseAnime.background_image || baseAnime.cover || 'https://via.placeholder.com/1280x720/111/fff?text=No+Background';
+        // Normalize string data values securely
+        const finalTitle = baseAnime.title || aniData.title?.english || aniData.title?.romaji || 'Unknown Title';
+        const finalJpTitle = baseAnime.japanese_title || aniData.title?.native || 'N/A';
+        const finalDesc = aniData.description || baseAnime.animeInfo?.Overview || 'No description available.';
+        
+        // Enforce true remote high-res layout images
+        const finalBanner = aniData.bannerImage || aniData.coverImage?.extraLarge || baseAnime.poster || 'https://via.placeholder.com/1280x720/111/fff?text=No+Background';
 
         window.app.state.currentAnimePage = {
             id: animeId,
             title: finalTitle,
             jpTitle: finalJpTitle,
             synopsis: finalDesc,
-            poster: aniData.coverImage?.extraLarge || baseAnime.poster || baseAnime.image || 'https://via.placeholder.com/800x1200/111/fff?text=No+Poster',
+            poster: aniData.coverImage?.extraLarge || baseAnime.poster || 'https://via.placeholder.com/800x1200/111/fff?text=No+Poster',
             banner: finalBanner,
             episodes: episodesList,
             aniList: aniData
@@ -84,10 +107,10 @@ window.app.components.info = async () => {
         window.app.state.epSearchValue = '';
         window.app.state.epRangeFilter = '1-100';
 
-        // 4. Smart Play Button Logic
+        // 4. Smart Dynamic Progression History Handler
         const profile = window.app.state && window.app.state.activeProfile ? window.app.state.activeProfile : null;
         let playBtnText = "Play E01";
-        let targetEpisodeId = episodesList.length > 0 ? episodesList[0].id : '';
+        let targetEpisodeId = episodesList.length > 0 ? (episodesList[0].id || episodesList[0].episode_no) : '';
         
         if (profile && profile.history) {
             const historyItem = profile.history.find(h => h.animeId === animeId);
@@ -102,7 +125,7 @@ window.app.components.info = async () => {
         renderAnimeInfoShell();
 
     } catch (error) {
-        console.error("Info Page Fatal Error:", error);
+        console.error("Info Page Engine Error Context:", error);
         container.innerHTML = `<div class="w-full h-screen flex flex-col items-center justify-center -mt-10"><i class="fas fa-exclamation-triangle text-5xl text-[#F47521] mb-4"></i><h2 class="text-2xl font-black text-white mb-2">Oops! Something went wrong.</h2><p class="text-gray-400 text-sm mb-6">${error.message}</p><button onclick="window.location.reload()" class="bg-white/10 px-6 py-2 rounded font-bold text-sm tracking-wide">Try Again</button></div>`;
     }
 };
@@ -120,6 +143,7 @@ function renderAnimeInfoShell() {
 
     container.innerHTML = `
         <div class="w-full flex flex-col bg-[#050505] min-h-screen pb-24">
+            
             <div class="relative w-full min-h-[55vh] md:min-h-[65vh] flex items-center py-10 border-b border-white/5 overflow-hidden">
                 <div class="absolute inset-0 z-0 pointer-events-none">
                     <img src="${data.banner}" class="w-full h-full object-cover object-top opacity-50 md:opacity-70">
@@ -195,8 +219,8 @@ function renderDynamicTabContent() {
 
         const studios = ani.studios?.nodes?.map(s => s.name).join(', ') || 'Unknown';
         const staffHtml = ani.staff?.nodes?.map(s => `
-            <div class="bg-[#111] p-3 rounded-lg border border-white/5 flex items-center gap-3 md:gap-4 hover:border-white/20 transition-colors shadow-sm">
-                <img src="${s.image?.large || 'https://via.placeholder.com/150/222/fff?text=?'}" class="w-10 h-10 md:w-12 md:h-12 rounded-full object-cover border border-white/10">
+            <div class="bg-[#111] p-3 rounded-lg border border-white/5 shadow-inner flex items-center gap-3 md:gap-4 hover:border-white/20 transition-colors">
+                <img src="${s.image?.large || 'https://via.placeholder.com/150/222/fff?text=?'}" class="w-10 h-10 md:w-12 md:h-12 rounded-full object-cover border border-white/10 shadow-md">
                 <div class="flex-1 min-w-0">
                     <div class="font-bold text-white text-xs md:text-sm truncate">${s.name.full}</div>
                     <div class="text-[10px] md:text-xs text-[#F47521] truncate mt-0.5">${s.primaryOccupations.join(', ')}</div>
@@ -206,7 +230,7 @@ function renderDynamicTabContent() {
 
         contentArea.innerHTML = `
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div class="lg:col-span-1 flex flex-col gap-5 bg-[#0a0a0a] p-6 rounded-xl border border-white/5 shadow-md h-fit">
+                <div class="lg:col-span-1 flex flex-col gap-5 bg-[#0a0a0a] p-6 rounded-xl border border-white/5 shadow-lg h-fit">
                     <div class="grid grid-cols-2 gap-4">
                         <div><span class="text-gray-600 text-[10px] font-bold uppercase block mb-1 tracking-wider">Status</span><span class="text-white font-medium capitalize text-xs md:text-sm">${ani.status ? ani.status.toLowerCase().replace('_', ' ') : 'Unknown'}</span></div>
                         <div><span class="text-gray-600 text-[10px] font-bold uppercase block mb-1 tracking-wider">Format</span><span class="text-white font-medium text-xs md:text-sm">${ani.format || 'TV'}</span></div>
@@ -316,16 +340,16 @@ function renderNumericEpisodeGrid() {
     let episodesToRender = data.episodes;
 
     if (searchVal !== '') {
-        episodesToRender = data.episodes.filter((ep, idx) => {
-            const epNumber = ep.number || (idx + 1);
-            return epNumber.toString().includes(searchVal);
+        episodesToRender = data.episodes.filter((ep) => {
+            const epNumber = ep.episode_no;
+            return epNumber && epNumber.toString().includes(searchVal);
         });
     } else if (rangeArray.length === 2) {
         const startEpNum = parseInt(rangeArray[0]);
         const endEpNum = parseInt(rangeArray[1]);
-        episodesToRender = data.episodes.filter((ep, idx) => {
-            const epNumber = ep.number || (idx + 1);
-            return epNumber >= startEpNum && epNumber <= endEpNum;
+        episodesToRender = data.episodes.filter((ep) => {
+            const epNumber = ep.episode_no;
+            return epNumber && epNumber >= startEpNum && epNumber <= endEpNum;
         });
     }
 
@@ -336,8 +360,8 @@ function renderNumericEpisodeGrid() {
 
     let gridHtml = '';
     episodesToRender.forEach((ep) => {
-        const originalArrayIdx = data.episodes.findIndex(e => e.id === ep.id);
-        const epNumber = ep.number || (originalArrayIdx + 1);
+        const epNumber = ep.episode_no;
+        const targetId = ep.id;
         
         const epTitleLower = (ep.title || '').toLowerCase();
         const isActuallyFiller = epTitleLower.includes('filler') || epTitleLower.includes('recap'); 
@@ -345,9 +369,8 @@ function renderNumericEpisodeGrid() {
         const fillerIconDot = isActuallyFiller ? `<div class="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full"></div>` : '';
         const hoverClasses = isActuallyFiller ? 'border-red-500/30 text-gray-400 hover:bg-red-500 hover:text-white hover:border-red-500 shadow-sm' : 'border-white/5 text-gray-300 hover:bg-[#F47521] hover:text-black hover:border-[#F47521] shadow-sm';
 
-        // ADDED AUTO-PROFILE PLAY CLICK
         gridHtml += `
-            <button onclick="window.app.handlePlayClick('${ep.id}', '${data.id}')" class="relative w-full aspect-square flex items-center justify-center rounded border transition-all duration-200 group bg-white/5 ${hoverClasses}">
+            <button onclick="window.app.handlePlayClick('${targetId}', '${data.id}')" class="relative w-full aspect-square flex items-center justify-center rounded border transition-all duration-200 group bg-white/5 ${hoverClasses}">
                 <span class="font-bold text-xs md:text-sm">${epNumber}</span>
                 ${fillerIconDot}
             </button>
@@ -403,18 +426,14 @@ window.app.handlePlayClick = async (episodeId, animeId) => {
     }
 
     try {
-        // If user already exists, just redirect to player
         if (window.app.state && window.app.state.activeProfile && window.app.state.activeProfile.uid) {
             window.location.href = `play.html?id=${episodeId}&anime=${animeId}`;
             return;
         }
 
-        // --- CREATE GUEST PROFILE ---
         const randomNum = Math.floor(Math.random() * 90000) + 10000;
         const generatedName = `Guest-${randomNum}`;
-        const generatedPfp = `pfp${Math.floor(Math.random() * 10) + 1}.jpeg`; // pfp1.jpeg to pfp10.jpeg
-        
-        // Generate a pseudo-UID for local and db tracking
+        const generatedPfp = `pfp${Math.floor(Math.random() * 10) + 1}.jpeg`; 
         const guestUid = 'anon_' + Date.now().toString(36) + Math.random().toString(36).substr(2);
 
         const newProfile = {
@@ -427,13 +446,9 @@ window.app.handlePlayClick = async (episodeId, animeId) => {
             createdAt: new Date().toISOString()
         };
 
-        // 1. Save to global state
         window.app.state.activeProfile = newProfile;
-        
-        // 2. Save locally so they stay "logged in" as a guest
         localStorage.setItem('blazex_user_profile', JSON.stringify(newProfile));
 
-        // 3. Save to Firebase (if available)
         try {
             const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
             const userRef = firestore.doc(window.app.db, "users", guestUid);
@@ -442,12 +457,10 @@ window.app.handlePlayClick = async (episodeId, animeId) => {
             console.log("Proceeding locally, DB save failed: ", dbError);
         }
 
-        // Redirect to player
         window.location.href = `play.html?id=${episodeId}&anime=${animeId}`;
 
     } catch (err) {
         console.error("Play redirect error:", err);
-        // Failsafe redirect
         window.location.href = `play.html?id=${episodeId}&anime=${animeId}`;
     }
 };
