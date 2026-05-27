@@ -12,10 +12,9 @@ window.app.components.info = async () => {
         return;
     }
 
-    // Master Trigger function to allow page re-rendering without full browser reloads
+    // High-performance state injection & data fetch thread
     window.app.loadInfoPageData = async (targetId) => {
         animeId = targetId;
-        // Update URL bar silently for bookmarking continuity
         const newUrl = `${window.location.pathname}?id=${targetId}`;
         window.history.pushState({ path: newUrl }, '', newUrl);
 
@@ -41,7 +40,7 @@ window.app.components.info = async () => {
             
             const baseAnime = infoJson.data;
 
-            // 2. Fetch corresponding episode map configurations safely
+            // 2. Fetch corresponding episode list map configurations safely
             let episodesList = [];
             try {
                 const epsResponse = await fetch(`${baseUrl}/api/episodes/${animeId}`);
@@ -57,7 +56,7 @@ window.app.components.info = async () => {
                     }
                 }
             } catch (e) {
-                console.log("No live episode tracking schemas found.");
+                console.log("No matching episodes payload layout detected.");
             }
 
             // 3. Fetch Schedule Countdown Data if Available
@@ -69,10 +68,10 @@ window.app.components.info = async () => {
                     scheduleData = schedJson.results.nextEpisodeSchedule || null;
                 }
             } catch (e) {
-                console.log("No schedule tracking module available for this title.");
+                console.log("No schedule tracking module available.");
             }
 
-            // --- ENHANCED ANILIST BULLETPROOF ID SYNC ---
+            // --- ANILIST API SYNC BLOCK ---
             let aniData = {};
             const hasValidAniId = baseAnime.anilistId && !isNaN(baseAnime.anilistId);
             
@@ -104,15 +103,16 @@ window.app.components.info = async () => {
                 const json = await aniRes.json();
                 aniData = json?.data?.Media || {};
             } catch (e) {
-                console.log("GraphQL parsing metrics fallbacks applied.");
+                console.log("GraphQL dynamic fallback state handled.");
             }
 
-            // Compile localized page configurations
+            // Fallback allocations
             const finalTitle = baseAnime.title || aniData.title?.english || aniData.title?.romaji || 'Unknown Title';
             const finalJpTitle = baseAnime.japanese_title || aniData.title?.native || 'N/A';
             const finalDesc = baseAnime.description || aniData.description || 'No description available.';
             const finalBanner = aniData.bannerImage || aniData.coverImage?.extraLarge || baseAnime.poster || 'https://via.placeholder.com/1280x720/111/fff?text=No+Background';
 
+            // Extract and clean raw data relations array
             let extractedRelations = [];
             if (aniData.relations && aniData.relations.nodes) {
                 extractedRelations = aniData.relations.nodes.filter(node => node.type === 'ANIME');
@@ -132,12 +132,11 @@ window.app.components.info = async () => {
                 rawPayload: baseAnime
             };
 
-            // Set UI defaults
             window.app.state.activeInfoTab = 'information'; 
             window.app.state.epSearchValue = '';
             window.app.state.epRangeFilter = '1-100';
 
-            // Smart button routing triggers
+            // Core playlist index resolution
             const profile = window.app.state && window.app.state.activeProfile ? window.app.state.activeProfile : null;
             let playBtnText = "Play E01";
             let targetEpisodeId = episodesList.length > 0 ? (episodesList[0].id || episodesList[0].episode_no) : '';
@@ -155,12 +154,11 @@ window.app.components.info = async () => {
             renderAnimeInfoShell();
 
         } catch (error) {
-            console.error("Info System Breakdown Handled Securely:", error);
+            console.error("Info View Sync Exception Handling Thread:", error);
             container.innerHTML = `<div class="w-full h-screen flex flex-col items-center justify-center -mt-10"><i class="fas fa-exclamation-triangle text-5xl text-[#F47521] mb-4"></i><h2 class="text-2xl font-black text-white mb-2">Oops! Something went wrong.</h2><p class="text-gray-400 text-sm mb-6">${error.message}</p><button onclick="window.location.reload()" class="bg-white/10 px-6 py-2 rounded font-bold text-sm tracking-wide">Try Again</button></div>`;
         }
     };
 
-    // Run primary load sequence thread loop on setup trigger
     window.app.loadInfoPageData(animeId);
 };
 
@@ -176,7 +174,7 @@ function renderAnimeInfoShell() {
     if (ani && ani.genres) genresStr = ani.genres.join(' • ');
     else if (raw && raw.genres) genresStr = Array.isArray(raw.genres) ? raw.genres.join(' • ') : raw.genres;
 
-    // Detect Upcoming Criteria Strings cleanly
+    // Direct check for production/release lifecycle stages
     const isUpcoming = (raw?.status && raw.status.toString().toLowerCase().includes('upcoming')) || 
                        (ani?.status && ani.status.toString().toLowerCase().includes('not_yet_released'));
 
@@ -185,34 +183,6 @@ function renderAnimeInfoShell() {
     
     const scoreVal = (ani && ani.averageScore) ? `${ani.averageScore}%` : (raw && raw.mal ? `${raw.mal}/10` : null);
     const scoreBadge = scoreVal ? `<span class="flex items-center gap-1"><i class="fas fa-star"></i> ${scoreVal} SCORE</span>` : '';
-
-    // --- SEASONS PILL GENERATION (MOVED TO THE TOP AREA ABOVE TABS) ---
-    let relationsHtml = '';
-    if (data.relations && data.relations.length > 0) {
-        data.relations.forEach(rel => {
-            const relTitle = rel.title?.english || rel.title?.romaji || 'Alternative Media';
-            const bgImage = rel.bannerImage || rel.coverImage?.extraLarge || '';
-            const formatBadge = rel.format ? `<span class="bg-[#F47521] text-white text-[9px] px-1.5 py-0.5 rounded font-black tracking-wide uppercase">${rel.format}</span>` : '';
-            const statusStr = rel.status ? rel.status.toLowerCase().replace('_', ' ') : '';
-            
-            relationsHtml += `
-                <div onclick="window.app.searchAndRouteToAnime('${relTitle.replace(/'/g, "\\'")}')" class="relative w-[260px] md:w-[320px] h-20 rounded-xl overflow-hidden border border-white/5 hover:border-[#F47521]/50 cursor-pointer transition-all flex items-center px-4 group shadow-lg flex-shrink-0">
-                    <div class="absolute inset-0 z-0 bg-black">
-                        <img src="${bgImage}" class="w-full h-full object-cover opacity-35 group-hover:scale-105 transition-transform duration-500 object-center">
-                        <div class="absolute inset-0 bg-gradient-to-r from-black/90 via-black/40 to-transparent"></div>
-                    </div>
-                    <div class="relative z-10 flex flex-col gap-1 min-w-0 pr-4">
-                        <div class="flex items-center gap-2">
-                            ${formatBadge}
-                            <span class="text-gray-400 font-bold capitalize text-[10px] tracking-wider">${statusStr}</span>
-                        </div>
-                        <h4 class="text-white font-black text-xs md:text-sm truncate drop-shadow-md tracking-tight">${relTitle}</h4>
-                    </div>
-                    <i class="fas fa-chevron-right text-gray-500 group-hover:text-[#F47521] ml-auto relative z-10 transition-colors text-xs"></i>
-                </div>
-            `;
-        });
-    }
 
     container.innerHTML = `
         <div class="w-full flex flex-col bg-[#050505] min-h-screen pb-24">
@@ -261,13 +231,10 @@ function renderAnimeInfoShell() {
 
             <div class="w-full max-w-7xl mx-auto px-4 md:px-12 mt-8 flex flex-col gap-6">
                 
-                ${relationsHtml !== '' ? `
-                <div class="w-full">
+                <div id="verified-relations-pill-box" class="w-full hidden">
                     <h3 class="text-white text-xs font-black mb-3 uppercase tracking-widest text-gray-400">Seasons & Alternative Media</h3>
-                    <div class="w-full flex gap-3 overflow-x-auto pb-3 hide-scrollbar snap-x pointer-events-auto">
-                        ${relationsHtml}
-                    </div>
-                </div>` : ''}
+                    <div id="relations-horizontal-slider" class="w-full flex gap-3 overflow-x-auto pb-3 hide-scrollbar snap-x"></div>
+                </div>
 
                 <div class="flex items-center justify-center w-full max-w-2xl border-b border-white/10 text-xs md:text-sm font-bold uppercase tracking-widest pt-2">
                     <button onclick="window.app.switchInfoTab('information')" id="tab-information" class="flex-1 text-center pb-3 transition-colors ${window.app.state.activeInfoTab === 'information' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white'}">Information</button>
@@ -280,7 +247,69 @@ function renderAnimeInfoShell() {
     `;
 
     renderDynamicTabContent();
+    injectVerifiedAlternativePills();
     setupDropdownListener();
+}
+
+// Intercepts AniList IDs to map against internal index files
+async function injectVerifiedAlternativePills() {
+    const data = window.app.state.currentAnimePage;
+    const slider = document.getElementById('relations-horizontal-slider');
+    const containerBox = document.getElementById('verified-relations-pill-box');
+    
+    if (!slider || !data.relations || data.relations.length === 0) return;
+
+    const baseUrl = 'https://anikoto-api-xi.vercel.app';
+    let validPillsCount = 0;
+
+    for (const rel of data.relations) {
+        try {
+            const relTitle = rel.title?.english || rel.title?.romaji;
+            if (!relTitle) continue;
+
+            // Step 1: Call endpoint query keyword match lookup
+            const response = await fetch(`${baseUrl}/api/search?keyword=${encodeURIComponent(relTitle)}`);
+            const json = await response.json();
+
+            if (json.success && json.results && json.results.length > 0) {
+                // Step 2: Extract anilist ID mapping config safely
+                const targetMatch = json.results.find(item => item.id && (item.id === rel.id || String(item.title).toLowerCase() === String(relTitle).toLowerCase()));
+                const activeId = targetMatch ? targetMatch.id : json.results[0].id;
+
+                const bgImage = rel.bannerImage || rel.coverImage?.extraLarge || '';
+                const formatBadge = rel.format ? `<span class="bg-[#F47521] text-white text-[9px] px-1.5 py-0.5 rounded font-black tracking-wide uppercase">${rel.format}</span>` : '';
+                const statusStr = rel.status ? rel.status.toLowerCase().replace('_', ' ') : '';
+
+                const blockDiv = document.createElement('div');
+                blockDiv.className = `relative w-[260px] md:w-[320px] h-20 rounded-xl overflow-hidden border border-white/5 hover:border-[#F47521]/50 cursor-pointer transition-all flex items-center px-4 group shadow-lg flex-shrink-0`;
+                blockDiv.onclick = () => window.app.loadInfoPageData(activeId);
+                
+                blockDiv.innerHTML = `
+                    <div class="absolute inset-0 z-0 bg-black">
+                        <img src="${bgImage}" class="w-full h-full object-cover opacity-35 group-hover:scale-105 transition-transform duration-500 object-center">
+                        <div class="absolute inset-0 bg-gradient-to-r from-black/90 via-black/40 to-transparent"></div>
+                    </div>
+                    <div class="relative z-10 flex flex-col gap-1 min-w-0 pr-4">
+                        <div class="flex items-center gap-2">
+                            ${formatBadge}
+                            <span class="text-gray-400 font-bold capitalize text-[10px] tracking-wider">${statusStr}</span>
+                        </div>
+                        <h4 class="text-white font-black text-xs md:text-sm truncate drop-shadow-md tracking-tight">${relTitle}</h4>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-500 group-hover:text-[#F47521] ml-auto relative z-10 transition-colors text-xs"></i>
+                `;
+
+                slider.appendChild(blockDiv);
+                validPillsCount++;
+            }
+        } catch (e) {
+            console.log("Alternative mapping sequence entry failed initialization parameters.");
+        }
+    }
+
+    if (validPillsCount > 0 && containerBox) {
+        containerBox.classList.remove('hidden');
+    }
 }
 
 window.app.switchInfoTab = (tabName) => {
@@ -298,7 +327,6 @@ function renderDynamicTabContent() {
     const raw = data.rawPayload;
 
     if (window.app.state.activeInfoTab === 'information') {
-        // --- HYPER COMPREHENSIVE DATA SYNC MAPS ---
         const studios = ani?.studios?.nodes?.map(s => s.name).join(', ') || (raw?.studios ? (Array.isArray(raw.studios) ? raw.studios.join(', ') : raw.studios) : 'N/A');
         const producers = raw?.producers ? (Array.isArray(raw.producers) ? raw.producers.join(', ') : raw.producers) : 'N/A';
         const formatStr = raw?.type ? (Array.isArray(raw.type) ? raw.type.join(', ') : raw.type) : (ani?.format || 'N/A');
@@ -308,7 +336,6 @@ function renderDynamicTabContent() {
         const trackDuration = raw?.duration ? (Array.isArray(raw.duration) ? raw.duration.join(', ') : raw.duration) : 'N/A';
         const totalEpsCount = raw?.episodes ? (Array.isArray(raw.episodes) ? raw.episodes.join(', ') : raw.episodes) : (data.episodes?.length || 'N/A');
 
-        // Compile Alternative Synonyms
         let synonymsList = [];
         if (ani?.synonyms) synonymsList = [...ani.synonyms];
         if (raw?.animeInfo?.Synonyms) synonymsList.push(raw.animeInfo.Synonyms);
@@ -322,11 +349,10 @@ function renderDynamicTabContent() {
                     <div class="text-[10px] md:text-xs text-[#F47521] truncate mt-0.5">${s.primaryOccupations.join(', ')}</div>
                 </div>
             </div>
-        `).join('') || '<div class="text-gray-500 text-xs">No key staff documentation cached.</div>';
+        `).join('') || '<div class="text-gray-500 text-xs">No configuration entries recorded for key staff.</div>';
 
         contentArea.innerHTML = `
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                
                 <div class="lg:col-span-1 flex flex-col gap-5 bg-[#0a0a0a] p-6 rounded-xl border border-white/5 shadow-lg h-fit text-xs">
                     <h4 class="text-white font-black uppercase tracking-widest text-[#F47521] border-b border-white/5 pb-2">Full Specifications</h4>
                     <div class="flex flex-col gap-4">
@@ -357,7 +383,6 @@ function renderDynamicTabContent() {
             </div>
         `;
     } else {
-        // --- EPISODES TAB LOGIC WITH UPCOMING COUNTDOWN CHECKS ---
         const isUpcoming = (raw?.status && raw.status.toString().toLowerCase().includes('upcoming')) || 
                            (ani?.status && ani.status.toString().toLowerCase().includes('not_yet_released'));
 
@@ -420,24 +445,6 @@ function renderDynamicTabContent() {
         renderNumericEpisodeGrid();
     }
 }
-
-window.app.searchAndRouteToAnime = async (titleKeyword) => {
-    try {
-        const baseUrl = 'https://anikoto-api-xi.vercel.app';
-        const response = await fetch(`${baseUrl}/api/search?keyword=${encodeURIComponent(titleKeyword)}`);
-        const json = await response.json();
-        
-        if (json.success && json.results && json.results.length > 0) {
-            // Re-execute localized loading sequencer thread loop instantly
-            window.app.loadInfoPageData(json.results[0].id);
-        } else {
-            if (window.app.showCustomAlert) window.app.showCustomAlert("This season is not listed on the streamer index yet.", "error");
-            else alert("This season is not available yet.");
-        }
-    } catch(e) {
-        console.error(e);
-    }
-};
 
 window.app.toggleDropdown = () => {
     const menu = document.getElementById('custom-dropdown-menu');
@@ -574,43 +581,6 @@ window.app.handlePlayClick = async (episodeId, animeId) => {
         else alert('No episodes available yet!');
         return;
     }
-
-    try {
-        if (window.app.state && window.app.state.activeProfile && window.app.state.activeProfile.uid) {
-            window.location.href = `play.html?id=${episodeId}&anime=${animeId}`;
-            return;
-        }
-
-        const randomNum = Math.floor(Math.random() * 90000) + 10000;
-        const generatedName = `Guest-${randomNum}`;
-        const generatedPfp = `pfp${Math.floor(Math.random() * 10) + 1}.jpeg`; 
-        const guestUid = 'anon_' + Date.now().toString(36) + Math.random().toString(36).substr(2);
-
-        const newProfile = {
-            uid: guestUid,
-            name: generatedName,
-            email: "Guest Account",
-            pfp: generatedPfp,
-            history: [],
-            watchlist: [],
-            createdAt: new Date().toISOString()
-        };
-
-        window.app.state.activeProfile = newProfile;
-        localStorage.setItem('blazex_user_profile', JSON.stringify(newProfile));
-
-        try {
-            const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-            const userRef = firestore.doc(window.app.db, "users", guestUid);
-            await firestore.setDoc(userRef, newProfile);
-        } catch (dbError) {
-            console.log("DB save failed: ", dbError);
-        }
-
-        window.location.href = `play.html?id=${episodeId}&anime=${animeId}`;
-
-    } catch (err) {
-        console.error("Play redirect error:", err);
-        window.location.href = `play.html?id=${episodeId}&anime=${animeId}`;
-    }
+    // Route matching play parameter configurations
+    window.location.href = `play.html?id=${episodeId}&anime=${animeId}`;
 };
