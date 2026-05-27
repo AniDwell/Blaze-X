@@ -15,14 +15,15 @@ window.app.components.carousel = async () => {
     `;
 
     try {
-        const response = await window.app.api.fetch('/recent-anime?page=1');
+        // --- UPDATED BASE URL TO YOUR VERCEL API ---
+        const baseUrl = 'https://anikoto-api-xi.vercel.app';
         
-        let rawSlides = [];
-        if (response && Array.isArray(response)) {
-            rawSlides = response;
-        } else if (response && response.data && Array.isArray(response.data)) {
-            rawSlides = response.data;
-        }
+        // Fetching from the official latest episodes route
+        const rawResponse = await fetch(`${baseUrl}/api/latest-episodes`);
+        const response = await rawResponse.json();
+        
+        // Extract the data array based on the API docs {"success": true, "data": [...]}
+        const rawSlides = response.data || [];
 
         if (rawSlides.length === 0) {
             container.innerHTML = `
@@ -33,14 +34,14 @@ window.app.components.carousel = async () => {
             return;
         }
 
-        // 2. WAIT FOR ALL ANILIST MATCHES
+        // 2. WAIT FOR ALL ANILIST MATCHES (Loader stays on screen during this)
         const enrichedSlides = await Promise.all(rawSlides.map(async (slide) => {
             const cleanTitle = (slide.title || '').replace(/\(Dub\)|\(Sub\)|Episode \d+/gi, '').trim();
             
-            // STRICTLY USE EXACT ID FROM JSON
+            // STRICTLY USE EXACT ID FROM API JSON
             const exactId = slide.id; 
             
-            let finalImage = slide.image || slide.cover || slide.poster || 'https://via.placeholder.com/1280x720/111/fff?text=No+Image';
+            let finalImage = slide.image || 'https://via.placeholder.com/1280x720/111/fff?text=No+Image';
             let finalRating = null;
             let trendingScore = 0;
 
@@ -77,7 +78,7 @@ window.app.components.carousel = async () => {
 
         // Build Background Image Slides
         topSlides.forEach((s, i) => {
-            // NEW: Added window.app.handleCarouselImageClick() to the background wrapper
+            // CLICKABLE BACKGROUND IMAGE - Routes to Info page instantly
             imageSlidesHtml += `
                 <div class="absolute inset-0 cursor-pointer z-0 group overflow-hidden bg-black" id="slide-bg-${i}" style="opacity: ${i === 0 ? '1' : '0'}; z-index: ${i === 0 ? '20' : '10'}; transition: opacity 0.8s ease-in-out;" onclick="window.app.handleCarouselImageClick()">
                     <img src="${s.finalImage}" class="absolute inset-0 w-full h-full object-cover object-[center_top] transition-transform duration-[10s] group-hover:scale-105">
@@ -136,13 +137,14 @@ window.app.updateCarouselUI = (index) => {
 
     setTimeout(() => {
         uiLayer.innerHTML = `
-            <div class="flex items-center gap-3 text-[#F47521] text-[10px] md:text-xs font-black tracking-widest drop-shadow-md mb-2 md:mb-3 uppercase">
+            <div class="flex items-center gap-3 text-[#F47521] text-[10px] md:text-xs font-black tracking-widest drop-shadow-md mb-2 md:mb-3 uppercase pointer-events-none">
                 <span class="bg-[#F47521]/10 border border-[#F47521]/30 px-2 py-0.5 rounded backdrop-blur-sm">#${index + 1} Trending</span>
                 ${ratingHtml}
             </div>
 
             <h2 class="text-3xl md:text-5xl lg:text-6xl font-black text-white mb-2 md:mb-3 drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] line-clamp-2 tracking-tight cursor-pointer leading-tight hover:text-[#F47521] transition-colors" onclick="window.app.handleCarouselImageClick()">${data.title || 'Unknown'}</h2>
-            <p class="text-[11px] md:text-xs text-gray-300 line-clamp-3 md:line-clamp-4 mb-5 md:mb-6 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-relaxed font-medium">${data.description || 'No synopsis available.'}</p>
+            
+            <p class="text-[11px] md:text-xs text-gray-300 line-clamp-3 md:line-clamp-4 mb-5 md:mb-6 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-relaxed font-medium pointer-events-none">${data.description || 'No synopsis available.'}</p>
             
             <div class="flex gap-2.5 relative z-40">
                 <button onclick="window.app.handleCarouselImageClick()" class="bg-[#F47521] text-white px-6 py-2 md:px-8 md:py-3 rounded shadow-[0_0_15px_rgba(244,117,33,0.3)] font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-white hover:text-black transition-colors flex items-center gap-2">
@@ -158,7 +160,6 @@ window.app.updateCarouselUI = (index) => {
     }, 300);
 };
 
-
 // --- SAFE ROUTING LOGIC FOR IMAGES & BUTTONS ---
 window.app.handleCarouselImageClick = () => {
     const currentIndex = window.app.state.carouselCurrentIndex;
@@ -171,7 +172,6 @@ window.app.handleCarouselImageClick = () => {
         alert("Unable to load details for this series.");
     }
 };
-
 
 // --- ROTATION & SLIDE CONTROLS ---
 window.app.goToCarouselSlide = (targetIndex) => {
