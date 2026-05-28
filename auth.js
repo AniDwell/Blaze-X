@@ -52,7 +52,6 @@ window.app.showCustomAlert = (message, type = 'error', actionText = null, action
 
 // --- AUTHENTICATION MODAL ENGINE ---
 window.app.components.auth = () => {
-    // Check if user is already logged in (Bypass anonymous profiles)
     if (window.app.state && window.app.state.activeProfile && window.app.state.activeProfile.uid && !window.app.state.activeProfile.uid.startsWith('anon_')) {
         window.location.href = 'profile.html';
         return;
@@ -61,7 +60,6 @@ window.app.components.auth = () => {
     const existingModal = document.getElementById('auth-modal');
     if (existingModal) existingModal.remove();
 
-    // Default Fallback Random PFP Generator
     window.app.state.authSelectedPfp = `pfp${Math.floor(Math.random() * 10) + 1}.jpeg`;
 
     const modal = document.createElement('div');
@@ -304,7 +302,6 @@ window.app.handleLogin = async (e) => {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         await window.app.syncProfileAfterAuth(userCredential.user);
         
-        // REDIRECT TARGET ACCENT ROUTED INSTANTLY ON AUTH CONFIRMATION
         window.app.closeAuthModal();
         window.location.href = 'profile.html';
         
@@ -334,22 +331,24 @@ window.app.handleRegister = async (e) => {
     const name = document.getElementById('register-name').value.trim();
     const email = document.getElementById('register-email').value.trim();
     const password = document.getElementById('register-password').value;
-    const pfp = window.app.state.authSelectedPfp; // Resolved ImgBB token mapping URL string
+    const pfp = window.app.state.authSelectedPfp; 
+
+    const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+    const { getAuth, createUserWithEmailAndPassword } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+    const auth = getAuth(window.app.firebaseApp);
+
+    let createdUser = null; // Track user instance for auto-rollback
 
     try {
-        const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-        
-        // SAFE CONTEXT LOOP BYPASS ENGINE: Prevents permissions breaking errors on uninitialized index parameters database files
+        // Step 1: Safe Lookup Engine
         let isUsernameTaken = false;
         try {
             const usersRef = firestore.collection(window.app.db, "users");
             const q = firestore.query(usersRef, firestore.where("name", "==", name));
             const querySnapshot = await firestore.getDocs(q);
-            if (!querySnapshot.empty) {
-                isUsernameTaken = true;
-            }
+            if (!querySnapshot.empty) isUsernameTaken = true;
         } catch (queryErr) {
-            console.log("Database namespace container context empty. Continuing execution path mapping safely.");
+            console.log("Empty or uninitialized collection query bypassed.");
         }
 
         if (isUsernameTaken) {
@@ -361,14 +360,13 @@ window.app.handleRegister = async (e) => {
 
         btn.innerText = "Creating Account...";
 
-        const { getAuth, createUserWithEmailAndPassword } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
-        const auth = getAuth(window.app.firebaseApp);
+        // Step 2: Auth Creation
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
+        createdUser = userCredential.user;
 
-        // Permanent cloud object properties compilation data block map
+        // Step 3: Cloud Database Profile Registration
         const newProfile = {
-            uid: user.uid,
+            uid: createdUser.uid,
             name: name,
             email: email,
             pfp: pfp, 
@@ -377,9 +375,20 @@ window.app.handleRegister = async (e) => {
             createdAt: new Date().toISOString()
         };
 
-        const userDocRef = firestore.doc(window.app.db, "users", user.uid);
-        await firestore.setDoc(userDocRef, newProfile);
+        const userDocRef = firestore.doc(window.app.db, "users", createdUser.uid);
+        
+        try {
+            await firestore.setDoc(userDocRef, newProfile);
+        } catch (dbError) {
+            // THE AUTO-ROLLBACK ENGINE: Triggered if Firestore denies the write operation
+            console.error("Firestore Permission Denied. Activating auto-rollback...");
+            if (createdUser) {
+                await createdUser.delete(); // Removes the corrupted "ghost" account from Firebase Auth
+            }
+            throw new Error("Database permissions blocked profile sync. The backend needs rules initialized.");
+        }
 
+        // Final Success Allocation
         window.app.state.activeProfile = newProfile;
         localStorage.setItem('blazex_user_profile', JSON.stringify(newProfile));
         
@@ -387,7 +396,13 @@ window.app.handleRegister = async (e) => {
         window.location.href = 'profile.html';
 
     } catch (error) {
-        console.error("Registration Engine Fatal Crash Trace:", error);
+        console.error("Registration Core Fatal Crash:", error);
+        
+        // Manual cleanup check in case of mid-execution failures
+        if (createdUser && error.message.includes('Database permissions')) {
+             try { await createdUser.delete(); } catch(e){}
+        }
+
         if (error.code === 'auth/email-already-in-use') {
             window.app.showCustomAlert("This email is already registered. Try signing in.", 'error', 'Go to Sign In', () => {
                 window.app.switchAuthView('login');
@@ -443,7 +458,7 @@ window.app.handleGoogleLogin = async () => {
             if (docSnap.exists()) {
                 profileData = docSnap.data();
             } else {
-                throw new Error("Trigger database entry serialization script initialization mappings.");
+                throw new Error("Trigger database entry serialization.");
             }
         } catch(snapErr) {
             profileData = {
@@ -465,10 +480,7 @@ window.app.handleGoogleLogin = async () => {
         window.location.href = 'profile.html';
 
     } catch (error) {
-        // FIXED: Realtime console trace analysis log injection to catch hidden popup barriers
-        console.error("--- GOOGLE POPUP AUTH BLOCK TRACE METRICS ---");
-        console.error("Firebase Internal Error Code Exception:", error.code);
-        console.error("Firebase Original Native Error Message:", error.message);
+        console.error("--- GOOGLE POPUP AUTH BLOCK TRACE METRICS ---", error);
         
         if (error.code === 'auth/popup-blocked') {
             window.app.showCustomAlert("Sign-in popup was blocked by your browser! Please check the address bar options panel to allow popups.", 'error');
