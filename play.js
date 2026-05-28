@@ -6,10 +6,10 @@ window.app.components.play = async () => {
 
     // 1. Read URL Parameters
     const urlParams = new URLSearchParams(window.location.search);
-    const episodeId = urlParams.get('id'); // e.g., frieren-beyond-journeys-end-18542?ep=107257
-    const animeId = urlParams.get('anime'); // e.g., frieren-beyond-journeys-end-18542
+    const episodeId = urlParams.get('id'); 
+    const animeId = urlParams.get('anime'); 
     const currentEpNum = urlParams.get('ep') || '1';
-    const currentAudioType = urlParams.get('type') || 'sub';
+    let currentAudioType = urlParams.get('type');
 
     if (!episodeId || !animeId) {
         workspace.innerHTML = `
@@ -23,14 +23,29 @@ window.app.components.play = async () => {
         return;
     }
 
-    // 2. Initialize Core State
+    const profile = window.app.state?.activeProfile || null;
+
+    // 2. Cloud-Synced Preferences Check
+    let autoSkipIntro = localStorage.getItem('blazex_autoskip_intro') === 'true';
+    let autoSkipOutro = localStorage.getItem('blazex_autoskip_outro') === 'true';
+
+    // Override with DB preferences if logged in
+    if (profile && profile.preferences) {
+        if (profile.preferences.skipIntro !== undefined) autoSkipIntro = profile.preferences.skipIntro;
+        if (profile.preferences.skipOutro !== undefined) autoSkipOutro = profile.preferences.skipOutro;
+        if (!currentAudioType && profile.preferences.audioType) currentAudioType = profile.preferences.audioType;
+    }
+    
+    // Default fallback
+    if (!currentAudioType) currentAudioType = 'sub';
+
+    // 3. Initialize Core State
     window.app.state.epSearchValue = '';
     window.app.state.epRangeFilter = null;
     window.app.state.activeLanguageType = currentAudioType;
     window.app.state.currentPlayingEpNum = parseInt(currentEpNum);
 
-    // Save initial watch history locally
-    const profile = window.app.state?.activeProfile || null;
+    // Watch History DB & Local Sync
     if (profile && profile.uid) {
         let mockProgressHistory = { 
             lastWatchedEp: currentEpNum, 
@@ -54,16 +69,12 @@ window.app.components.play = async () => {
         localStorage.setItem(`blazex_progress_${profile.uid}_${animeId}`, JSON.stringify(mockProgressHistory));
     }
 
-    // Default Skip Settings (Loaded from LocalStorage)
-    const autoSkipIntro = localStorage.getItem('blazex_autoskip_intro') === 'true';
-    const autoSkipOutro = localStorage.getItem('blazex_autoskip_outro') === 'true';
-
-    // 3. DYNAMIC UI SKELETON GENERATION
+    // 4. DYNAMIC UI SKELETON GENERATION
     workspace.innerHTML = `
-        <div class="w-full flex flex-col gap-5 animate-fade-in opacity-0 transition-opacity duration-500" id="play-content-wrapper">
+        <div class="w-full max-w-5xl mx-auto flex flex-col gap-6 animate-fade-in opacity-0 transition-opacity duration-500" id="play-content-wrapper">
             
             <!-- VIDEO PLAYER MOUNT POINT (Loads player.js) -->
-            <div id="blazex-player-root" class="w-full aspect-video md:aspect-[21/9] bg-black rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] border border-white/5 overflow-hidden flex flex-col items-center justify-center relative group">
+            <div id="blazex-player-root" class="w-full aspect-video md:aspect-[21/9] bg-black rounded-xl shadow-lg border border-white/5 overflow-hidden flex flex-col items-center justify-center relative group">
                 <div class="tk-loader scale-125 z-0">
                     <div class="tk-dot tk-dot-1"></div>
                     <div class="tk-dot tk-dot-2"></div>
@@ -74,7 +85,6 @@ window.app.components.play = async () => {
             <!-- PLAYER UTILITY BAR (Skip Intro/Outro & Server/Lang Toggles) -->
             <div class="w-full flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-[#0a0a0a] p-3 rounded-lg border border-white/5">
                 
-                <!-- Current Episode Specific Lang Selector -->
                 <div class="flex items-center gap-3">
                     <span class="text-gray-500 text-[10px] font-black uppercase tracking-widest bg-black px-2 py-1 rounded border border-white/5">Audio</span>
                     <div class="flex bg-[#111] p-1 border border-white/10 rounded-md text-[10px] font-black select-none tracking-wider uppercase">
@@ -83,7 +93,6 @@ window.app.components.play = async () => {
                     </div>
                 </div>
 
-                <!-- Auto Skip Toggles -->
                 <div class="flex items-center gap-4 text-[10px] font-bold uppercase tracking-wider text-gray-400">
                     <label class="flex items-center gap-2 cursor-pointer hover:text-white transition-colors">
                         <input type="checkbox" id="toggle-skip-intro" class="hidden" onchange="window.app.toggleAutoSkip('intro')" ${autoSkipIntro ? 'checked' : ''}>
@@ -103,36 +112,48 @@ window.app.components.play = async () => {
             </div>
 
             <!-- EPISODE METADATA & ACTIONS BAR -->
-            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 py-2 border-b border-white/5 pb-4">
-                <div class="flex-1">
-                    <h1 id="current-ep-title" class="text-xl md:text-2xl font-black text-white tracking-tight leading-tight">Episode ${currentEpNum}</h1>
-                    <p id="current-anime-title" class="text-xs text-[#F47521] font-bold uppercase tracking-widest mt-1 animate-pulse">Loading Anime Data...</p>
+            <div class="flex flex-col md:flex-row items-start md:items-start justify-between gap-6 py-2 border-b border-white/5 pb-6">
+                
+                <!-- Anime & Episode Info Block -->
+                <div class="flex-1 flex gap-4 w-full">
+                    <div class="w-20 md:w-28 flex-shrink-0 rounded-lg overflow-hidden shadow-md border border-white/10 hidden sm:block">
+                        <img id="play-anime-poster" src="https://via.placeholder.com/200x300/111/fff?text=..." class="w-full h-full object-cover aspect-[2/3] animate-pulse">
+                    </div>
+                    <div class="flex-1 flex flex-col justify-center min-w-0">
+                        <p id="current-anime-title" class="text-[10px] md:text-xs text-[#F47521] font-bold uppercase tracking-widest mb-1 truncate">Loading Anime Data...</p>
+                        <h1 id="current-ep-title" class="text-lg md:text-2xl font-black text-white tracking-tight leading-tight truncate w-full">Episode ${currentEpNum}</h1>
+                        <p id="current-anime-desc" class="text-xs text-gray-400 line-clamp-2 mt-2 leading-relaxed max-w-2xl"></p>
+                        
+                        <div id="play-schedule-container" class="mt-3 hidden"></div>
+                    </div>
                 </div>
                 
-                <div class="flex items-center gap-2 shrink-0">
-                    <button onclick="window.app.handleReaction('like')" id="btn-like" class="flex items-center gap-2 bg-[#111] border border-white/5 hover:border-[#F47521] hover:text-[#F47521] px-4 py-2 rounded-lg transition-colors text-xs font-bold text-gray-300">
-                        <i class="fas fa-thumbs-up"></i> <span>Like</span>
-                    </button>
-                    <button onclick="window.app.handleReaction('dislike')" id="btn-dislike" class="flex items-center gap-2 bg-[#111] border border-white/5 hover:border-white/40 px-4 py-2 rounded-lg transition-colors text-xs font-bold text-gray-300">
-                        <i class="fas fa-thumbs-down"></i>
-                    </button>
-                    <!-- Triggers comment.js modal -->
-                    <button onclick="if(window.app.components.comment) window.app.components.comment()" class="flex items-center gap-2 bg-[#F47521] text-black hover:bg-white px-5 py-2 rounded-lg transition-colors text-xs font-black uppercase tracking-wider shadow-md">
-                        <i class="fas fa-comment-alt"></i> Comment
+                <!-- Interaction Buttons -->
+                <div class="flex flex-row md:flex-col lg:flex-row items-center justify-start md:justify-end gap-2 shrink-0 w-full md:w-auto">
+                    <div class="flex items-center gap-2">
+                        <button onclick="window.app.handleReaction('like')" id="btn-like" class="flex items-center gap-2 bg-[#111] border border-white/5 hover:border-[#F47521] px-4 py-2 rounded-lg transition-colors text-xs font-bold text-gray-400">
+                            <i class="fas fa-thumbs-up"></i>
+                        </button>
+                        <button onclick="window.app.handleReaction('dislike')" id="btn-dislike" class="flex items-center gap-2 bg-[#111] border border-white/5 hover:border-white/40 px-4 py-2 rounded-lg transition-colors text-xs font-bold text-gray-400">
+                            <i class="fas fa-thumbs-down"></i>
+                        </button>
+                    </div>
+                    <button onclick="if(window.app.components.comment) window.app.components.comment()" class="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white/10 text-white hover:bg-[#F47521] hover:text-black border border-white/10 px-5 py-2 rounded-lg transition-colors text-xs font-black uppercase tracking-wider shadow-sm">
+                        <i class="fas fa-comment-alt"></i> Discuss
                     </button>
                 </div>
             </div>
 
-            <!-- DYNAMIC EPISODES MATRIX GRID -->
-            <div class="w-full flex flex-col gap-4 mt-2">
-                <h3 class="text-white text-sm font-black uppercase tracking-widest flex items-center gap-2"><i class="fas fa-list text-[#F47521]"></i> Episodes Vault</h3>
+            <!-- DYNAMIC EPISODES MATRIX GRID (Clean Style) -->
+            <div class="w-full flex flex-col gap-4 mt-2 bg-[#0a0a0a] p-4 md:p-5 rounded-xl border border-white/5 shadow-md">
+                <h3 class="text-white text-sm font-black uppercase tracking-widest flex items-center gap-2 mb-2"><i class="fas fa-list text-[#F47521]"></i> Episodes Vault</h3>
                 <div id="episodes-grid-mount-point"></div>
             </div>
 
-            <!-- COMMENTS SECTION MOUNT POINT (Loads commentsss.js) -->
-            <div class="w-full mt-8 border-t border-white/5 pt-6">
+            <!-- COMMENTS SECTION MOUNT POINT -->
+            <div class="w-full mt-4">
                 <h3 class="text-white text-sm font-black uppercase tracking-widest mb-4 flex items-center gap-2"><i class="fas fa-comments text-[#F47521]"></i> Community Discussion</h3>
-                <div id="comments-section-root" class="min-h-[200px] flex items-center justify-center bg-[#0a0a0a] rounded-xl border border-white/5">
+                <div id="comments-section-root" class="min-h-[200px] flex items-center justify-center bg-[#0a0a0a] rounded-xl border border-white/5 shadow-md">
                     <div class="tk-loader scale-75"><div class="tk-dot tk-dot-1"></div><div class="tk-dot tk-dot-2"></div></div>
                 </div>
             </div>
@@ -153,55 +174,96 @@ window.app.components.play = async () => {
         if (wrapper) wrapper.classList.remove('opacity-0');
     }, 50);
 
-    // 4. FETCH ANIME DATA & EPISODES PROPERLY
+    // 5. FETCH ANIME DATA & EPISODES PROPERLY
     try {
         const baseUrl = 'https://anikoto-api-xi.vercel.app';
-        
-        // Fetch specific episode list to build matrix
         let episodesList = [];
+        let baseAnime = {};
+        let aniData = {};
+
+        // A. Fetch Info (API)
+        try {
+            const infoResponse = await fetch(`${baseUrl}/api/info?id=${animeId}`);
+            const infoJson = await infoResponse.json();
+            if (infoJson && infoJson.success && infoJson.data) baseAnime = infoJson.data;
+        } catch(e) { console.error("Info fetch failed."); }
+
+        // B. Fetch AniList Metadata for Schedule & High-Res Poster
+        try {
+            const hasValidAniId = baseAnime.anilistId && !isNaN(baseAnime.anilistId);
+            const query = `query ($id: Int, $search: String) { 
+                Media (id: $id, search: $search, type: ANIME) { 
+                    id title { romaji english native } description coverImage { extraLarge }
+                    nextAiringEpisode { airingAt timeUntilAiring episode }
+                } 
+            }`;
+            const variables = hasValidAniId ? { id: parseInt(baseAnime.anilistId) } : { search: (baseAnime.title || animeId).replace(/\(Dub\)|\(Sub\)/gi, '').trim() };
+            const aniRes = await fetch('https://graphql.anilist.co', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ query, variables })
+            });
+            const json = await aniRes.json();
+            aniData = json?.data?.Media || {};
+        } catch (e) { console.log("AniList sync bypassed."); }
+
+        // C. Fetch Episode List
         try {
             const epsResponse = await fetch(`${baseUrl}/api/episodes/${animeId}`);
             const epsJson = await epsResponse.json();
-            
-            // Handle your specific API response schema natively
             if (epsJson && epsJson.success && Array.isArray(epsJson.data)) {
                 episodesList = epsJson.data;
             } else if (epsJson && epsJson.success && epsJson.results && Array.isArray(epsJson.results.episodes)) {
                 episodesList = epsJson.results.episodes;
             }
-        } catch(e) {
-            console.error("Episode list fetch failed:", e);
+        } catch(e) { console.error("Episode list fetch failed."); }
+
+        // Update Header UI Meta Data
+        const finalTitle = baseAnime.title || aniData.title?.english || aniData.title?.romaji || animeId.replace(/-/g, ' ').toUpperCase();
+        const finalDesc = (baseAnime.description || aniData.description || 'No description available.').replace(/<[^>]*>?/gm, '');
+        const finalPoster = aniData.coverImage?.extraLarge || baseAnime.poster || 'https://via.placeholder.com/800x1200/111/fff?text=Poster';
+
+        document.getElementById('current-anime-title').innerText = finalTitle;
+        document.getElementById('current-anime-desc').innerText = finalDesc;
+        
+        const posterImg = document.getElementById('play-anime-poster');
+        if(posterImg) {
+            posterImg.src = finalPoster;
+            posterImg.classList.remove('animate-pulse');
         }
 
-        // Fetch Anime title for header mapping
-        try {
-            const infoResponse = await fetch(`${baseUrl}/api/info?id=${animeId}`);
-            const infoJson = await infoResponse.json();
-            
-            let animeTitle = animeId.replace(/-/g, ' ').toUpperCase();
-            if (infoJson && infoJson.success && infoJson.data && infoJson.data.title) {
-                animeTitle = infoJson.data.title;
+        // Parse Next Airing Episode
+        if (aniData.nextAiringEpisode) {
+            const timeRaw = aniData.nextAiringEpisode.timeUntilAiring;
+            const days = Math.floor(timeRaw / (3600*24));
+            const hours = Math.floor(timeRaw % (3600*24) / 3600);
+            const scheduleHtml = `
+                <div class="inline-flex items-center gap-2 bg-[#F47521]/10 border border-[#F47521]/30 text-[#F47521] px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-widest mt-2">
+                    <i class="fas fa-broadcast-tower"></i> Ep ${aniData.nextAiringEpisode.episode} in ${days}d ${hours}h
+                </div>
+            `;
+            const schedContainer = document.getElementById('play-schedule-container');
+            if(schedContainer) {
+                schedContainer.innerHTML = scheduleHtml;
+                schedContainer.classList.remove('hidden');
             }
-            
-            const titleEl = document.getElementById('current-anime-title');
-            if(titleEl) {
-                titleEl.innerText = animeTitle;
-                titleEl.classList.remove('animate-pulse');
-            }
-        } catch(e) {
-            console.error("Anime Details fetch failed:", e);
         }
 
-        // Locate current episode data for accurate title
+        // Set Episode Specific Title
         if (episodesList && episodesList.length > 0) {
             const currentEpObj = episodesList.find(e => (e.num || e.episode_no) == currentEpNum);
             const epTitleEl = document.getElementById('current-ep-title');
-            
             if (currentEpObj && epTitleEl) {
-                // If title exists and is not just "Episode X", display it correctly
                 const titleStr = currentEpObj.title ? currentEpObj.title : `Episode ${currentEpNum}`;
                 epTitleEl.innerText = `E${currentEpNum}: ${titleStr}`;
             }
+        }
+
+        // Initialize Like/Dislike DB States
+        if (profile && profile.likedAnime && profile.likedAnime.includes(animeId)) {
+            window.app.handleReactionUI('like');
+        } else if (profile && profile.dislikedAnime && profile.dislikedAnime.includes(animeId)) {
+            window.app.handleReactionUI('dislike');
         }
 
         // Setup global episodes data state
@@ -211,56 +273,114 @@ window.app.components.play = async () => {
         // Render the Episodes Grid Engine
         window.app.renderPlayEpisodesUI();
 
-        // 5. INITIALIZE EXTERNAL COMPONENTS
-        
-        // Load Custom Player
-        if (window.app.components.player) {
-            window.app.components.player(); 
-        } else {
-            console.warn("player.js component not found.");
-        }
-        
-        // Load Comments Section at the bottom
-        if (window.app.components.commentsss) {
-            window.app.components.commentsss();
-        } else {
-            document.getElementById('comments-section-root').innerHTML = `
-                <p class="text-gray-500 text-xs py-10 font-bold uppercase tracking-widest"><i class="fas fa-wrench mr-2"></i> Comments system initializing...</p>
-            `;
-        }
+        // 6. INITIALIZE EXTERNAL COMPONENTS
+        if (window.app.components.player) window.app.components.player(); 
+        if (window.app.components.commentsss) window.app.components.commentsss();
 
     } catch (err) {
-        console.error("Failed to compile player grid matrix:", err);
+        console.error("Failed to compile player environment:", err);
     }
 };
 
 // ==========================================
-// --- PLAYER UTILITY ACTIONS ---
+// --- CLOUD-SYNCED PLAYER ACTIONS ---
 // ==========================================
+
+window.app.syncPreferencesToDB = async (updatesObject) => {
+    const profile = window.app.state?.activeProfile || null;
+    if (!profile || !profile.uid || profile.uid.startsWith('anon_')) return;
+
+    try {
+        const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        const userRef = firestore.doc(window.app.db, "users", profile.uid);
+        
+        // Ensure preferences object exists locally
+        if(!profile.preferences) profile.preferences = {};
+        Object.assign(profile.preferences, updatesObject);
+        localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
+
+        await firestore.setDoc(userRef, { preferences: updatesObject }, { merge: true });
+    } catch (error) { console.log("Silent cloud pref sync dropped."); }
+};
 
 window.app.toggleAutoSkip = (type) => {
     const isChecked = document.getElementById(`toggle-skip-${type}`).checked;
     localStorage.setItem(`blazex_autoskip_${type}`, isChecked ? 'true' : 'false');
+    
+    // Cloud Sync
+    const prefKey = type === 'intro' ? 'skipIntro' : 'skipOutro';
+    window.app.syncPreferencesToDB({ [prefKey]: isChecked });
 };
 
 window.app.changeCurrentPlayerAudio = (type) => {
+    localStorage.setItem('blazex_audio', type);
+    window.app.syncPreferencesToDB({ audioType: type });
+
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('type') === type) return;
     urlParams.set('type', type);
     window.location.search = urlParams.toString();
 };
 
-window.app.handleReaction = (type) => {
+window.app.handleReactionUI = (type) => {
     const likeBtn = document.getElementById('btn-like');
     const dislikeBtn = document.getElementById('btn-dislike');
     
     if (type === 'like') {
         likeBtn.classList.add('text-[#F47521]', 'border-[#F47521]');
-        dislikeBtn.classList.remove('text-red-500', 'border-red-500');
-    } else {
-        dislikeBtn.classList.add('text-red-500', 'border-red-500');
+        dislikeBtn.classList.remove('text-[#F47521]', 'border-[#F47521]');
+    } else if (type === 'dislike') {
+        dislikeBtn.classList.add('text-[#F47521]', 'border-[#F47521]');
         likeBtn.classList.remove('text-[#F47521]', 'border-[#F47521]');
+    } else {
+        likeBtn.classList.remove('text-[#F47521]', 'border-[#F47521]');
+        dislikeBtn.classList.remove('text-[#F47521]', 'border-[#F47521]');
     }
+};
+
+window.app.handleReaction = async (type) => {
+    const profile = window.app.state?.activeProfile || null;
+    if (!profile || !profile.uid || profile.uid.startsWith('anon_')) {
+        if(window.app.components.auth) window.app.components.auth();
+        return;
+    }
+
+    const animeId = window.app.state.currentAnimePage.id;
+    if(!profile.likedAnime) profile.likedAnime = [];
+    if(!profile.dislikedAnime) profile.dislikedAnime = [];
+
+    // Toggle Logic
+    if (type === 'like') {
+        if (profile.likedAnime.includes(animeId)) {
+            profile.likedAnime = profile.likedAnime.filter(id => id !== animeId);
+            window.app.handleReactionUI('none');
+        } else {
+            profile.likedAnime.push(animeId);
+            profile.dislikedAnime = profile.dislikedAnime.filter(id => id !== animeId);
+            window.app.handleReactionUI('like');
+        }
+    } else if (type === 'dislike') {
+        if (profile.dislikedAnime.includes(animeId)) {
+            profile.dislikedAnime = profile.dislikedAnime.filter(id => id !== animeId);
+            window.app.handleReactionUI('none');
+        } else {
+            profile.dislikedAnime.push(animeId);
+            profile.likedAnime = profile.likedAnime.filter(id => id !== animeId);
+            window.app.handleReactionUI('dislike');
+        }
+    }
+
+    localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
+
+    // Cloud Sync
+    try {
+        const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        const userRef = firestore.doc(window.app.db, "users", profile.uid);
+        await firestore.updateDoc(userRef, { 
+            likedAnime: profile.likedAnime,
+            dislikedAnime: profile.dislikedAnime 
+        });
+    } catch (e) { console.log("Reaction sync dropped."); }
 };
 
 // ==========================================
@@ -321,7 +441,7 @@ window.app.renderPlayEpisodesUI = () => {
             </div>
 
             <!-- Grid Numbers -->
-            <div id="play-numeric-episodes-grid" class="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-14 lg:grid-cols-18 gap-2 w-full max-h-[300px] overflow-y-auto hide-scrollbar pr-1 pb-2"></div>
+            <div id="play-numeric-episodes-grid" class="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-12 lg:grid-cols-16 gap-2 w-full max-h-[350px] overflow-y-auto hide-scrollbar pr-1 pb-2"></div>
         </div>
     `;
 
@@ -408,7 +528,7 @@ window.app.renderPlayGridItems = () => {
         const targetEpisodeSlugId = ep.slug || ep.id || String(epNumber); 
         
         const isFillerEpisode = ep.isFiller === true;
-        const fillerIconDot = isFillerEpisode ? `<div class="absolute top-0.5 right-0.5 w-1 h-1 bg-red-500 rounded-full shadow-[0_0_5px_red]"></div>` : '';
+        const fillerIconDot = isFillerEpisode ? `<div class="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full"></div>` : '';
         const isSupportedByLang = (currentLangMode === 'sub' && ep.isSub !== false) || 
                                   (currentLangMode === 'dub' && ep.isDub === true);
 
@@ -429,13 +549,14 @@ window.app.renderPlayGridItems = () => {
             interactiveActionAttr = `onclick="window.location.href='play.html?id=${encodeURIComponent(targetEpisodeSlugId)}&anime=${animeId}&ep=${epNumber}&type=${currentLangMode}'"`;
             
             if (isCurrentlyPlaying) {
-                buttonStyleClass = 'border-[#F47521] text-black bg-[#F47521] font-black text-base shadow-[0_0_10px_#F47521] scale-105 z-10';
+                // Flat, non-glowing solid orange for active state
+                buttonStyleClass = 'border-[#F47521] text-black bg-[#F47521] font-black text-base z-10';
             } else if (isAlreadyWatched) {
-                buttonStyleClass = 'border-[#F47521]/40 text-[#F47521] bg-[#F47521]/5 hover:bg-[#F47521] hover:text-black font-black text-base transition-colors';
+                buttonStyleClass = 'border-[#F47521]/30 text-[#F47521] bg-[#F47521]/5 hover:bg-[#F47521] hover:text-black font-black text-base transition-colors';
             } else {
                 buttonStyleClass = isFillerEpisode 
-                    ? 'border-red-500/30 text-gray-300 hover:bg-red-500 hover:text-white hover:border-red-500 font-black text-base transition-colors' 
-                    : 'border-white/10 bg-[#0a0a0a] text-gray-300 hover:bg-[#F47521] hover:text-black hover:border-[#F47521] font-black text-base transition-colors shadow-sm';
+                    ? 'border-red-500/30 text-gray-300 hover:bg-red-500 hover:text-white hover:border-red-500 font-black text-base transition-colors bg-red-500/5' 
+                    : 'border-white/10 bg-[#111] text-gray-300 hover:bg-[#F47521] hover:text-black hover:border-[#F47521] font-black text-base transition-colors shadow-sm';
             }
         } else {
             interactiveActionAttr = 'disabled';
@@ -454,7 +575,7 @@ window.app.renderPlayGridItems = () => {
     gridDiv.innerHTML = gridHtml;
 
     setTimeout(() => {
-        const activeTile = gridDiv.querySelector('.border-\\[\\#F47521\\]');
+        const activeTile = gridDiv.querySelector('.bg-\\[\\#F47521\\]');
         if (activeTile) activeTile.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }, 100);
 };
