@@ -58,20 +58,33 @@ window.app.components.info = async () => {
                 }
             } catch (e) { console.log("Schedule countdown unpopulated."); }
 
-            // 4. FIXED: Fetch characters matching your exact coupled endpoint schema -> results.data
-            let characterList = [];
-            try {
-                const charRes = await fetch(`${baseUrl}/api/character/list/${animeId}`);
-                const charJson = await charRes.json();
-                if (charJson && charJson.success && charJson.results && Array.isArray(charJson.results.data)) {
-                    characterList = charJson.results.data;
-                }
-            } catch (e) { console.log("Character list not found."); }
-
-            // --- ANILIST API BACKGROUND SYNC BLOCK ---
+            // --- DEEP ANILIST API GRAPHQL INTEGRATION (CHARACTERS & VA SYNC ADDED HERE) ---
             let aniData = {};
             const hasValidAniId = baseAnime.anilistId && !isNaN(baseAnime.anilistId);
-            const query = `query ($id: Int, $search: String) { Media (id: $id, search: $search, type: ANIME) { id title { romaji english native } bannerImage coverImage { extraLarge } description synonyms format source status averageScore trending genres studios(isMain: true) { nodes { name } } staff(perPage: 12, sort: RELEVANCE) { nodes { name { full } image { large } primaryOccupations } } relations { nodes { id type format status bannerImage coverImage { extraLarge } title { romaji english } } } } }`;
+            
+            const query = `query ($id: Int, $search: String) { 
+                Media (id: $id, search: $search, type: ANIME) { 
+                    id title { romaji english native } bannerImage coverImage { extraLarge } description synonyms format source status averageScore trending genres 
+                    studios(isMain: true) { nodes { name } } 
+                    staff(perPage: 12, sort: RELEVANCE) { nodes { name { full } image { large } primaryOccupations } } 
+                    relations { nodes { id type format status bannerImage coverImage { extraLarge } title { romaji english } } }
+                    characters(perPage: 24, sort: [ROLE, RELEVANCE]) {
+                        edges {
+                            role
+                            node {
+                                id
+                                name { full }
+                                image { large }
+                            }
+                            voiceActors(language: JAPANESE, sort: [RELEVANCE]) {
+                                id
+                                name { full }
+                                image { large }
+                            }
+                        }
+                    }
+                } 
+            }`;
 
             try {
                 const variables = hasValidAniId ? { id: parseInt(baseAnime.anilistId) } : { search: baseAnime.title.replace(/\(Dub\)|\(Sub\)/gi, '').trim() };
@@ -82,7 +95,7 @@ window.app.components.info = async () => {
                 });
                 const json = await aniRes.json();
                 aniData = json?.data?.Media || {};
-            } catch (e) { console.log("AniList network sync bypassed."); }
+            } catch (e) { console.log("AniList character-voice graph layer failed initialization sync."); }
 
             // Fallback structural allocations
             const finalTitle = baseAnime.title || aniData.title?.english || aniData.title?.romaji || 'Unknown Title';
@@ -95,6 +108,12 @@ window.app.components.info = async () => {
                 extractedRelations = aniData.relations.nodes.filter(node => node.type === 'ANIME');
             }
 
+            // Extract native character edge loops safely from inside AniList object layer
+            let parsedAniCharacters = [];
+            if (aniData.characters && Array.isArray(aniData.characters.edges)) {
+                parsedAniCharacters = aniData.characters.edges;
+            }
+
             window.app.state.currentAnimePage = {
                 id: animeId,
                 title: finalTitle,
@@ -104,20 +123,20 @@ window.app.components.info = async () => {
                 banner: finalBanner,
                 episodes: episodesList, 
                 relations: extractedRelations,
-                characters: characterList,
+                characters: parsedAniCharacters, // Populated entirely from real-time AniList payload metrics
                 aniList: aniData,
                 scheduleCountdown: scheduleData,
                 rawPayload: baseAnime
             };
 
-            // Setup UI defaults
+            // Setup UI views defaults
             window.app.state.activeInfoTab = 'episodes'; 
             window.app.state.activeMetaTab = 'characters'; 
             window.app.state.epSearchValue = '';
             window.app.state.epRangeFilter = '1-100';
             window.app.state.activeLanguageType = 'sub';
 
-            // Smart progression watch state calculator
+            // Smart progression watch tracker calculations
             const profile = window.app.state?.activeProfile || null;
             let playBtnText = "Play E01";
             let targetEpisodeSlug = episodesList.length > 0 ? (episodesList[0].slug || "1") : '1';
@@ -146,7 +165,7 @@ window.app.components.info = async () => {
                                 playBtnText = `Resume E${targetEpNum < 10 ? '0' + targetEpNum : targetEpNum}`;
                             }
                         }
-                    } catch(e) { console.log("History trackers validation bypassed."); }
+                    } catch(e) { console.log("History tracking parsing handled securely."); }
                 }
             }
 
@@ -246,18 +265,22 @@ function renderAnimeInfoShell() {
 
             <div class="w-full max-w-7xl mx-auto px-4 md:px-12 mt-8 flex flex-col gap-8">
                 
+                <!-- SEASONS PILL SLIDER -->
                 <div id="verified-relations-pill-box" class="w-full hidden">
                     <h3 class="text-white text-xs font-black mb-3 uppercase tracking-widest text-gray-400">Seasons & Alternative Media</h3>
                     <div id="relations-horizontal-slider" class="w-full flex gap-3 overflow-x-auto pb-3 hide-scrollbar snap-x"></div>
                 </div>
 
+                <!-- TAB SWITCH BUTTONS BAR -->
                 <div class="flex items-center justify-center w-full max-w-2xl border-b border-white/10 text-xs md:text-sm font-bold uppercase tracking-widest pt-2">
                     <button onclick="window.app.switchInfoTab('episodes')" id="tab-episodes" class="flex-1 text-center pb-3 transition-colors ${window.app.state.activeInfoTab === 'episodes' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white'}">Episodes</button>
                     <button onclick="window.app.switchInfoTab('information')" id="tab-information" class="flex-1 text-center pb-3 transition-colors ${window.app.state.activeInfoTab === 'information' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white'}">Information</button>
                 </div>
                 
+                <!-- SUB-VIEW CONTAINER FOR CHOSEN TAB CONTENT -->
                 <div id="dynamic-tab-content-area" class="py-2"></div>
 
+                <!-- RECOMMENDATIONS SECTION -->
                 ${recommendationsHtml !== '' ? `
                 <div class="w-full border-t border-white/5 pt-8 mt-4">
                     <h3 class="text-white text-sm md:text-base font-black uppercase tracking-widest text-gray-300 mb-4"><i class="fas fa-heart text-[#F47521] mr-1.5"></i> If You Liked This, Watch These</h3>
@@ -428,38 +451,40 @@ window.app.components.informationtab = () => {
 
     const activeMeta = window.app.state.activeMetaTab || 'characters';
     
-    // --- FIXED: CHARACTER CARDS UPDATED TO PARSE YOUR EXACT COUPLED DATA SCHEMA ---
+    // --- UPDATED: PARSES NESTED EDGES DATA RECOVERED NATIVELY FROM ANILIST ---
     let characterCardsHtml = '';
     if (data.characters && data.characters.length > 0) {
-        data.characters.forEach(item => {
-            const charObj = item.character || {};
-            const primaryVa = (item.voiceActors && item.voiceActors.length > 0) ? item.voiceActors[0] : null;
+        data.characters.forEach(edge => {
+            const charNode = edge.node || {};
+            const roleType = edge.role || 'SUPPORTING';
+            const primaryVa = (edge.voiceActors && edge.voiceActors.length > 0) ? edge.voiceActors[0] : null;
 
-            // Voice actor element markup block check
             const vaHtml = primaryVa ? `
                 <div class="flex items-center gap-1.5 border-l border-white/10 pl-2 ml-auto min-w-0 max-w-[45%]">
                     <div class="text-right min-w-0">
-                        <div class="text-[10px] font-bold text-gray-300 truncate leading-tight">${primaryVa.name}</div>
-                        <div class="text-[8px] text-[#F47521] tracking-tighter uppercase">JA Seiyuu</div>
+                        <div class="text-[10px] font-bold text-gray-300 truncate leading-tight">${primaryVa.name?.full || 'Seiyuu'}</div>
+                        <div class="text-[8px] text-[#F47521] tracking-tighter uppercase font-black">JA Seiyuu</div>
                     </div>
-                    <img src="${primaryVa.poster || 'https://via.placeholder.com/100/222/fff?text=?'}" class="w-7 h-7 rounded-full object-cover border border-white/10 shrink-0 shadow-md">
+                    <img src="${primaryVa.image?.large || 'https://via.placeholder.com/100/222/fff?text=?'}" class="w-7 h-7 rounded-full object-cover border border-white/10 shrink-0 shadow-md">
                 </div>
             ` : '';
 
             characterCardsHtml += `
                 <div class="bg-[#111] p-2 rounded-lg border border-white/5 shadow-inner flex items-center justify-between gap-2 hover:border-white/20 transition-colors w-full">
+                    <!-- Left Character Segment -->
                     <div class="flex items-center gap-2 min-w-0 max-w-[55%]">
-                        <img src="${charObj.poster || 'https://via.placeholder.com/120/222/fff?text=?'}" class="w-9 h-11 rounded object-cover border border-white/10 shrink-0 shadow-md">
+                        <img src="${charNode.image?.large || 'https://via.placeholder.com/120/222/fff?text=?'}" class="w-9 h-11 rounded object-cover border border-white/10 shrink-0 shadow-md">
                         <div class="min-w-0">
-                            <div class="font-black text-white text-[11px] md:text-xs truncate leading-snug">${charObj.name || 'Unknown character'}</div>
-                            <div class="text-[9px] text-gray-400 truncate mt-0.5 uppercase tracking-wide font-bold">${charObj.cast || 'Supporting'}</div>
+                            <div class="font-black text-white text-[11px] md:text-xs truncate leading-snug">${charNode.name?.full || 'Character'}</div>
+                            <div class="text-[9px] text-gray-400 truncate mt-0.5 uppercase tracking-wide font-bold">${roleType.toLowerCase()}</div>
                         </div>
                     </div>
+                    <!-- Right Voice Actor Segment -->
                     ${vaHtml}
                 </div>
             `;
         });
-    } else { characterCardsHtml = `<div class="col-span-full text-gray-500 text-xs py-2"><i class="fas fa-info-circle mr-1"></i> Character profiles mapping unindexed.</div>`; }
+    } else { characterCardsHtml = `<div class="col-span-full text-gray-500 text-xs py-2"><i class="fas fa-info-circle mr-1"></i> Character profiles mapping unindexed on AniList.</div>`; }
 
     let staffCardsHtml = '';
     if (ani?.staff?.nodes && ani.staff.nodes.length > 0) {
