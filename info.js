@@ -51,8 +51,10 @@ window.app.components.info = async () => {
                 const epsResponse = await fetch(`${baseUrl}/api/episodes/${animeId}`);
                 const epsJson = await epsResponse.json();
                 
-                // Maps your exact object schema results -> results.episodes
-                if (epsJson && epsJson.success && epsJson.results && Array.isArray(epsJson.results.episodes)) {
+                // Maps your exact root object array wrapper template schema: {"success": true, "data": [...]}
+                if (epsJson && epsJson.success && Array.isArray(epsJson.data)) {
+                    episodesList = epsJson.data;
+                } else if (epsJson && epsJson.success && epsJson.results && Array.isArray(epsJson.results.episodes)) {
                     episodesList = epsJson.results.episodes;
                 }
             } catch (e) {
@@ -124,7 +126,7 @@ window.app.components.info = async () => {
                 synopsis: finalDesc,
                 poster: aniData.coverImage?.extraLarge || baseAnime.poster || 'https://via.placeholder.com/800x1200/111/fff?text=No+Poster',
                 banner: finalBanner,
-                episodes: episodesList, // Now guarantees a clean object array map natively
+                episodes: episodesList, 
                 relations: extractedRelations,
                 aniList: aniData,
                 scheduleCountdown: scheduleData,
@@ -134,10 +136,11 @@ window.app.components.info = async () => {
             window.app.state.activeInfoTab = 'information'; 
             window.app.state.epSearchValue = '';
             window.app.state.epRangeFilter = '1-100';
+            window.app.state.activeLanguageType = 'sub'; // Explicit sub/dub selection tracker state initialization
 
             const profile = window.app.state && window.app.state.activeProfile ? window.app.state.activeProfile : null;
             let playBtnText = "Play E01";
-            let targetEpisodeId = episodesList.length > 0 ? (episodesList[0].id || "1") : '1';
+            let targetEpisodeId = episodesList.length > 0 ? (episodesList[0].slug || "1") : '1';
             
             if (profile && profile.history) {
                 const historyItem = profile.history.find(h => h.animeId === animeId);
@@ -389,7 +392,7 @@ window.app.togglePageDesc = () => {
         btn.innerHTML = `Show Less <i class="fas fa-chevron-up ml-1"></i>`;
     } else {
         descP.className = "text-xs md:text-sm text-gray-300 line-clamp-3 leading-relaxed drop-shadow-md pr-4 transition-all duration-300";
-        btn.innerHTML = `See More <i class="fas fa-chevron-down ml-1"></i>`;
+        btn.innerHTML = `See More <i class="fas fa-chevron-down ml-1"></i></button>`;
     }
 };
 
@@ -422,8 +425,9 @@ window.app.addToLibrary = async (id, title, img) => {
 
 window.app.handlePlayClick = async (episodeUrlId, animeId) => {
     try {
+        const activeLang = window.app.state.activeLanguageType || 'sub';
         if (window.app.state && window.app.state.activeProfile && window.app.state.activeProfile.uid) {
-            window.location.href = `play.html?id=${encodeURIComponent(episodeUrlId)}&anime=${animeId}`;
+            window.location.href = `play.html?id=${encodeURIComponent(episodeUrlId)}&anime=${animeId}&type=${activeLang}`;
             return;
         }
 
@@ -453,11 +457,11 @@ window.app.handlePlayClick = async (episodeUrlId, animeId) => {
             console.log("DB save failed: ", dbError);
         }
 
-        window.location.href = `play.html?id=${encodeURIComponent(episodeUrlId)}&anime=${animeId}`;
+        window.location.href = `play.html?id=${encodeURIComponent(episodeUrlId)}&anime=${animeId}&type=${activeLang}`;
 
     } catch (err) {
         console.error("Play redirect error:", err);
-        window.location.href = `play.html?id=${encodeURIComponent(episodeUrlId)}&anime=${animeId}`;
+        window.location.href = `play.html?id=${encodeURIComponent(episodeUrlId)}&anime=${animeId}&type=${window.app.state.activeLanguageType || 'sub'}`;
     }
 };
 
@@ -580,13 +584,12 @@ window.app.components.episodestab = () => {
         return;
     }
 
-    // Direct resolution on your loaded episodes collection array structure
     let finalEpisodesArray = data.episodes || [];
     window.app.state.currentEpisodesListProcessed = finalEpisodesArray;
 
     const totalEps = finalEpisodesArray.length;
-    let dropdownHtml = '';
-    let currentLabel = 'N/A';
+    let rangeDropdownHtml = '';
+    let currentRangeLabel = 'N/A';
 
     if (totalEps > 0) {
         for (let i = 0; i < totalEps; i += 100) {
@@ -595,35 +598,68 @@ window.app.components.episodestab = () => {
             const val = `${startNum}-${endNum}`;
             const label = `Episodes ${startNum} - ${endNum}`;
             if (!window.app.state.epRangeFilter && i === 0) window.app.state.epRangeFilter = val;
-            if (window.app.state.epRangeFilter === val) currentLabel = label;
-            dropdownHtml += `<button onclick="window.app.selectDropdownOption('${label}', '${val}')" class="w-full text-left px-4 py-3 text-xs md:text-sm font-bold text-white hover:bg-[#F47521] hover:text-black transition-colors border-b border-white/5 last:border-0">${label}</button>`;
+            if (window.app.state.epRangeFilter === val) currentRangeLabel = label;
+            rangeDropdownHtml += `<button onclick="window.app.selectDropdownOption('${label}', '${val}')" class="w-full text-left px-4 py-3 text-xs md:text-sm font-bold text-white hover:bg-[#F47521] hover:text-black transition-colors border-b border-white/5 last:border-0">${label}</button>`;
         }
     } else {
-        currentLabel = 'No Episodes';
-        dropdownHtml = `<div class="px-4 py-3 text-xs text-gray-500">N/A</div>`;
+        currentRangeLabel = 'No Episodes';
+        rangeDropdownHtml = `<div class="px-4 py-3 text-xs text-gray-500">N/A</div>`;
     }
 
+    const currentLang = window.app.state.activeLanguageType || 'sub';
+
     contentArea.innerHTML = `
-        <div class="animate-fade-in">
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 bg-[#0a0a0a] p-3 md:p-4 rounded-xl border border-white/5 shadow-md">
+        <div class="animate-fade-in flex flex-col gap-6">
+            
+            <!-- CONTROLS MANAGEMENT CONSOLE PANEL BOARD -->
+            <div class="flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between bg-[#0a0a0a] p-4 rounded-xl border border-white/5 shadow-md w-full">
+                
+                <!-- 1. SUB / DUB GLOWING SELECTION PILLS (ADDED) -->
+                <div class="flex bg-[#111] p-1 border border-white/10 rounded-lg max-w-xs md:w-48 text-xs font-black select-none tracking-wider uppercase h-12">
+                    <button onclick="window.app.toggleActiveAudioLanguage('sub')" id="lang-btn-sub" class="flex-1 rounded-md transition-all flex items-center justify-center gap-1.5 ${currentLang === 'sub' ? 'bg-[#F47521] text-black shadow-md font-black' : 'text-gray-400 hover:text-white'}">
+                        <i class="fas fa-closed-captioning"></i> Sub
+                    </button>
+                    <button onclick="window.app.toggleActiveAudioLanguage('dub')" id="lang-btn-dub" class="flex-1 rounded-md transition-all flex items-center justify-center gap-1.5 ${currentLang === 'dub' ? 'bg-[#F47521] text-black shadow-md font-black' : 'text-gray-400 hover:text-white'}">
+                        <i class="fas fa-microphone"></i> Dub
+                    </button>
+                </div>
+
+                <!-- 2. EPISODES SEGMENT INDEX DROPDOWN CHUNKS -->
                 <div class="relative w-full sm:w-64" id="custom-dropdown-container">
-                    <button id="custom-dropdown-btn" onclick="window.app.toggleDropdown()" class="flex items-center justify-between w-full bg-[#111] border border-white/10 text-white text-xs md:text-sm font-bold py-3 pl-4 pr-4 rounded-lg outline-none hover:border-white/30 focus:border-[#F47521] transition-all">
-                        <span id="custom-dropdown-selected">${currentLabel}</span>
+                    <button id="custom-dropdown-btn" onclick="window.app.toggleDropdown()" class="flex items-center justify-between w-full bg-[#111] border border-white/10 text-white text-xs md:text-sm font-bold h-12 px-4 rounded-lg outline-none hover:border-white/30 focus:border-[#F47521] transition-all">
+                        <span id="custom-dropdown-selected">${currentRangeLabel}</span>
                         <i id="custom-dropdown-icon" class="fas fa-chevron-down text-gray-400 text-xs transition-transform duration-300"></i>
                     </button>
                     <div id="custom-dropdown-menu" class="absolute left-0 mt-2 w-full bg-[#111] border border-white/10 rounded-lg shadow-2xl z-50 hidden overflow-hidden flex flex-col max-h-60 overflow-y-auto hide-scrollbar">
-                        ${dropdownHtml}
+                        ${rangeDropdownHtml}
                     </div>
                 </div>
-                <div class="relative w-full sm:w-auto flex-1 max-w-sm">
-                    <input type="number" id="episode-search-box" value="${window.app.state.epSearchValue || ''}" onkeyup="window.app.runEpisodeSearch(this.value)" placeholder="Search episode #..." class="w-full bg-[#111] border border-white/10 text-white text-xs md:text-sm py-3 pl-10 pr-4 rounded-lg outline-none focus:border-[#F47521] placeholder-gray-600 transition-colors">
+
+                <!-- 3. QUANTITATIVE NUMBER MATCH SEARCH INPUT ENGINE BOX -->
+                <div class="relative flex-1 max-w-md w-full">
+                    <input type="number" id="episode-search-box" value="${window.app.state.epSearchValue || ''}" onkeyup="window.app.runEpisodeSearch(this.value)" placeholder="Search episode #..." class="w-full bg-[#111] border border-white/10 text-white text-xs md:text-sm h-12 pl-11 pr-4 rounded-lg outline-none focus:border-[#F47521] placeholder-gray-600 transition-colors">
                     <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-xs"></i>
                 </div>
             </div>
-            <div id="numeric-episodes-grid" class="grid grid-cols-6 sm:grid-cols-10 md:grid-cols-14 lg:grid-cols-20 gap-2"></div>
+
+            <!-- GRID MOUNTING NODE -->
+            <div id="numeric-episodes-grid" class="grid grid-cols-4 sm:grid-cols-8 md:grid-cols-12 lg:grid-cols-16 gap-2.5"></div>
         </div>
     `;
     
+    window.app.renderNumericEpisodeGrid();
+};
+
+// Toggle handler that dynamically switches language layout states
+window.app.toggleActiveAudioLanguage = (langMode) => {
+    if (window.app.state.activeLanguageType === langMode) return;
+    window.app.state.activeLanguageType = langMode;
+    
+    // Smooth visual button shift reflection
+    document.getElementById('lang-btn-sub').className = `flex-1 rounded-md transition-all flex items-center justify-center gap-1.5 ${langMode === 'sub' ? 'bg-[#F47521] text-black shadow-md font-black' : 'text-gray-400 hover:text-white'}`;
+    document.getElementById('lang-btn-dub').className = `flex-1 rounded-md transition-all flex items-center justify-center gap-1.5 ${langMode === 'dub' ? 'bg-[#F47521] text-black shadow-md font-black' : 'text-gray-400 hover:text-white'}`;
+    
+    // Instantly re-evaluate audio stream grids
     window.app.renderNumericEpisodeGrid();
 };
 
@@ -662,19 +698,20 @@ window.app.renderNumericEpisodeGrid = () => {
     const episodesToFilter = window.app.state.currentEpisodesListProcessed || [];
     const searchVal = window.app.state.epSearchValue || '';
     const rangeArray = window.app.state.epRangeFilter ? window.app.state.epRangeFilter.split('-') : [];
+    const currentLangMode = window.app.state.activeLanguageType || 'sub';
     
     let episodesToRender = [...episodesToFilter];
 
     if (searchVal !== '') {
         episodesToRender = episodesToRender.filter((ep) => {
-            const epNumber = ep.episode_no;
+            const epNumber = ep.num || ep.episode_no;
             return epNumber && epNumber.toString().includes(searchVal);
         });
     } else if (rangeArray.length === 2) {
         const startEpNum = parseInt(rangeArray[0]);
         const endEpNum = parseInt(rangeArray[1]);
         episodesToRender = episodesToRender.filter((ep) => {
-            const epNumber = ep.episode_no;
+            const epNumber = ep.num || ep.episode_no;
             return epNumber && epNumber >= startEpNum && epNumber <= endEpNum;
         });
     }
@@ -686,32 +723,53 @@ window.app.renderNumericEpisodeGrid = () => {
 
     let gridHtml = '';
     episodesToRender.forEach((ep) => {
-        const epNumber = ep.episode_no;
-        const targetEpisodeId = ep.id || `${data.id}-episode-${epNumber}`; 
+        const epNumber = ep.num || ep.episode_no;
+        const targetEpisodeSlugId = ep.slug || ep.id || String(epNumber); 
         
-        const epTitleLower = (ep.title || '').toLowerCase();
-        const isActuallyFiller = epTitleLower.includes('filler') || epTitleLower.includes('recap'); 
-        
-        const fillerIconDot = isActuallyFiller ? `<div class="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full"></div>` : '';
-        const hoverClasses = isActuallyFiller ? 'border-red-500/30 text-gray-400 hover:bg-red-500 hover:text-white hover:border-red-500 shadow-sm' : 'border-white/5 text-gray-300 hover:bg-[#F47521] hover:text-black hover:border-[#F47521] shadow-sm';
+        // Accurate filler parsing using your response object's native `isFiller` key!
+        const isFillerEpisode = ep.isFiller === true;
+        const fillerIconDot = isFillerEpisode ? `<div class="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full"></div>` : '';
+
+        // Dynamic availability flag resolution checks
+        const isSupportedByLang = (currentLangMode === 'sub' && ep.isSub !== false) || 
+                                  (currentLangMode === 'dub' && ep.isDub === true);
+
+        let buttonStyleClass = '';
+        let interactiveActionAttr = '';
+        let conditionalLabelBadge = '';
+
+        if (isSupportedByLang) {
+            // Audio track exists: Fully active glowing slate template style block
+            interactiveActionAttr = `onclick="window.app.resolveEpisodeStreamAndRoute('${targetEpisodeSlugId}', ${epNumber}, '${data.id}')"`;
+            buttonStyleClass = isFillerEpisode 
+                ? 'border-red-500/20 text-gray-300 hover:bg-red-500 hover:text-white hover:border-red-500 cursor-pointer' 
+                : 'border-white/5 text-gray-300 hover:bg-[#F47521] hover:text-black hover:border-[#F47521] cursor-pointer';
+        } else {
+            // Audio track doesn't exist: Gray out button, deactivate clicks, show badge
+            interactiveActionAttr = 'disabled';
+            buttonStyleClass = 'opacity-25 border-dashed border-white/5 text-gray-600 cursor-not-allowed bg-black/40';
+            conditionalLabelBadge = `<span class="absolute bottom-1 text-[8px] font-black text-gray-500 tracking-tighter uppercase">Sub Only</span>`;
+        }
 
         gridHtml += `
-            <button onclick="window.app.resolveEpisodeStreamAndRoute('${targetEpisodeId}', ${epNumber}, '${data.id}')" class="relative w-full aspect-square flex items-center justify-center rounded border transition-all duration-200 group bg-white/5 ${hoverClasses}">
-                <span class="font-bold text-xs md:text-sm">${epNumber}</span>
+            <button ${interactiveActionAttr} class="relative w-full aspect-square flex flex-col items-center justify-center rounded border transition-all duration-200 group bg-white/5 ${buttonStyleClass}">
+                <span class="font-bold text-xs md:text-sm ${!isSupportedByLang ? 'mt--2' : ''}">${epNumber}</span>
                 ${fillerIconDot}
+                ${conditionalLabelBadge}
             </button>
         `;
     });
     gridDiv.innerHTML = gridHtml;
 };
 
-window.app.resolveEpisodeStreamAndRoute = async (episodeId, episodeNumber, animeId) => {
+window.app.resolveEpisodeStreamAndRoute = async (episodeSlug, episodeNumber, animeId) => {
     try {
         const baseUrl = 'https://anikoto-api-xi.vercel.app';
         const targetServer = 'hd-1';
-        const targetType = 'sub';
+        const targetType = window.app.state.activeLanguageType || 'sub';
 
-        const streamUrl = `${baseUrl}/api/stream?id=${encodeURIComponent(episodeId)}&server=${targetServer}&type=${targetType}`;
+        // Passes the audio tracker criteria parameters securely right down your stream pipeline
+        const streamUrl = `${baseUrl}/api/stream?id=${encodeURIComponent(episodeSlug)}&server=${targetServer}&type=${targetType}`;
         const response = await fetch(streamUrl);
         const json = await response.json();
 
@@ -720,7 +778,7 @@ window.app.resolveEpisodeStreamAndRoute = async (episodeId, episodeNumber, anime
             verifiedStreamData = json.results;
         } else {
             console.log("Primary stream link missing. Fetching secondary fallback assets...");
-            const fallbackUrl = `${baseUrl}/api/stream/fallback?id=${encodeURIComponent(episodeId)}&server=${targetServer}&type=${targetType}`;
+            const fallbackUrl = `${baseUrl}/api/stream/fallback?id=${encodeURIComponent(episodeSlug)}&server=${targetServer}&type=${targetType}`;
             const fbResponse = await fetch(fallbackUrl);
             const fbJson = await fbResponse.json();
             if (fbJson && fbJson.success && fbJson.results?.streamingLink) {
@@ -750,10 +808,10 @@ window.app.resolveEpisodeStreamAndRoute = async (episodeId, episodeNumber, anime
             localStorage.setItem('blazex_user_profile', JSON.stringify(guestProfile));
         }
 
-        window.location.href = `play.html?id=${encodeURIComponent(episodeId)}&anime=${animeId}&ep=${episodeNumber}`;
+        window.location.href = `play.html?id=${encodeURIComponent(episodeSlug)}&anime=${animeId}&ep=${episodeNumber}&type=${targetType}`;
 
     } catch (error) {
         console.error("Stream routing error caught:", error);
-        window.location.href = `play.html?id=${encodeURIComponent(episodeId)}&anime=${animeId}&ep=${episodeNumber}`;
+        window.location.href = `play.html?id=${encodeURIComponent(episodeSlug)}&anime=${animeId}&ep=${episodeNumber}&type=${window.app.state.activeLanguageType || 'sub'}`;
     }
 };
