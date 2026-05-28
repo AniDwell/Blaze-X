@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blaze-X | Player Suite</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body { 
+            background-color: #050505; 
+            color: white; 
+            margin: 0; 
+            padding: 0; 
+            font-family: sans-serif; 
+        }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-[#050505] text-white overflow-x-hidden min-h-screen flex flex-col">
+
+    <div id="header-container"></div>
+
+    <main id="player-workspace" class="flex-1 w-full max-w-7xl mx-auto px-4 md:px-12 pt-24 pb-24 md:pb-12 flex flex-col gap-6">
+        
+        <div id="video-container" class="w-full aspect-video md:aspect-[21/9] bg-[#0a0a0a] rounded-xl border border-white/10 shadow-2xl flex flex-col items-center justify-center animate-pulse relative overflow-hidden">
+            <i class="fas fa-play-circle text-5xl md:text-7xl text-[#F47521]/40 mb-4"></i>
+            <p class="text-gray-500 font-black uppercase tracking-widest text-[10px] md:text-xs">Initializing Player Engine...</p>
+        </div>
+
+        <div id="player-metadata-container" class="w-full flex flex-col gap-3">
+            <div class="h-8 w-3/4 md:w-1/2 bg-[#111] rounded border border-white/5 animate-pulse"></div>
+            <div class="h-4 w-1/4 md:w-1/6 bg-[#111] rounded border border-white/5 animate-pulse"></div>
+        </div>
+
+        <div id="player-controls-container" class="w-full grid grid-cols-1 lg:grid-cols-3 gap-6 mt-2">
+            <div class="lg:col-span-2 h-32 md:h-40 bg-[#111] rounded-xl border border-white/5 animate-pulse flex items-center justify-center">
+                <span class="text-gray-600 font-bold uppercase text-[10px] tracking-widest">Awaiting Stream Data</span>
+            </div>
+            <div class="lg:col-span-1 h-32 md:h-40 bg-[#111] rounded-xl border border-white/5 animate-pulse flex items-center justify-center">
+                <span class="text-gray-600 font-bold uppercase text-[10px] tracking-widest">Awaiting Episodes</span>
+            </div>
+        </div>
+
+    </main>
+
+    <div id="bottom-nav-container"></div>
+
+    <script>
+        window.app = window.app || {
+            state: {
+                activeProfile: JSON.parse(localStorage.getItem('blazex_user_profile')) || null,
+                resolvedStreamManifest: null // Ready to catch the pre-fetched payload from info.js
+            },
+            components: {}
+        };
+    </script>
+
+    <script type="module" src="header.js"></script>
+    <script src="bottomnav.js"></script>
+    <script src="auth.js"></script>
+
+    <script>
+        // Mount external layout components safely
+        document.addEventListener("DOMContentLoaded", () => {
+            if (window.app.components.header) window.app.components.header();
+            if (window.app.components.bottomnav) window.app.components.bottomnav();
+        });
+    </script>
+
+</body>
+</html>
