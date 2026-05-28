@@ -19,13 +19,48 @@
         }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Custom Blaze-X Spinner Loader */
+        .tk-loader {
+            position: relative;
+            width: 40px;
+            height: 40px;
+            animation: rotate 2s linear infinite;
+        }
+        .tk-dot {
+            width: 60%;
+            height: 60%;
+            display: inline-block;
+            position: absolute;
+            top: 0;
+            background-color: #F47521;
+            border-radius: 100%;
+            animation: bounce 2s ease-in-out infinite;
+        }
+        .tk-dot-2 {
+            top: auto;
+            bottom: 0;
+            animation-delay: -1s;
+        }
+        @keyframes rotate { 100% { transform: rotate(360deg); } }
+        @keyframes bounce { 
+            0%, 100% { transform: scale(0); } 
+            50% { transform: scale(1); } 
+        }
     </style>
 </head>
 <body class="bg-[#050505] text-white overflow-x-hidden min-h-screen flex flex-col">
 
+    <div id="global-loader" class="fixed inset-0 z-[999] bg-[#050505] flex items-center justify-center transition-opacity duration-500">
+        <div class="tk-loader scale-150">
+            <div class="tk-dot tk-dot-1"></div>
+            <div class="tk-dot tk-dot-2"></div>
+        </div>
+    </div>
+
     <div id="header-container"></div>
 
-    <main id="player-workspace" class="flex-1 w-full max-w-7xl mx-auto px-4 md:px-12 pt-24 pb-24 md:pb-12 flex flex-col gap-6">
+    <main id="player-workspace" class="flex-1 w-full max-w-7xl mx-auto px-4 md:px-12 pt-24 pb-24 md:pb-12 flex flex-col gap-6 opacity-0 transition-opacity duration-700" style="opacity: 1;">
         
         <div id="video-container" class="w-full aspect-video md:aspect-[21/9] bg-[#0a0a0a] rounded-xl border border-white/10 shadow-2xl flex flex-col items-center justify-center animate-pulse relative overflow-hidden">
             <i class="fas fa-play-circle text-5xl md:text-7xl text-[#F47521]/40 mb-4"></i>
@@ -69,6 +104,17 @@
         document.addEventListener("DOMContentLoaded", () => {
             if (window.app.components.header) window.app.components.header();
             if (window.app.components.bottomnav) window.app.components.bottomnav();
+        });
+
+        // Remove loading screen elegantly after initialization
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                const loader = document.getElementById('global-loader');
+                if(loader) {
+                    loader.classList.add('opacity-0');
+                    setTimeout(() => loader.remove(), 500); // remove from DOM after fade out
+                }
+            }, 400); // Slight delay to ensure a smooth transition
         });
     </script>
 
