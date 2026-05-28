@@ -52,6 +52,7 @@ window.app.showCustomAlert = (message, type = 'error', actionText = null, action
 
 // --- AUTHENTICATION MODAL ENGINE ---
 window.app.components.auth = () => {
+    // Check if user is already logged in (Bypass anonymous profiles)
     if (window.app.state && window.app.state.activeProfile && window.app.state.activeProfile.uid && !window.app.state.activeProfile.uid.startsWith('anon_')) {
         window.location.href = 'profile.html';
         return;
@@ -60,7 +61,7 @@ window.app.components.auth = () => {
     const existingModal = document.getElementById('auth-modal');
     if (existingModal) existingModal.remove();
 
-    // Default Avatar Base Allocations
+    // Default Fallback Random PFP Generator
     window.app.state.authSelectedPfp = `pfp${Math.floor(Math.random() * 10) + 1}.jpeg`;
 
     const modal = document.createElement('div');
@@ -205,8 +206,7 @@ window.app.components.auth = () => {
     }, 10);
 };
 
-// --- VIEW & UI CONTROLS ---
-
+// --- VIEW & UI PANEL TOGGLES ---
 window.app.closeAuthModal = () => {
     const modal = document.getElementById('auth-modal');
     const box = document.getElementById('auth-modal-box');
@@ -242,8 +242,7 @@ window.app.switchAuthView = (view) => {
     if (targetView) targetView.classList.remove('hidden');
 };
 
-
-// --- PFP UPLOAD WITH IMGBB INTEGRATION ---
+// --- PFP UPLOAD HANDLER VIA IMGBB API ---
 window.app.handlePfpUpload = async (event, previewId) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -256,7 +255,6 @@ window.app.handlePfpUpload = async (event, previewId) => {
     formData.append("image", file);
     
     try {
-        // FIXED: Uploading directly to ImgBB using your dedicated development API key
         const res = await fetch(`https://api.imgbb.com/1/upload?key=4a683051e76ed12880a42aefa6ed427b`, {
             method: 'POST',
             body: formData
@@ -268,7 +266,7 @@ window.app.handlePfpUpload = async (event, previewId) => {
             window.app.state.authSelectedPfp = uploadedImgUrl;
             imgPreview.src = uploadedImgUrl;
 
-            // If the user is already authenticated, update their existing DB entry instantly on upload event
+            // Direct mapping upload write sync if user profile layer session runs alive
             if (window.app.state.activeProfile && window.app.state.activeProfile.uid && !window.app.state.activeProfile.uid.startsWith('anon_')) {
                 try {
                     const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
@@ -276,9 +274,8 @@ window.app.handlePfpUpload = async (event, previewId) => {
                     await firestore.updateDoc(userDocRef, { pfp: uploadedImgUrl });
                     window.app.state.activeProfile.pfp = uploadedImgUrl;
                     localStorage.setItem('blazex_user_profile', JSON.stringify(window.app.state.activeProfile));
-                } catch(dbErr) { console.error("Realtime PFP mapping sync failed:", dbErr); }
+                } catch(dbErr) { console.error("Realtime firestore image write sync failed:", dbErr); }
             }
-
             window.app.showCustomAlert('Profile picture updated!', 'success');
         } else {
             throw new Error();
@@ -289,8 +286,7 @@ window.app.handlePfpUpload = async (event, previewId) => {
     }
 };
 
-// --- FIREBASE LOGIC ---
-
+// --- FIREBASE CORE AUTH LAYER MANAGEMENT LOGIC RUNTIME ---
 window.app.handleLogin = async (e) => {
     e.preventDefault();
     const btn = document.getElementById('btn-login');
@@ -308,10 +304,12 @@ window.app.handleLogin = async (e) => {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         await window.app.syncProfileAfterAuth(userCredential.user);
         
+        // REDIRECT TARGET ACCENT ROUTED INSTANTLY ON AUTH CONFIRMATION
         window.app.closeAuthModal();
         window.location.href = 'profile.html';
         
     } catch (error) {
+        console.error("Login Module Failure Context Stack:", error);
         const errCode = error.code;
         if (errCode === 'auth/user-not-found' || errCode === 'auth/invalid-credential') {
             window.app.showCustomAlert("Account not found. Would you like to create one?", 'error', 'Go to Sign Up', () => {
@@ -336,11 +334,12 @@ window.app.handleRegister = async (e) => {
     const name = document.getElementById('register-name').value.trim();
     const email = document.getElementById('register-email').value.trim();
     const password = document.getElementById('register-password').value;
-    const pfp = window.app.state.authSelectedPfp; // Contains either default random string asset name or raw uploaded ImgBB URL
+    const pfp = window.app.state.authSelectedPfp; // Resolved ImgBB token mapping URL string
 
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         
+        // SAFE CONTEXT LOOP BYPASS ENGINE: Prevents permissions breaking errors on uninitialized index parameters database files
         let isUsernameTaken = false;
         try {
             const usersRef = firestore.collection(window.app.db, "users");
@@ -350,7 +349,7 @@ window.app.handleRegister = async (e) => {
                 isUsernameTaken = true;
             }
         } catch (queryErr) {
-            console.log("Collection structure uninitialized. Assuming unique state route.");
+            console.log("Database namespace container context empty. Continuing execution path mapping safely.");
         }
 
         if (isUsernameTaken) {
@@ -367,7 +366,7 @@ window.app.handleRegister = async (e) => {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
-        // FIXED: The resolved ImgBB link maps directly into the permanent Firestore object layer array fields payload here
+        // Permanent cloud object properties compilation data block map
         const newProfile = {
             uid: user.uid,
             name: name,
@@ -388,6 +387,7 @@ window.app.handleRegister = async (e) => {
         window.location.href = 'profile.html';
 
     } catch (error) {
+        console.error("Registration Engine Fatal Crash Trace:", error);
         if (error.code === 'auth/email-already-in-use') {
             window.app.showCustomAlert("This email is already registered. Try signing in.", 'error', 'Go to Sign In', () => {
                 window.app.switchAuthView('login');
@@ -443,10 +443,9 @@ window.app.handleGoogleLogin = async () => {
             if (docSnap.exists()) {
                 profileData = docSnap.data();
             } else {
-                throw new Error("Force create entry");
+                throw new Error("Trigger database entry serialization script initialization mappings.");
             }
         } catch(snapErr) {
-            // FIXED: Google Auth saves the high-resolution photo URL straight from Google profile parameters
             profileData = {
                 uid: user.uid,
                 name: user.displayName || 'Google User',
@@ -466,7 +465,18 @@ window.app.handleGoogleLogin = async () => {
         window.location.href = 'profile.html';
 
     } catch (error) {
-        window.app.showCustomAlert("Google Sign-In was cancelled or failed.", 'error');
+        // FIXED: Realtime console trace analysis log injection to catch hidden popup barriers
+        console.error("--- GOOGLE POPUP AUTH BLOCK TRACE METRICS ---");
+        console.error("Firebase Internal Error Code Exception:", error.code);
+        console.error("Firebase Original Native Error Message:", error.message);
+        
+        if (error.code === 'auth/popup-blocked') {
+            window.app.showCustomAlert("Sign-in popup was blocked by your browser! Please check the address bar options panel to allow popups.", 'error');
+        } else if (error.code === 'auth/operation-not-allowed') {
+            window.app.showCustomAlert("Google Sign-In is disabled in Firebase Console! Please go to your Console settings and enable Google provider support.", 'error');
+        } else {
+            window.app.showCustomAlert(`Authentication dropped context: ${error.code || 'Network Exception'}`, 'error');
+        }
     }
 };
 
@@ -498,7 +508,7 @@ window.app.handleGuestCreation = async (e) => {
         const userRef = firestore.doc(window.app.db, "users", guestUid);
         await firestore.setDoc(userRef, guestProfile);
     } catch (dbError) {
-        console.log("Guest saved locally.");
+        console.log("Guest tracking cached locally.");
     }
 
     window.app.closeAuthModal();
@@ -517,6 +527,6 @@ window.app.syncProfileAfterAuth = async (firebaseUser) => {
             localStorage.setItem('blazex_user_profile', JSON.stringify(data));
         }
     } catch(syncErr) {
-        console.log("Profile caching sync dropped safely.");
+        console.log("Active state caching sync tracking module handled safely.");
     }
 };
