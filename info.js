@@ -17,7 +17,6 @@ window.app.components.info = async () => {
         return;
     }
 
-    // Master Trigger function to navigate and load data without full-page reloads
     window.app.loadInfoPageData = async (targetId) => {
         animeId = targetId;
         const newUrl = `${window.location.pathname}?id=${targetId}`;
@@ -38,11 +37,7 @@ window.app.components.info = async () => {
             // 1. Fetch metadata directly from /api/info
             const infoResponse = await fetch(`${baseUrl}/api/info?id=${animeId}`);
             const infoJson = await infoResponse.json();
-            
-            if (!infoJson || !infoJson.success || !infoJson.data) {
-                throw new Error("Target anime metadata could not be parsed from server payload.");
-            }
-            
+            if (!infoJson || !infoJson.success || !infoJson.data) throw new Error("Anime metadata parsing aborted.");
             const baseAnime = infoJson.data;
 
             // 2. Fetch corresponding episode lists matching /api/episodes/{param} strictly
@@ -50,18 +45,10 @@ window.app.components.info = async () => {
             try {
                 const epsResponse = await fetch(`${baseUrl}/api/episodes/${animeId}`);
                 const epsJson = await epsResponse.json();
-                
-                // Maps your exact root object array wrapper template schema: {"success": true, "data": [...]}
-                if (epsJson && epsJson.success && Array.isArray(epsJson.data)) {
-                    episodesList = epsJson.data;
-                } else if (epsJson && epsJson.success && epsJson.results && Array.isArray(epsJson.results.episodes)) {
-                    episodesList = epsJson.results.episodes;
-                }
-            } catch (e) {
-                console.log("No matching episodes payload layout detected.");
-            }
+                if (epsJson && epsJson.success && Array.isArray(epsJson.data)) episodesList = epsJson.data;
+            } catch (e) { console.log("Episode list download skipped."); }
 
-            // 3. Fetch Schedule Countdown Data if available
+            // 3. Fetch Schedule Countdown Data straight from /api/schedule/:id
             let scheduleData = null;
             try {
                 const schedRes = await fetch(`${baseUrl}/api/schedule/${animeId}`);
@@ -69,31 +56,24 @@ window.app.components.info = async () => {
                 if (schedJson && schedJson.success && schedJson.results) {
                     scheduleData = schedJson.results.nextEpisodeSchedule || null;
                 }
-            } catch (e) {
-                console.log("No schedule tracking module available.");
-            }
+            } catch (e) { console.log("Schedule countdown unpopulated."); }
 
-            // --- ANILIST API SYNC BLOCK ---
+            // 4. Fetch Anime Characters via your custom route /api/character/list/{id}
+            let characterList = [];
+            try {
+                const charRes = await fetch(`${baseUrl}/api/character/list/${animeId}`);
+                const charJson = await charRes.json();
+                if (charJson && charJson.success && Array.isArray(charJson.data)) {
+                    characterList = charJson.data;
+                }
+            } catch (e) { console.log("Character list not found."); }
+
+            // --- ANILIST API BACKGROUND SYNC BLOCK ---
             let aniData = {};
             const hasValidAniId = baseAnime.anilistId && !isNaN(baseAnime.anilistId);
-            
             const query = hasValidAniId 
-                ? `query ($id: Int) { 
-                    Media (id: $id, type: ANIME) { 
-                        id title { romaji native english } bannerImage coverImage { extraLarge } description synonyms format source status averageScore trending genres 
-                        studios(isMain: true) { nodes { name } } 
-                        staff(perPage: 12, sort: RELEVANCE) { nodes { name { full } image { large } primaryOccupations } }
-                        relations { nodes { id type format status bannerImage coverImage { extraLarge } title { romaji english } } }
-                    } 
-                  }`
-                : `query ($search: String) { 
-                    Media (search: $search, type: ANIME, sort: SEARCH_MATCH) { 
-                        id title { romaji native english } bannerImage coverImage { extraLarge } description synonyms format source status averageScore trending genres 
-                        studios(isMain: true) { nodes { name } } 
-                        staff(perPage: 12, sort: RELEVANCE) { nodes { name { full } image { large } primaryOccupations } }
-                        relations { nodes { id type format status bannerImage coverImage { extraLarge } title { romaji english } } }
-                } 
-              }`;
+                ? `query ($id: Int) { Media (id: $id, type: ANIME) { id title { romaji english native } bannerImage coverImage { extraLarge } description synonyms format source status averageScore trending genres studios(isMain: true) { nodes { name } } staff(perPage: 12, sort: RELEVANCE) { nodes { name { full } image { large } primaryOccupations } } relations { nodes { id type format status bannerImage coverImage { extraLarge } title { romaji english } } } } }`
+                : `query ($search: String) { Media (search: $search, type: ANIME, sort: SEARCH_MATCH) { id title { romaji english native } bannerImage coverImage { extraLarge } description synonyms format source status averageScore trending genres studios(isMain: true) { nodes { name } } staff(perPage: 12, sort: RELEVANCE) { nodes { name { full } image { large } primaryOccupations } } relations { nodes { id type format status bannerImage coverImage { extraLarge } title { romaji english } } } } }`;
 
             try {
                 const variables = hasValidAniId ? { id: parseInt(baseAnime.anilistId) } : { search: baseAnime.title.replace(/\(Dub\)|\(Sub\)/gi, '').trim() };
@@ -104,11 +84,9 @@ window.app.components.info = async () => {
                 });
                 const json = await aniRes.json();
                 aniData = json?.data?.Media || {};
-            } catch (e) {
-                console.log("GraphQL dynamic fallback state handled.");
-            }
+            } catch (e) { console.log("AniList network sync bypassed."); }
 
-            // Fallback allocations
+            // Fallback structural assignments
             const finalTitle = baseAnime.title || aniData.title?.english || aniData.title?.romaji || 'Unknown Title';
             const finalJpTitle = baseAnime.japanese_title || aniData.title?.native || 'N/A';
             const finalDesc = baseAnime.description || aniData.description || 'No description available.';
@@ -128,34 +106,66 @@ window.app.components.info = async () => {
                 banner: finalBanner,
                 episodes: episodesList, 
                 relations: extractedRelations,
+                characters: characterList,
                 aniList: aniData,
                 scheduleCountdown: scheduleData,
                 rawPayload: baseAnime
             };
 
-            window.app.state.activeInfoTab = 'information'; 
+            // UPGRADED DEFAULTS: Episodes tab is now active on initialization immediately
+            window.app.state.activeInfoTab = 'episodes'; 
+            window.app.state.activeMetaTab = 'characters'; // Sub-tab context under information screen
             window.app.state.epSearchValue = '';
             window.app.state.epRangeFilter = '1-100';
-            window.app.state.activeLanguageType = 'sub'; // Explicit sub/dub selection tracker state initialization
+            window.app.state.activeLanguageType = 'sub';
 
-            const profile = window.app.state && window.app.state.activeProfile ? window.app.state.activeProfile : null;
+            // =========================================================================
+            // --- SMART WATCH TRACKER ENGINE / PROGRESSION ROUTER LOGIC ---
+            // =========================================================================
+            const profile = window.app.state?.activeProfile || null;
             let playBtnText = "Play E01";
-            let targetEpisodeId = episodesList.length > 0 ? (episodesList[0].slug || "1") : '1';
-            
-            if (profile && profile.history) {
-                const historyItem = profile.history.find(h => h.animeId === animeId);
-                if (historyItem) {
-                    playBtnText = `Resume E${historyItem.episodeNumber || '?'}`;
-                    targetEpisodeId = historyItem.episodeId || targetEpisodeId;
+            let targetEpisodeSlug = episodesList.length > 0 ? (episodesList[0].slug || "1") : '1';
+            let targetEpNum = 1;
+
+            if (profile && profile.uid) {
+                // Read local progression state map dictionary safely
+                const localHistory = localStorage.getItem(`blazex_progress_${profile.uid}_${animeId}`);
+                if (localHistory) {
+                    try {
+                        const trackObj = JSON.parse(localHistory); 
+                        // Format keys: { lastWatchedEp: 4, lastSlug: "4", finishedEp: true }
+                        if (trackObj && trackObj.lastWatchedEp) {
+                            targetEpNum = parseInt(trackObj.lastWatchedEp);
+                            targetEpisodeSlug = trackObj.lastSlug || String(targetEpNum);
+
+                            if (trackObj.finishedEp === true) {
+                                // User crossed outro duration bounds threshold: increment forward!
+                                const totalAvailableEps = episodesList.length;
+                                if (targetEpNum < totalAvailableEps) {
+                                    targetEpNum += 1;
+                                    const nextEpObj = episodesList.find(e => (e.num || e.episode_no) == targetEpNum);
+                                    targetEpisodeSlug = nextEpObj ? (nextEpObj.slug || nextEpObj.id) : String(targetEpNum);
+                                    playBtnText = `Play E${targetEpNum < 10 ? '0' + targetEpNum : targetEpNum}`;
+                                } else {
+                                    playBtnText = `Replay Last Ep`;
+                                }
+                            } else {
+                                // Session is incomplete: Render standard Resume modifier tag
+                                playBtnText = `Resume E${targetEpNum < 10 ? '0' + targetEpNum : targetEpNum}`;
+                            }
+                        }
+                    } catch(e) { console.log("History index corrupted."); }
                 }
             }
-            window.app.state.currentAnimePage.smartPlayAction = targetEpisodeId;
+
+            window.app.state.currentAnimePage.smartPlayAction = targetEpisodeSlug;
+            window.app.state.currentAnimePage.smartPlayNumber = targetEpNum;
             window.app.state.currentAnimePage.smartPlayText = playBtnText;
 
             renderAnimeInfoShell();
 
         } catch (error) {
-            console.error("Info System Breakdown Handled Securely:", error);
+            console.error("Master Layout Assembly Failed:", error);
             container.innerHTML = `<div class="w-full h-screen flex flex-col items-center justify-center -mt-10"><i class="fas fa-exclamation-triangle text-5xl text-[#F47521] mb-4"></i><h2 class="text-2xl font-black text-white mb-2">Oops! Something went wrong.</h2><p class="text-gray-400 text-sm mb-6">${error.message}</p><button onclick="window.location.reload()" class="bg-white/10 px-6 py-2 rounded font-bold text-sm tracking-wide">Try Again</button></div>`;
         }
     };
@@ -170,7 +180,6 @@ function renderAnimeInfoShell() {
     const raw = data.rawPayload;
 
     const cleanDesc = (data.synopsis || '').replace(/<[^>]*>?/gm, '');
-    
     let genresStr = 'Anime Series';
     if (ani && ani.genres) genresStr = ani.genres.join(' • ');
     else if (raw && raw.genres) genresStr = Array.isArray(raw.genres) ? raw.genres.join(' • ') : raw.genres;
@@ -184,7 +193,6 @@ function renderAnimeInfoShell() {
     const scoreVal = (ani && ani.averageScore) ? `${ani.averageScore}%` : (raw && raw.mal ? `${raw.mal}/10` : null);
     const scoreBadge = scoreVal ? `<span class="flex items-center gap-1"><i class="fas fa-star"></i> ${scoreVal} SCORE</span>` : '';
 
-    // --- CRUNCH RECOMMENDATIONS GENERATION MAP ---
     let recommendationsHtml = '';
     if (raw && raw.recommendations && raw.recommendations.length > 0) {
         raw.recommendations.forEach(rec => {
@@ -227,7 +235,7 @@ function renderAnimeInfoShell() {
                         
                         <div class="flex flex-wrap justify-center md:justify-start gap-3 md:gap-4 mb-8 w-full">
                             ${!isUpcoming ? `
-                            <button onclick="window.app.handlePlayClick('${data.smartPlayAction}', '${data.id}')" class="bg-[#F47521] text-white px-8 py-3.5 rounded-lg shadow-md font-black text-xs md:text-sm uppercase tracking-wider hover:bg-white hover:text-black transition-colors flex items-center gap-2">
+                            <button onclick="window.app.resolveEpisodeStreamAndRoute('${data.smartPlayAction}', ${data.smartPlayNumber}, '${data.id}')" class="bg-[#F47521] text-white px-8 py-3.5 rounded-lg shadow-md font-black text-xs md:text-sm uppercase tracking-wider hover:bg-white hover:text-black transition-colors flex items-center gap-2">
                                 <i class="fas fa-play"></i> ${data.smartPlayText}
                             </button>` : ''}
                             
@@ -246,22 +254,18 @@ function renderAnimeInfoShell() {
 
             <div class="w-full max-w-7xl mx-auto px-4 md:px-12 mt-8 flex flex-col gap-8">
                 
-                <!-- SEASONS PILL SLIDER -->
                 <div id="verified-relations-pill-box" class="w-full hidden">
                     <h3 class="text-white text-xs font-black mb-3 uppercase tracking-widest text-gray-400">Seasons & Alternative Media</h3>
                     <div id="relations-horizontal-slider" class="w-full flex gap-3 overflow-x-auto pb-3 hide-scrollbar snap-x"></div>
                 </div>
 
-                <!-- TAB SWITCH BUTTONS BAR -->
                 <div class="flex items-center justify-center w-full max-w-2xl border-b border-white/10 text-xs md:text-sm font-bold uppercase tracking-widest pt-2">
-                    <button onclick="window.app.switchInfoTab('information')" id="tab-information" class="flex-1 text-center pb-3 transition-colors ${window.app.state.activeInfoTab === 'information' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white'}">Information</button>
                     <button onclick="window.app.switchInfoTab('episodes')" id="tab-episodes" class="flex-1 text-center pb-3 transition-colors ${window.app.state.activeInfoTab === 'episodes' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white'}">Episodes</button>
+                    <button onclick="window.app.switchInfoTab('information')" id="tab-information" class="flex-1 text-center pb-3 transition-colors ${window.app.state.activeInfoTab === 'information' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white'}">Information</button>
                 </div>
                 
-                <!-- SUB-VIEW CONTAINER FOR CHOSEN TAB CONTENT -->
                 <div id="dynamic-tab-content-area" class="py-2"></div>
 
-                <!-- RECOMMENDATIONS SECTION -->
                 ${recommendationsHtml !== '' ? `
                 <div class="w-full border-t border-white/5 pt-8 mt-4">
                     <h3 class="text-white text-sm md:text-base font-black uppercase tracking-widest text-gray-300 mb-4"><i class="fas fa-heart text-[#F47521] mr-1.5"></i> If You Liked This, Watch These</h3>
@@ -281,11 +285,8 @@ function renderAnimeInfoShell() {
 
 window.app.renderInfoInlineTabContent = () => {
     const activeTab = window.app.state.activeInfoTab;
-    if (activeTab === 'information') {
-        window.app.components.informationtab();
-    } else if (activeTab === 'episodes') {
-        window.app.components.episodestab();
-    }
+    if (activeTab === 'information') window.app.components.informationtab();
+    else if (activeTab === 'episodes') window.app.components.episodestab();
 };
 
 window.app.switchInfoTab = (tabName) => {
@@ -300,7 +301,6 @@ async function injectVerifiedAlternativePills() {
     const data = window.app.state.currentAnimePage;
     const slider = document.getElementById('relations-horizontal-slider');
     const containerBox = document.getElementById('verified-relations-pill-box');
-    
     if (!slider || !data.relations || data.relations.length === 0) return;
 
     const baseUrl = 'https://anikoto-api-xi.vercel.app';
@@ -340,36 +340,13 @@ async function injectVerifiedAlternativePills() {
                     </div>
                     <i class="fas fa-chevron-right text-gray-500 group-hover:text-[#F47521] ml-auto relative z-10 transition-colors text-xs"></i>
                 `;
-
                 slider.appendChild(blockDiv);
                 validPillsCount++;
             }
-        } catch (e) {
-            console.log("Alternative mapping failure.");
-        }
+        } catch (e) { console.log("Alternative mapping failure."); }
     }
-
-    if (validPillsCount > 0 && containerBox) {
-        containerBox.classList.remove('hidden');
-    }
+    if (validPillsCount > 0 && containerBox) containerBox.classList.remove('hidden');
 }
-
-window.app.searchAndRouteToAnime = async (titleKeyword) => {
-    try {
-        const baseUrl = 'https://anikoto-api-xi.vercel.app';
-        const response = await fetch(`${baseUrl}/api/search?keyword=${encodeURIComponent(titleKeyword)}`);
-        const json = await response.json();
-        
-        if (json.success && Array.isArray(json.results) && json.results.length > 0) {
-            window.app.loadInfoPageData(json.results[0].id);
-        } else {
-            if (window.app.showCustomAlert) window.app.showCustomAlert("This season is not available on streaming indexes yet.", "error");
-            else alert("This season is not available yet.");
-        }
-    } catch(e) {
-        console.error(e);
-    }
-};
 
 function setupDropdownListener() {
     document.addEventListener('click', (e) => {
@@ -392,20 +369,19 @@ window.app.togglePageDesc = () => {
         btn.innerHTML = `Show Less <i class="fas fa-chevron-up ml-1"></i>`;
     } else {
         descP.className = "text-xs md:text-sm text-gray-300 line-clamp-3 leading-relaxed drop-shadow-md pr-4 transition-all duration-300";
-        btn.innerHTML = `See More <i class="fas fa-chevron-down ml-1"></i></button>`;
+        btn.innerHTML = `See More <i class="fas fa-chevron-down ml-1"></i>`;
     }
 };
 
 window.app.addToLibrary = async (id, title, img) => {
-    const profile = window.app.state && window.app.state.activeProfile ? window.app.state.activeProfile : null;
+    const profile = window.app.state?.activeProfile || null;
     if (!profile || !profile.uid) {
-        if (window.app.components && window.app.components.auth) window.app.components.auth();
+        if (window.app.components.auth) window.app.components.auth();
         else alert("Please log in to save to your Library!");
         return;
     }
     const formattedAnimeEntry = { id, title, img };
     if (profile.watchlist && profile.watchlist.some(item => item.id == formattedAnimeEntry.id)) return alert("Already in Library!");
-    
     if(!profile.watchlist) profile.watchlist = [];
     profile.watchlist.unshift(formattedAnimeEntry);
     
@@ -415,54 +391,11 @@ window.app.addToLibrary = async (id, title, img) => {
         clickedBtn.innerHTML = `<i class="fas fa-check text-green-400"></i> Added`;
         setTimeout(() => clickedBtn.innerHTML = originalBtnHtml, 2000);
     }
-
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const userFirestoreRef = firestore.doc(window.app.db, "users", profile.uid);
         await firestore.updateDoc(userFirestoreRef, { watchlist: firestore.arrayUnion(formattedAnimeEntry) });
     } catch (error) { console.error("Firebase library sync failed:", error); }
-};
-
-window.app.handlePlayClick = async (episodeUrlId, animeId) => {
-    try {
-        const activeLang = window.app.state.activeLanguageType || 'sub';
-        if (window.app.state && window.app.state.activeProfile && window.app.state.activeProfile.uid) {
-            window.location.href = `play.html?id=${encodeURIComponent(episodeUrlId)}&anime=${animeId}&type=${activeLang}`;
-            return;
-        }
-
-        const randomNum = Math.floor(Math.random() * 90000) + 10000;
-        const generatedName = `Guest-${randomNum}`;
-        const generatedPfp = `pfp${Math.floor(Math.random() * 10) + 1}.jpeg`; 
-        const guestUid = 'anon_' + Date.now().toString(36) + Math.random().toString(36).substr(2);
-
-        const newProfile = {
-            uid: guestUid,
-            name: generatedName,
-            email: "Guest Account",
-            pfp: generatedPfp,
-            history: [],
-            watchlist: [],
-            createdAt: new Date().toISOString()
-        };
-
-        window.app.state.activeProfile = newProfile;
-        localStorage.setItem('blazex_user_profile', JSON.stringify(newProfile));
-
-        try {
-            const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-            const userRef = firestore.doc(window.app.db, "users", guestUid);
-            await firestore.setDoc(userRef, newProfile);
-        } catch (dbError) {
-            console.log("DB save failed: ", dbError);
-        }
-
-        window.location.href = `play.html?id=${encodeURIComponent(episodeUrlId)}&anime=${animeId}&type=${activeLang}`;
-
-    } catch (err) {
-        console.error("Play redirect error:", err);
-        window.location.href = `play.html?id=${encodeURIComponent(episodeUrlId)}&anime=${animeId}&type=${window.app.state.activeLanguageType || 'sub'}`;
-    }
 };
 
 
@@ -501,53 +434,74 @@ window.app.components.informationtab = () => {
     if (raw?.animeInfo?.Synonyms) synonymsList.push(raw.animeInfo.Synonyms);
     const uniqueSynonyms = [...new Set(synonymsList)].filter(Boolean);
 
-    const staffHtml = ani?.staff?.nodes?.map(s => `
-        <div class="bg-[#111] p-3 rounded-lg border border-white/5 shadow-inner flex items-center gap-3 md:gap-4 hover:border-white/20 transition-colors">
-            <img src="${s.image?.large || 'https://via.placeholder.com/150/222/fff?text=?'}" class="w-10 h-10 md:w-12 md:h-12 rounded-full object-cover border border-white/10 shadow-md">
-            <div class="flex-1 min-w-0">
-                <div class="font-bold text-white text-xs md:text-sm truncate">${s.name.full}</div>
-                <div class="text-[10px] md:text-xs text-[#F47521] truncate mt-0.5">${s.primaryOccupations.join(', ')}</div>
-            </div>
-        </div>
-    `).join('') || '<div class="text-gray-500 text-xs">No configuration entries recorded for key staff.</div>';
+    // --- MODULAR CAST SUB-TAB GENERATION LAYOUT BLOCKS ---
+    const activeMeta = window.app.state.activeMetaTab || 'characters';
+    
+    // Characters: maps 2 items side-by-side, 1 below the other on mobile screens via grid structure
+    let characterCardsHtml = '';
+    if (data.characters && data.characters.length > 0) {
+        data.characters.slice(0, 16).forEach(c => {
+            characterCardsHtml += `
+                <div class="bg-[#111] p-2.5 rounded-lg border border-white/5 shadow-inner flex items-center gap-3 hover:border-white/20 transition-colors w-full">
+                    <img src="${c.image || 'https://via.placeholder.com/150/222/fff?text=?'}" class="w-11 h-11 rounded-md object-cover border border-white/10 shadow-md">
+                    <div class="flex-1 min-w-0">
+                        <div class="font-black text-white text-xs truncate">${c.name || 'Unknown character'}</div>
+                        <div class="text-[10px] text-gray-400 truncate mt-0.5 capitalize">${c.role || 'Main'} Character</div>
+                    </div>
+                </div>
+            `;
+        });
+    } else { characterCardsHtml = `<div class="col-span-full text-gray-500 text-xs py-2"><i class="fas fa-info-circle mr-1"></i> Character profiles mapping unindexed.</div>`; }
+
+    // Staff: fallback layout array rendering
+    let staffCardsHtml = '';
+    if (ani?.staff?.nodes && ani.staff.nodes.length > 0) {
+        ani.staff.nodes.forEach(s => {
+            staffCardsHtml += `
+                <div class="bg-[#111] p-2.5 rounded-lg border border-white/5 shadow-inner flex items-center gap-3 hover:border-white/20 transition-colors w-full">
+                    <img src="${s.image?.large || 'https://via.placeholder.com/150/222/fff?text=?'}" class="w-11 h-11 rounded-full object-cover border border-white/10 shadow-md">
+                    <div class="flex-1 min-w-0">
+                        <div class="font-black text-white text-xs truncate">${s.name?.full}</div>
+                        <div class="text-[10px] text-[#F47521] truncate mt-0.5">${s.primaryOccupations?.[0] || 'Production'}</div>
+                    </div>
+                </div>
+            `;
+        });
+    } else { staffCardsHtml = `<div class="col-span-full text-gray-500 text-xs py-2">Production staff details unavailable.</div>`; }
 
     contentArea.innerHTML = `
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in text-xs">
-            <div class="lg:col-span-1 flex flex-col gap-5 bg-[#0a0a0a] p-6 rounded-xl border border-white/5 shadow-lg h-fit text-xs">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in text-xs">
+            <div class="lg:col-span-1 flex flex-col gap-5 bg-[#0a0a0a] p-5 rounded-xl border border-white/5 shadow-lg h-fit text-xs">
                 <h4 class="text-white font-black uppercase tracking-widest text-[#F47521] border-b border-white/5 pb-2">Full Specifications</h4>
                 <div class="flex flex-col gap-4">
                     <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Format Type</span><span class="text-white capitalize font-medium">${formatStr}</span></div>
                     <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Current Status</span><span class="text-white capitalize font-medium">${statusStr}</span></div>
-                    <div>
-                        <span class="text-gray-500 font-bold uppercase tracking-wider block mb-2">Production Studios</span>
-                        <div class="flex flex-wrap gap-1.5 w-full">${studioButtonsHtml}</div>
-                    </div>
-                    <div>
-                        <span class="text-gray-500 font-bold uppercase tracking-wider block mb-2">Industrial Producers</span>
-                        <div class="flex flex-wrap gap-1.5 w-full">${producerButtonsHtml}</div>
-                    </div>
-                    <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Total Episodes Count</span><span class="text-white font-medium">${totalEpsCount} Units</span></div>
-                    <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Runtime Duration</span><span class="text-white font-medium">${trackDuration}</span></div>
-                    <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Premiered Season</span><span class="text-white uppercase font-medium">${premSeason}</span></div>
-                    <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Aired Window</span><span class="text-white font-medium">${airedTimeline}</span></div>
-                    <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Source Material</span><span class="text-white capitalize font-medium">${ani?.source?.toLowerCase().replace('_', ' ') || 'N/A'}</span></div>
+                    <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-1.5">Production Studios</span><div class="flex flex-wrap gap-1.5 w-full">${studioButtonsHtml}</div></div>
+                    <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-1.5">Industrial Producers</span><div class="flex flex-wrap gap-1.5 w-full">${producerButtonsHtml}</div></div>
+                    <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Total Units</span><span class="text-white font-medium">${totalEpsCount} Eps</span></div>
+                    <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Runtime Length</span><span class="text-white font-medium">${trackDuration}</span></div>
+                    <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Season Window</span><span class="text-white uppercase font-medium">${premSeason} (${airedTimeline})</span></div>
                 </div>
-
-                ${uniqueSynonyms.length > 0 ? `
-                <div class="pt-4 border-t border-white/5 mt-2">
-                    <h5 class="text-gray-500 font-bold uppercase tracking-wider mb-2">Alternative Titles</h5>
-                    <div class="text-gray-400 leading-relaxed space-y-1.5 text-[11px]">
-                        ${uniqueSynonyms.map(syn => `<p class="truncate"><i class="fas fa-marker text-[#F47521]/40 text-[9px] mr-1.5"></i>${syn}</p>`).join('')}
-                    </div>
-                </div>` : ''}
+                ${uniqueSynonyms.length > 0 ? `<div class="pt-4 border-t border-white/5 mt-1"><h5 class="text-gray-500 font-bold uppercase tracking-wider mb-2">Alternative Titles</h5><div class="text-gray-400 leading-relaxed space-y-1 text-[11px] truncate">${uniqueSynonyms.map(syn => `<p>• ${syn}</p>`).join('')}</div></div>` : ''}
             </div>
 
-            <div class="lg:col-span-2 flex flex-col gap-6">
-                <h3 class="text-white text-base md:text-lg font-black tracking-tight border-b-2 border-[#F47521] inline-block pb-1">Production & Voice Cast</h3>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">${staffHtml}</div>
+            <div class="lg:col-span-2 flex flex-col gap-4">
+                <div class="flex items-center gap-4 border-b border-white/5 text-[11px] font-black uppercase tracking-wider pb-1">
+                    <button onclick="window.app.switchMetaContentTab('characters')" id="subtab-characters" class="pb-2 transition-colors ${activeMeta === 'characters' ? 'text-white border-b border-[#F47521]' : 'text-gray-500 hover:text-white'}">Characters</button>
+                    <button onclick="window.app.switchMetaContentTab('staff')" id="subtab-staff" class="pb-2 transition-colors ${activeMeta === 'staff' ? 'text-white border-b border-[#F47521]' : 'text-gray-500 hover:text-white'}">Staff Core</button>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-2.5 w-full">
+                    ${activeMeta === 'characters' ? characterCardsHtml : staffCardsHtml}
+                </div>
             </div>
         </div>
     `;
+};
+
+window.app.switchMetaContentTab = (metaTarget) => {
+    window.app.state.activeMetaTab = metaTarget;
+    window.app.components.informationtab();
 };
 
 
@@ -565,10 +519,19 @@ window.app.components.episodestab = () => {
     const isUpcoming = (raw?.status && raw.status.toString().toLowerCase().includes('upcoming')) || 
                        (ani?.status && ani.status.toString().toLowerCase().includes('not_yet_released'));
 
+    // Upcoming board mapping widget anchor
+    let scheduleContainerHtml = '';
+    if (data.scheduleCountdown) {
+        scheduleContainerHtml = `
+            <div class="w-full mt-6 bg-[#0a0a0a] border border-white/5 rounded-xl p-4 text-center shadow-lg animate-fade-in max-w-xl mx-auto">
+                <span class="text-[#F47521] text-[10px] font-black uppercase tracking-widest block mb-1"><i class="fas fa-broadcast-tower mr-1"></i> Live Broadcast Schedule</span>
+                <p class="text-white text-xs font-bold font-mono tracking-wide bg-white/5 border border-white/10 px-4 py-2 rounded inline-block mt-1">${data.scheduleCountdown}</p>
+            </div>
+        `;
+    }
+
     if (isUpcoming) {
         const expectedDate = raw?.aired || raw?.premiered || "TBA 2026";
-        const liveCountdown = data.scheduleCountdown ? `<p class="text-sm font-black text-[#F47521] bg-[#F47521]/10 px-4 py-2 border border-[#F47521]/20 rounded-md tracking-wider max-w-sm mx-auto uppercase"><i class="fas fa-satellite-dish mr-1.5"></i> Next Ep Live: ${data.scheduleCountdown}</p>` : '';
-
         contentArea.innerHTML = `
             <div class="w-full text-center py-16 bg-[#0a0a0a] rounded-xl border border-white/5 p-6 flex flex-col gap-4 max-w-2xl mx-auto shadow-xl animate-fade-in">
                 <i class="fas fa-hourglass-start text-4xl text-[#F47521] animate-bounce"></i>
@@ -578,7 +541,7 @@ window.app.components.episodestab = () => {
                     <span class="text-gray-600 uppercase font-black text-[10px] tracking-widest block mb-1">Expected Timeline</span>
                     <p class="text-white text-sm font-bold capitalize">${expectedDate}</p>
                 </div>
-                ${liveCountdown}
+                ${scheduleContainerHtml}
             </div>
         `;
         return;
@@ -609,24 +572,16 @@ window.app.components.episodestab = () => {
     const currentLang = window.app.state.activeLanguageType || 'sub';
 
     contentArea.innerHTML = `
-        <div class="animate-fade-in flex flex-col gap-6">
+        <div class="animate-fade-in flex flex-col gap-5">
             
-            <!-- CONTROLS MANAGEMENT CONSOLE PANEL BOARD -->
-            <div class="flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between bg-[#0a0a0a] p-4 rounded-xl border border-white/5 shadow-md w-full">
-                
-                <!-- 1. SUB / DUB GLOWING SELECTION PILLS (ADDED) -->
-                <div class="flex bg-[#111] p-1 border border-white/10 rounded-lg max-w-xs md:w-48 text-xs font-black select-none tracking-wider uppercase h-12">
-                    <button onclick="window.app.toggleActiveAudioLanguage('sub')" id="lang-btn-sub" class="flex-1 rounded-md transition-all flex items-center justify-center gap-1.5 ${currentLang === 'sub' ? 'bg-[#F47521] text-black shadow-md font-black' : 'text-gray-400 hover:text-white'}">
-                        <i class="fas fa-closed-captioning"></i> Sub
-                    </button>
-                    <button onclick="window.app.toggleActiveAudioLanguage('dub')" id="lang-btn-dub" class="flex-1 rounded-md transition-all flex items-center justify-center gap-1.5 ${currentLang === 'dub' ? 'bg-[#F47521] text-black shadow-md font-black' : 'text-gray-400 hover:text-white'}">
-                        <i class="fas fa-microphone"></i> Dub
-                    </button>
+            <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between bg-[#0a0a0a] p-3 rounded-xl border border-white/5 shadow-md w-full">
+                <div class="flex bg-[#111] p-1 border border-white/10 rounded-lg max-w-xs md:w-44 text-[11px] font-black select-none tracking-wider uppercase h-10 shrink-0">
+                    <button onclick="window.app.toggleActiveAudioLanguage('sub')" id="lang-btn-sub" class="flex-1 rounded-md transition-all flex items-center justify-center gap-1 ${currentLang === 'sub' ? 'bg-[#F47521] text-black shadow-md font-black' : 'text-gray-400 hover:text-white'}">Sub</button>
+                    <button onclick="window.app.toggleActiveAudioLanguage('dub')" id="lang-btn-dub" class="flex-1 rounded-md transition-all flex items-center justify-center gap-1 ${currentLang === 'dub' ? 'bg-[#F47521] text-black shadow-md font-black' : 'text-gray-400 hover:text-white'}">Dub</button>
                 </div>
 
-                <!-- 2. EPISODES SEGMENT INDEX DROPDOWN CHUNKS -->
-                <div class="relative w-full sm:w-64" id="custom-dropdown-container">
-                    <button id="custom-dropdown-btn" onclick="window.app.toggleDropdown()" class="flex items-center justify-between w-full bg-[#111] border border-white/10 text-white text-xs md:text-sm font-bold h-12 px-4 rounded-lg outline-none hover:border-white/30 focus:border-[#F47521] transition-all">
+                <div class="relative w-full sm:w-56 shrink-0" id="custom-dropdown-container">
+                    <button id="custom-dropdown-btn" onclick="window.app.toggleDropdown()" class="flex items-center justify-between w-full bg-[#111] border border-white/10 text-white text-xs font-bold h-10 px-4 rounded-lg outline-none hover:border-white/30 focus:border-[#F47521] transition-all">
                         <span id="custom-dropdown-selected">${currentRangeLabel}</span>
                         <i id="custom-dropdown-icon" class="fas fa-chevron-down text-gray-400 text-xs transition-transform duration-300"></i>
                     </button>
@@ -635,45 +590,27 @@ window.app.components.episodestab = () => {
                     </div>
                 </div>
 
-                <!-- 3. QUANTITATIVE NUMBER MATCH SEARCH INPUT ENGINE BOX -->
                 <div class="relative flex-1 max-w-md w-full">
-                    <input type="number" id="episode-search-box" value="${window.app.state.epSearchValue || ''}" onkeyup="window.app.runEpisodeSearch(this.value)" placeholder="Search episode #..." class="w-full bg-[#111] border border-white/10 text-white text-xs md:text-sm h-12 pl-11 pr-4 rounded-lg outline-none focus:border-[#F47521] placeholder-gray-600 transition-colors">
+                    <input type="number" id="episode-search-box" value="${window.app.state.epSearchValue || ''}" onkeyup="window.app.runEpisodeSearch(this.value)" placeholder="Search episode #..." class="w-full bg-[#111] border border-white/10 text-white text-xs h-10 pl-10 pr-4 rounded-lg outline-none focus:border-[#F47521] placeholder-gray-600 transition-colors">
                     <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-xs"></i>
                 </div>
             </div>
 
-            <!-- GRID MOUNTING NODE -->
-            <div id="numeric-episodes-grid" class="grid grid-cols-4 sm:grid-cols-8 md:grid-cols-12 lg:grid-cols-16 gap-2.5"></div>
+            <div id="numeric-episodes-grid" class="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-14 lg:grid-cols-18 gap-2 w-full"></div>
+
+            ${scheduleContainerHtml}
         </div>
     `;
     
     window.app.renderNumericEpisodeGrid();
 };
 
-// Toggle handler that dynamically switches language layout states
 window.app.toggleActiveAudioLanguage = (langMode) => {
     if (window.app.state.activeLanguageType === langMode) return;
     window.app.state.activeLanguageType = langMode;
-    
-    // Smooth visual button shift reflection
-    document.getElementById('lang-btn-sub').className = `flex-1 rounded-md transition-all flex items-center justify-center gap-1.5 ${langMode === 'sub' ? 'bg-[#F47521] text-black shadow-md font-black' : 'text-gray-400 hover:text-white'}`;
-    document.getElementById('lang-btn-dub').className = `flex-1 rounded-md transition-all flex items-center justify-center gap-1.5 ${langMode === 'dub' ? 'bg-[#F47521] text-black shadow-md font-black' : 'text-gray-400 hover:text-white'}`;
-    
-    // Instantly re-evaluate audio stream grids
+    document.getElementById('lang-btn-sub').className = `flex-1 rounded-md transition-all flex items-center justify-center gap-1 ${langMode === 'sub' ? 'bg-[#F47521] text-black shadow-md font-black' : 'text-gray-400 hover:text-white'}`;
+    document.getElementById('lang-btn-dub').className = `flex-1 rounded-md transition-all flex items-center justify-center gap-1 ${langMode === 'dub' ? 'bg-[#F47521] text-black shadow-md font-black' : 'text-gray-400 hover:text-white'}`;
     window.app.renderNumericEpisodeGrid();
-};
-
-window.app.toggleDropdown = () => {
-    const menu = document.getElementById('custom-dropdown-menu');
-    const icon = document.getElementById('custom-dropdown-icon');
-    if (!menu) return;
-    if(menu.classList.contains('hidden')) {
-        menu.classList.remove('hidden');
-        icon.style.transform = 'rotate(180deg)';
-    } else {
-        menu.classList.add('hidden');
-        icon.style.transform = 'rotate(0deg)';
-    }
 };
 
 window.app.selectDropdownOption = (label, val) => {
@@ -717,8 +654,16 @@ window.app.renderNumericEpisodeGrid = () => {
     }
 
     if (episodesToRender.length === 0) {
-        gridDiv.innerHTML = `<div class="col-span-full text-center py-10 text-gray-500 text-sm">No episodes found matching this query.</div>`;
+        gridDiv.innerHTML = `<div class="col-span-full text-center py-10 text-gray-500 text-xs">No matching audio sources found.</div>`;
         return;
+    }
+
+    // Recover progress records to calculate highlighted status elements
+    const profile = window.app.state?.activeProfile || null;
+    let localHistoryMap = null;
+    if (profile && profile.uid) {
+        const stored = localStorage.getItem(`blazex_progress_${profile.uid}_${data.id}`);
+        if (stored) { try { localHistoryMap = JSON.parse(stored); } catch(e){} }
     }
 
     let gridHtml = '';
@@ -726,34 +671,44 @@ window.app.renderNumericEpisodeGrid = () => {
         const epNumber = ep.num || ep.episode_no;
         const targetEpisodeSlugId = ep.slug || ep.id || String(epNumber); 
         
-        // Accurate filler parsing using your response object's native `isFiller` key!
         const isFillerEpisode = ep.isFiller === true;
-        const fillerIconDot = isFillerEpisode ? `<div class="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full"></div>` : '';
-
-        // Dynamic availability flag resolution checks
+        const fillerIconDot = isFillerEpisode ? `<div class="absolute top-0.5 right-0.5 w-1 h-1 bg-red-500 rounded-full"></div>` : '';
         const isSupportedByLang = (currentLangMode === 'sub' && ep.isSub !== false) || 
                                   (currentLangMode === 'dub' && ep.isDub === true);
+
+        // Calculate if this specific step index has completed tracking markers logged
+        let isAlreadyWatched = false;
+        if (localHistoryMap && localHistoryMap.watchedHistoryList) {
+            isAlreadyWatched = localHistoryMap.watchedHistoryList.includes(parseInt(epNumber));
+        } else if (localHistoryMap && localHistoryMap.lastWatchedEp) {
+            isAlreadyWatched = parseInt(epNumber) <= parseInt(localHistoryMap.lastWatchedEp);
+        }
 
         let buttonStyleClass = '';
         let interactiveActionAttr = '';
         let conditionalLabelBadge = '';
 
         if (isSupportedByLang) {
-            // Audio track exists: Fully active glowing slate template style block
             interactiveActionAttr = `onclick="window.app.resolveEpisodeStreamAndRoute('${targetEpisodeSlugId}', ${epNumber}, '${data.id}')"`;
-            buttonStyleClass = isFillerEpisode 
-                ? 'border-red-500/20 text-gray-300 hover:bg-red-500 hover:text-white hover:border-red-500 cursor-pointer' 
-                : 'border-white/5 text-gray-300 hover:bg-[#F47521] hover:text-black hover:border-[#F47521] cursor-pointer';
+            
+            // COMPACT STYLING ACCENTS APPLIED: font size scaled to text-base font-black for visibility
+            if (isAlreadyWatched) {
+                // Highlighted Watched Outline Frame Accents
+                buttonStyleClass = 'border-[#F47521]/40 text-[#F47521] bg-[#F47521]/5 cursor-pointer hover:bg-[#F47521] hover:text-black font-black text-base shadow-sm';
+            } else {
+                buttonStyleClass = isFillerEpisode 
+                    ? 'border-red-500/20 text-gray-300 hover:bg-red-500 hover:text-white hover:border-red-500 cursor-pointer font-black text-base shadow-sm' 
+                    : 'border-white/5 text-gray-300 hover:bg-[#F47521] hover:text-black hover:border-[#F47521] cursor-pointer font-black text-base shadow-sm';
+            }
         } else {
-            // Audio track doesn't exist: Gray out button, deactivate clicks, show badge
             interactiveActionAttr = 'disabled';
-            buttonStyleClass = 'opacity-25 border-dashed border-white/5 text-gray-600 cursor-not-allowed bg-black/40';
-            conditionalLabelBadge = `<span class="absolute bottom-1 text-[8px] font-black text-gray-500 tracking-tighter uppercase">Sub Only</span>`;
+            buttonStyleClass = 'opacity-20 border-dashed border-white/5 text-gray-600 cursor-not-allowed bg-black/40 font-black text-base';
+            conditionalLabelBadge = `<span class="absolute bottom-0.5 text-[7px] font-black text-gray-600 tracking-tighter uppercase">Sub Only</span>`;
         }
 
         gridHtml += `
-            <button ${interactiveActionAttr} class="relative w-full aspect-square flex flex-col items-center justify-center rounded border transition-all duration-200 group bg-white/5 ${buttonStyleClass}">
-                <span class="font-bold text-xs md:text-sm ${!isSupportedByLang ? 'mt--2' : ''}">${epNumber}</span>
+            <button ${interactiveActionAttr} class="relative w-full aspect-square flex flex-col items-center justify-center rounded border transition-all duration-150 p-1 group bg-white/5 ${buttonStyleClass}">
+                <span class="${!isSupportedByLang ? '-translate-y-1' : ''}">${epNumber}</span>
                 ${fillerIconDot}
                 ${conditionalLabelBadge}
             </button>
@@ -768,7 +723,6 @@ window.app.resolveEpisodeStreamAndRoute = async (episodeSlug, episodeNumber, ani
         const targetServer = 'hd-1';
         const targetType = window.app.state.activeLanguageType || 'sub';
 
-        // Passes the audio tracker criteria parameters securely right down your stream pipeline
         const streamUrl = `${baseUrl}/api/stream?id=${encodeURIComponent(episodeSlug)}&server=${targetServer}&type=${targetType}`;
         const response = await fetch(streamUrl);
         const json = await response.json();
@@ -777,41 +731,39 @@ window.app.resolveEpisodeStreamAndRoute = async (episodeSlug, episodeNumber, ani
         if (json && json.success && json.results?.streamingLink) {
             verifiedStreamData = json.results;
         } else {
-            console.log("Primary stream link missing. Fetching secondary fallback assets...");
             const fallbackUrl = `${baseUrl}/api/stream/fallback?id=${encodeURIComponent(episodeSlug)}&server=${targetServer}&type=${targetType}`;
             const fbResponse = await fetch(fallbackUrl);
             const fbJson = await fbResponse.json();
-            if (fbJson && fbJson.success && fbJson.results?.streamingLink) {
-                verifiedStreamData = fbJson.results;
-            }
+            if (fbJson && fbJson.success && fbJson.results?.streamingLink) verifiedStreamData = fbJson.results;
         }
 
         if (!verifiedStreamData) {
-            alert("Sources are caching on host mirrors. Try another server or check back in a bit!");
+            alert("Video sources are caching on server mirrors. Try again in a minute!");
             return;
         }
 
         window.app.state.resolvedStreamManifest = verifiedStreamData;
 
-        if (!window.app.state.activeProfile || !window.app.state.activeProfile.uid) {
-            const randomNum = Math.floor(Math.random() * 90000) + 10000;
-            const guestProfile = {
-                uid: 'anon_' + Date.now().toString(36) + Math.random().toString(36).substr(2),
-                name: `Guest-${randomNum}`,
-                email: "Guest Account",
-                pfp: `pfp${Math.floor(Math.random() * 10) + 1}.jpeg`,
-                history: [],
-                watchlist: [],
-                createdAt: new Date().toISOString()
-            };
-            window.app.state.activeProfile = guestProfile;
-            localStorage.setItem('blazex_user_profile', JSON.stringify(guestProfile));
+        // Sync local progression tokens right before launching the player context view loop
+        const profile = window.app.state?.activeProfile || null;
+        if (profile && profile.uid) {
+            let mockProgressHistory = { lastWatchedEp: episodeNumber, lastSlug: episodeSlug, finishedEp: false, watchedHistoryList: [episodeNumber] };
+            const stored = localStorage.getItem(`blazex_progress_${profile.uid}_${animeId}`);
+            if (stored) {
+                try {
+                    let parsed = JSON.parse(stored);
+                    parsed.lastWatchedEp = episodeNumber;
+                    parsed.lastSlug = episodeSlug;
+                    if(!parsed.watchedHistoryList) parsed.watchedHistoryList = [];
+                    if(!parsed.watchedHistoryList.includes(episodeNumber)) parsed.watchedHistoryList.push(episodeNumber);
+                    mockProgressHistory = parsed;
+                } catch(e){}
+            }
+            localStorage.setItem(`blazex_progress_${profile.uid}_${animeId}`, JSON.stringify(mockProgressHistory));
         }
 
         window.location.href = `play.html?id=${encodeURIComponent(episodeSlug)}&anime=${animeId}&ep=${episodeNumber}&type=${targetType}`;
-
     } catch (error) {
-        console.error("Stream routing error caught:", error);
         window.location.href = `play.html?id=${encodeURIComponent(episodeSlug)}&anime=${animeId}&ep=${episodeNumber}&type=${window.app.state.activeLanguageType || 'sub'}`;
     }
 };
