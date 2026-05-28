@@ -45,18 +45,14 @@ window.app.components.info = async () => {
             
             const baseAnime = infoJson.data;
 
-            // 2. Fetch corresponding episode lists safely using your API array schema rules
+            // 2. Fetch corresponding episode lists matching /api/episodes/{param} strictly
             let episodesList = [];
             try {
                 const epsResponse = await fetch(`${baseUrl}/api/episodes/${animeId}`);
                 const epsJson = await epsResponse.json();
                 
-                if (epsJson && epsJson.success && Array.isArray(epsJson.results)) {
-                    const payloadContainer = epsJson.results[0];
-                    if (payloadContainer && Array.isArray(payloadContainer.episodes)) {
-                        episodesList = payloadContainer.episodes;
-                    }
-                } else if (epsJson && epsJson.success && epsJson.results?.episodes) {
+                // Maps your exact object schema results -> results.episodes
+                if (epsJson && epsJson.success && epsJson.results && Array.isArray(epsJson.results.episodes)) {
                     episodesList = epsJson.results.episodes;
                 }
             } catch (e) {
@@ -128,7 +124,7 @@ window.app.components.info = async () => {
                 synopsis: finalDesc,
                 poster: aniData.coverImage?.extraLarge || baseAnime.poster || 'https://via.placeholder.com/800x1200/111/fff?text=No+Poster',
                 banner: finalBanner,
-                episodes: episodesList,
+                episodes: episodesList, // Now guarantees a clean object array map natively
                 relations: extractedRelations,
                 aniList: aniData,
                 scheduleCountdown: scheduleData,
@@ -247,18 +243,22 @@ function renderAnimeInfoShell() {
 
             <div class="w-full max-w-7xl mx-auto px-4 md:px-12 mt-8 flex flex-col gap-8">
                 
+                <!-- SEASONS PILL SLIDER -->
                 <div id="verified-relations-pill-box" class="w-full hidden">
                     <h3 class="text-white text-xs font-black mb-3 uppercase tracking-widest text-gray-400">Seasons & Alternative Media</h3>
                     <div id="relations-horizontal-slider" class="w-full flex gap-3 overflow-x-auto pb-3 hide-scrollbar snap-x"></div>
                 </div>
 
+                <!-- TAB SWITCH BUTTONS BAR -->
                 <div class="flex items-center justify-center w-full max-w-2xl border-b border-white/10 text-xs md:text-sm font-bold uppercase tracking-widest pt-2">
                     <button onclick="window.app.switchInfoTab('information')" id="tab-information" class="flex-1 text-center pb-3 transition-colors ${window.app.state.activeInfoTab === 'information' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white'}">Information</button>
                     <button onclick="window.app.switchInfoTab('episodes')" id="tab-episodes" class="flex-1 text-center pb-3 transition-colors ${window.app.state.activeInfoTab === 'episodes' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white'}">Episodes</button>
                 </div>
                 
+                <!-- SUB-VIEW CONTAINER FOR CHOSEN TAB CONTENT -->
                 <div id="dynamic-tab-content-area" class="py-2"></div>
 
+                <!-- RECOMMENDATIONS SECTION -->
                 ${recommendationsHtml !== '' ? `
                 <div class="w-full border-t border-white/5 pt-8 mt-4">
                     <h3 class="text-white text-sm md:text-base font-black uppercase tracking-widest text-gray-300 mb-4"><i class="fas fa-heart text-[#F47521] mr-1.5"></i> If You Liked This, Watch These</h3>
@@ -276,7 +276,6 @@ function renderAnimeInfoShell() {
     setupDropdownListener();
 }
 
-// INLINE ROUTER: Calls embedded function code directly without demanding separate .js asset dependencies
 window.app.renderInfoInlineTabContent = () => {
     const activeTab = window.app.state.activeInfoTab;
     if (activeTab === 'information') {
@@ -581,19 +580,8 @@ window.app.components.episodestab = () => {
         return;
     }
 
-    let finalEpisodesArray = [];
-    if (data && data.episodes) {
-        if (Array.isArray(data.episodes)) {
-            finalEpisodesArray = data.episodes;
-        } else if (data.episodes.episodes && Array.isArray(data.episodes.episodes)) {
-            finalEpisodesArray = data.episodes.episodes;
-        } else if (Array.isArray(data.episodes.results)) {
-            finalEpisodesArray = data.episodes.results;
-        } else if (data.episodes.results?.episodes && Array.isArray(data.episodes.results.episodes)) {
-            finalEpisodesArray = data.episodes.results.episodes;
-        }
-    }
-
+    // Direct resolution on your loaded episodes collection array structure
+    let finalEpisodesArray = data.episodes || [];
     window.app.state.currentEpisodesListProcessed = finalEpisodesArray;
 
     const totalEps = finalEpisodesArray.length;
