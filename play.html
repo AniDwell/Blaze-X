@@ -20,50 +20,61 @@
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* Custom Blaze-X Spinner Loader */
+        /* White & Orange TikTok Style Loader */
         .tk-loader {
-            position: relative;
             width: 40px;
             height: 40px;
-            animation: rotate 2s linear infinite;
+            position: relative;
         }
-        .tk-dot {
-            width: 60%;
-            height: 60%;
-            display: inline-block;
+        .tk-loader::before, .tk-loader::after {
+            content: '';
             position: absolute;
-            top: 0;
-            background-color: #F47521;
-            border-radius: 100%;
-            animation: bounce 2s ease-in-out infinite;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            animation: tk-pulse 1s infinite ease-in-out;
         }
-        .tk-dot-2 {
-            top: auto;
-            bottom: 0;
-            animation-delay: -1s;
+        .tk-loader::before {
+            background-color: #F47521; /* Orange Dot */
+            animation-name: tk-pulse-orange;
         }
-        @keyframes rotate { 100% { transform: rotate(360deg); } }
-        @keyframes bounce { 
-            0%, 100% { transform: scale(0); } 
-            50% { transform: scale(1); } 
+        .tk-loader::after {
+            background-color: #ffffff; /* White Dot */
+            animation-name: tk-pulse-white;
+        }
+
+        /* Intersecting Orbit Keyframes */
+        @keyframes tk-pulse-orange {
+            0%   { transform: translate(-100%, -50%) scale(1); z-index: 1; }
+            25%  { transform: translate(-50%, -50%) scale(1.3); z-index: 2; }
+            50%  { transform: translate(0%, -50%) scale(1); z-index: 2; }
+            75%  { transform: translate(-50%, -50%) scale(0.7); z-index: 1; }
+            100% { transform: translate(-100%, -50%) scale(1); z-index: 1; }
+        }
+        @keyframes tk-pulse-white {
+            0%   { transform: translate(0%, -50%) scale(1); z-index: 2; }
+            25%  { transform: translate(-50%, -50%) scale(0.7); z-index: 1; }
+            50%  { transform: translate(-100%, -50%) scale(1); z-index: 1; }
+            75%  { transform: translate(-50%, -50%) scale(1.3); z-index: 2; }
+            100% { transform: translate(0%, -50%) scale(1); z-index: 2; }
         }
     </style>
 </head>
 <body class="bg-[#050505] text-white overflow-x-hidden min-h-screen flex flex-col">
 
     <div id="global-loader" class="fixed inset-0 z-[999] bg-[#050505] flex items-center justify-center transition-opacity duration-500">
-        <div class="tk-loader scale-150">
-            <div class="tk-dot tk-dot-1"></div>
-            <div class="tk-dot tk-dot-2"></div>
-        </div>
+        <div class="tk-loader scale-150"></div>
     </div>
 
     <div id="header-container"></div>
 
     <main id="player-workspace" class="flex-1 w-full max-w-7xl mx-auto px-4 md:px-12 pt-24 pb-24 md:pb-12 flex flex-col gap-6 opacity-0 transition-opacity duration-700" style="opacity: 1;">
         
-        <div id="video-container" class="w-full aspect-video md:aspect-[21/9] bg-[#0a0a0a] rounded-xl border border-white/10 shadow-2xl flex flex-col items-center justify-center animate-pulse relative overflow-hidden">
-            <i class="fas fa-play-circle text-5xl md:text-7xl text-[#F47521]/40 mb-4"></i>
+        <div id="video-container" class="w-full aspect-video md:aspect-[21/9] bg-[#0a0a0a] rounded-xl border border-white/10 shadow-2xl flex flex-col items-center justify-center relative overflow-hidden">
+            <div class="tk-loader scale-125 mb-4"></div>
             <p class="text-gray-500 font-black uppercase tracking-widest text-[10px] md:text-xs">Initializing Player Engine...</p>
         </div>
 
@@ -99,11 +110,19 @@
     <script src="bottomnav.js"></script>
     <script src="auth.js"></script>
 
+    <script src="play.js"></script> 
+    <script src="player.js"></script> 
+    
     <script>
-        // Mount external layout components safely
+        // Mount external layout components safely once DOM is ready
         document.addEventListener("DOMContentLoaded", () => {
             if (window.app.components.header) window.app.components.header();
             if (window.app.components.bottomnav) window.app.components.bottomnav();
+            
+            // Failsafe execution: Ensure play engine boots up if it didn't auto-invoke
+            if (window.app.components.play && document.getElementById('play-content-wrapper') === null) {
+                window.app.components.play();
+            }
         });
 
         // Remove loading screen elegantly after initialization
@@ -114,7 +133,7 @@
                     loader.classList.add('opacity-0');
                     setTimeout(() => loader.remove(), 500); // remove from DOM after fade out
                 }
-            }, 400); // Slight delay to ensure a smooth transition
+            }, 600); // Slight delay to ensure a smooth visual transition
         });
     </script>
 
