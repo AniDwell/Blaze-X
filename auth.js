@@ -50,7 +50,6 @@ window.app.showCustomAlert = (message, type = 'error', actionText = null, action
     }
 };
 
-
 // --- AUTHENTICATION MODAL ENGINE ---
 window.app.components.auth = () => {
     if (window.app.state && window.app.state.activeProfile && window.app.state.activeProfile.uid && !window.app.state.activeProfile.uid.startsWith('anon_')) {
@@ -61,6 +60,7 @@ window.app.components.auth = () => {
     const existingModal = document.getElementById('auth-modal');
     if (existingModal) existingModal.remove();
 
+    // Default Avatar Base Allocations
     window.app.state.authSelectedPfp = `pfp${Math.floor(Math.random() * 10) + 1}.jpeg`;
 
     const modal = document.createElement('div');
@@ -243,7 +243,7 @@ window.app.switchAuthView = (view) => {
 };
 
 
-// --- PFP UPLOAD ---
+// --- PFP UPLOAD WITH IMGBB INTEGRATION ---
 window.app.handlePfpUpload = async (event, previewId) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -256,15 +256,29 @@ window.app.handlePfpUpload = async (event, previewId) => {
     formData.append("image", file);
     
     try {
+        // FIXED: Uploading directly to ImgBB using your dedicated development API key
         const res = await fetch(`https://api.imgbb.com/1/upload?key=4a683051e76ed12880a42aefa6ed427b`, {
             method: 'POST',
             body: formData
         });
         const data = await res.json();
         
-        if(data.success) {
-            window.app.state.authSelectedPfp = data.data.url;
-            imgPreview.src = data.data.url;
+        if(data.success && data.data?.url) {
+            const uploadedImgUrl = data.data.url;
+            window.app.state.authSelectedPfp = uploadedImgUrl;
+            imgPreview.src = uploadedImgUrl;
+
+            // If the user is already authenticated, update their existing DB entry instantly on upload event
+            if (window.app.state.activeProfile && window.app.state.activeProfile.uid && !window.app.state.activeProfile.uid.startsWith('anon_')) {
+                try {
+                    const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+                    const userDocRef = firestore.doc(window.app.db, "users", window.app.state.activeProfile.uid);
+                    await firestore.updateDoc(userDocRef, { pfp: uploadedImgUrl });
+                    window.app.state.activeProfile.pfp = uploadedImgUrl;
+                    localStorage.setItem('blazex_user_profile', JSON.stringify(window.app.state.activeProfile));
+                } catch(dbErr) { console.error("Realtime PFP mapping sync failed:", dbErr); }
+            }
+
             window.app.showCustomAlert('Profile picture updated!', 'success');
         } else {
             throw new Error();
@@ -295,8 +309,7 @@ window.app.handleLogin = async (e) => {
         await window.app.syncProfileAfterAuth(userCredential.user);
         
         window.app.closeAuthModal();
-        window.app.showCustomAlert("Successfully logged in!", 'success');
-        setTimeout(() => window.location.reload(), 1000);
+        window.location.href = 'profile.html';
         
     } catch (error) {
         const errCode = error.code;
@@ -323,12 +336,11 @@ window.app.handleRegister = async (e) => {
     const name = document.getElementById('register-name').value.trim();
     const email = document.getElementById('register-email').value.trim();
     const password = document.getElementById('register-password').value;
-    const pfp = window.app.state.authSelectedPfp;
+    const pfp = window.app.state.authSelectedPfp; // Contains either default random string asset name or raw uploaded ImgBB URL
 
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         
-        // FIXED: Empty database par query block/crash bypass wrapper checkpoint logic loop
         let isUsernameTaken = false;
         try {
             const usersRef = firestore.collection(window.app.db, "users");
@@ -338,7 +350,6 @@ window.app.handleRegister = async (e) => {
                 isUsernameTaken = true;
             }
         } catch (queryErr) {
-            // Agar collection missing ya index empty hai toh permission crash drop nahi hone dega, direct fallback pass karega
             console.log("Collection structure uninitialized. Assuming unique state route.");
         }
 
@@ -356,11 +367,12 @@ window.app.handleRegister = async (e) => {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
+        // FIXED: The resolved ImgBB link maps directly into the permanent Firestore object layer array fields payload here
         const newProfile = {
             uid: user.uid,
             name: name,
             email: email,
-            pfp: pfp,
+            pfp: pfp, 
             history: [],
             watchlist: [],
             createdAt: new Date().toISOString()
@@ -373,8 +385,7 @@ window.app.handleRegister = async (e) => {
         localStorage.setItem('blazex_user_profile', JSON.stringify(newProfile));
         
         window.app.closeAuthModal();
-        window.app.showCustomAlert("Account created successfully!", 'success');
-        setTimeout(() => window.location.reload(), 1000);
+        window.location.href = 'profile.html';
 
     } catch (error) {
         if (error.code === 'auth/email-already-in-use') {
@@ -435,6 +446,7 @@ window.app.handleGoogleLogin = async () => {
                 throw new Error("Force create entry");
             }
         } catch(snapErr) {
+            // FIXED: Google Auth saves the high-resolution photo URL straight from Google profile parameters
             profileData = {
                 uid: user.uid,
                 name: user.displayName || 'Google User',
@@ -451,8 +463,7 @@ window.app.handleGoogleLogin = async () => {
         localStorage.setItem('blazex_user_profile', JSON.stringify(profileData));
         
         window.app.closeAuthModal();
-        window.app.showCustomAlert("Signed in with Google!", 'success');
-        setTimeout(() => window.location.reload(), 1000);
+        window.location.href = 'profile.html';
 
     } catch (error) {
         window.app.showCustomAlert("Google Sign-In was cancelled or failed.", 'error');
@@ -491,8 +502,7 @@ window.app.handleGuestCreation = async (e) => {
     }
 
     window.app.closeAuthModal();
-    window.app.showCustomAlert(`Welcome, ${name}!`, 'success');
-    setTimeout(() => window.location.reload(), 1000);
+    window.location.href = 'profile.html';
 };
 
 window.app.syncProfileAfterAuth = async (firebaseUser) => {
