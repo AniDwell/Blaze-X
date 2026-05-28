@@ -58,22 +58,20 @@ window.app.components.info = async () => {
                 }
             } catch (e) { console.log("Schedule countdown unpopulated."); }
 
-            // 4. Fetch Anime Characters via your custom route /api/character/list/{id}
+            // 4. FIXED: Fetch characters matching your exact coupled endpoint schema -> results.data
             let characterList = [];
             try {
                 const charRes = await fetch(`${baseUrl}/api/character/list/${animeId}`);
                 const charJson = await charRes.json();
-                if (charJson && charJson.success && Array.isArray(charJson.data)) {
-                    characterList = charJson.data;
+                if (charJson && charJson.success && charJson.results && Array.isArray(charJson.results.data)) {
+                    characterList = charJson.results.data;
                 }
             } catch (e) { console.log("Character list not found."); }
 
             // --- ANILIST API BACKGROUND SYNC BLOCK ---
             let aniData = {};
             const hasValidAniId = baseAnime.anilistId && !isNaN(baseAnime.anilistId);
-            const query = hasValidAniId 
-                ? `query ($id: Int) { Media (id: $id, type: ANIME) { id title { romaji english native } bannerImage coverImage { extraLarge } description synonyms format source status averageScore trending genres studios(isMain: true) { nodes { name } } staff(perPage: 12, sort: RELEVANCE) { nodes { name { full } image { large } primaryOccupations } } relations { nodes { id type format status bannerImage coverImage { extraLarge } title { romaji english } } } } }`
-                : `query ($search: String) { Media (search: $search, type: ANIME, sort: SEARCH_MATCH) { id title { romaji english native } bannerImage coverImage { extraLarge } description synonyms format source status averageScore trending genres studios(isMain: true) { nodes { name } } staff(perPage: 12, sort: RELEVANCE) { nodes { name { full } image { large } primaryOccupations } } relations { nodes { id type format status bannerImage coverImage { extraLarge } title { romaji english } } } } }`;
+            const query = `query ($id: Int, $search: String) { Media (id: $id, search: $search, type: ANIME) { id title { romaji english native } bannerImage coverImage { extraLarge } description synonyms format source status averageScore trending genres studios(isMain: true) { nodes { name } } staff(perPage: 12, sort: RELEVANCE) { nodes { name { full } image { large } primaryOccupations } } relations { nodes { id type format status bannerImage coverImage { extraLarge } title { romaji english } } } } }`;
 
             try {
                 const variables = hasValidAniId ? { id: parseInt(baseAnime.anilistId) } : { search: baseAnime.title.replace(/\(Dub\)|\(Sub\)/gi, '').trim() };
@@ -86,7 +84,7 @@ window.app.components.info = async () => {
                 aniData = json?.data?.Media || {};
             } catch (e) { console.log("AniList network sync bypassed."); }
 
-            // Fallback structural assignments
+            // Fallback structural allocations
             const finalTitle = baseAnime.title || aniData.title?.english || aniData.title?.romaji || 'Unknown Title';
             const finalJpTitle = baseAnime.japanese_title || aniData.title?.native || 'N/A';
             const finalDesc = baseAnime.description || aniData.description || 'No description available.';
@@ -112,34 +110,29 @@ window.app.components.info = async () => {
                 rawPayload: baseAnime
             };
 
-            // UPGRADED DEFAULTS: Episodes tab is now active on initialization immediately
+            // Setup UI defaults
             window.app.state.activeInfoTab = 'episodes'; 
-            window.app.state.activeMetaTab = 'characters'; // Sub-tab context under information screen
+            window.app.state.activeMetaTab = 'characters'; 
             window.app.state.epSearchValue = '';
             window.app.state.epRangeFilter = '1-100';
             window.app.state.activeLanguageType = 'sub';
 
-            // =========================================================================
-            // --- SMART WATCH TRACKER ENGINE / PROGRESSION ROUTER LOGIC ---
-            // =========================================================================
+            // Smart progression watch state calculator
             const profile = window.app.state?.activeProfile || null;
             let playBtnText = "Play E01";
             let targetEpisodeSlug = episodesList.length > 0 ? (episodesList[0].slug || "1") : '1';
             let targetEpNum = 1;
 
             if (profile && profile.uid) {
-                // Read local progression state map dictionary safely
                 const localHistory = localStorage.getItem(`blazex_progress_${profile.uid}_${animeId}`);
                 if (localHistory) {
                     try {
                         const trackObj = JSON.parse(localHistory); 
-                        // Format keys: { lastWatchedEp: 4, lastSlug: "4", finishedEp: true }
                         if (trackObj && trackObj.lastWatchedEp) {
                             targetEpNum = parseInt(trackObj.lastWatchedEp);
                             targetEpisodeSlug = trackObj.lastSlug || String(targetEpNum);
 
                             if (trackObj.finishedEp === true) {
-                                // User crossed outro duration bounds threshold: increment forward!
                                 const totalAvailableEps = episodesList.length;
                                 if (targetEpNum < totalAvailableEps) {
                                     targetEpNum += 1;
@@ -150,11 +143,10 @@ window.app.components.info = async () => {
                                     playBtnText = `Replay Last Ep`;
                                 }
                             } else {
-                                // Session is incomplete: Render standard Resume modifier tag
                                 playBtnText = `Resume E${targetEpNum < 10 ? '0' + targetEpNum : targetEpNum}`;
                             }
                         }
-                    } catch(e) { console.log("History index corrupted."); }
+                    } catch(e) { console.log("History trackers validation bypassed."); }
                 }
             }
 
@@ -434,26 +426,41 @@ window.app.components.informationtab = () => {
     if (raw?.animeInfo?.Synonyms) synonymsList.push(raw.animeInfo.Synonyms);
     const uniqueSynonyms = [...new Set(synonymsList)].filter(Boolean);
 
-    // --- MODULAR CAST SUB-TAB GENERATION LAYOUT BLOCKS ---
     const activeMeta = window.app.state.activeMetaTab || 'characters';
     
-    // Characters: maps 2 items side-by-side, 1 below the other on mobile screens via grid structure
+    // --- FIXED: CHARACTER CARDS UPDATED TO PARSE YOUR EXACT COUPLED DATA SCHEMA ---
     let characterCardsHtml = '';
     if (data.characters && data.characters.length > 0) {
-        data.characters.slice(0, 16).forEach(c => {
-            characterCardsHtml += `
-                <div class="bg-[#111] p-2.5 rounded-lg border border-white/5 shadow-inner flex items-center gap-3 hover:border-white/20 transition-colors w-full">
-                    <img src="${c.image || 'https://via.placeholder.com/150/222/fff?text=?'}" class="w-11 h-11 rounded-md object-cover border border-white/10 shadow-md">
-                    <div class="flex-1 min-w-0">
-                        <div class="font-black text-white text-xs truncate">${c.name || 'Unknown character'}</div>
-                        <div class="text-[10px] text-gray-400 truncate mt-0.5 capitalize">${c.role || 'Main'} Character</div>
+        data.characters.forEach(item => {
+            const charObj = item.character || {};
+            const primaryVa = (item.voiceActors && item.voiceActors.length > 0) ? item.voiceActors[0] : null;
+
+            // Voice actor element markup block check
+            const vaHtml = primaryVa ? `
+                <div class="flex items-center gap-1.5 border-l border-white/10 pl-2 ml-auto min-w-0 max-w-[45%]">
+                    <div class="text-right min-w-0">
+                        <div class="text-[10px] font-bold text-gray-300 truncate leading-tight">${primaryVa.name}</div>
+                        <div class="text-[8px] text-[#F47521] tracking-tighter uppercase">JA Seiyuu</div>
                     </div>
+                    <img src="${primaryVa.poster || 'https://via.placeholder.com/100/222/fff?text=?'}" class="w-7 h-7 rounded-full object-cover border border-white/10 shrink-0 shadow-md">
+                </div>
+            ` : '';
+
+            characterCardsHtml += `
+                <div class="bg-[#111] p-2 rounded-lg border border-white/5 shadow-inner flex items-center justify-between gap-2 hover:border-white/20 transition-colors w-full">
+                    <div class="flex items-center gap-2 min-w-0 max-w-[55%]">
+                        <img src="${charObj.poster || 'https://via.placeholder.com/120/222/fff?text=?'}" class="w-9 h-11 rounded object-cover border border-white/10 shrink-0 shadow-md">
+                        <div class="min-w-0">
+                            <div class="font-black text-white text-[11px] md:text-xs truncate leading-snug">${charObj.name || 'Unknown character'}</div>
+                            <div class="text-[9px] text-gray-400 truncate mt-0.5 uppercase tracking-wide font-bold">${charObj.cast || 'Supporting'}</div>
+                        </div>
+                    </div>
+                    ${vaHtml}
                 </div>
             `;
         });
     } else { characterCardsHtml = `<div class="col-span-full text-gray-500 text-xs py-2"><i class="fas fa-info-circle mr-1"></i> Character profiles mapping unindexed.</div>`; }
 
-    // Staff: fallback layout array rendering
     let staffCardsHtml = '';
     if (ani?.staff?.nodes && ani.staff.nodes.length > 0) {
         ani.staff.nodes.forEach(s => {
@@ -491,7 +498,7 @@ window.app.components.informationtab = () => {
                     <button onclick="window.app.switchMetaContentTab('staff')" id="subtab-staff" class="pb-2 transition-colors ${activeMeta === 'staff' ? 'text-white border-b border-[#F47521]' : 'text-gray-500 hover:text-white'}">Staff Core</button>
                 </div>
                 
-                <div class="grid grid-cols-2 gap-2.5 w-full">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full">
                     ${activeMeta === 'characters' ? characterCardsHtml : staffCardsHtml}
                 </div>
             </div>
@@ -519,7 +526,6 @@ window.app.components.episodestab = () => {
     const isUpcoming = (raw?.status && raw.status.toString().toLowerCase().includes('upcoming')) || 
                        (ani?.status && ani.status.toString().toLowerCase().includes('not_yet_released'));
 
-    // Upcoming board mapping widget anchor
     let scheduleContainerHtml = '';
     if (data.scheduleCountdown) {
         scheduleContainerHtml = `
@@ -658,7 +664,6 @@ window.app.renderNumericEpisodeGrid = () => {
         return;
     }
 
-    // Recover progress records to calculate highlighted status elements
     const profile = window.app.state?.activeProfile || null;
     let localHistoryMap = null;
     if (profile && profile.uid) {
@@ -676,7 +681,6 @@ window.app.renderNumericEpisodeGrid = () => {
         const isSupportedByLang = (currentLangMode === 'sub' && ep.isSub !== false) || 
                                   (currentLangMode === 'dub' && ep.isDub === true);
 
-        // Calculate if this specific step index has completed tracking markers logged
         let isAlreadyWatched = false;
         if (localHistoryMap && localHistoryMap.watchedHistoryList) {
             isAlreadyWatched = localHistoryMap.watchedHistoryList.includes(parseInt(epNumber));
@@ -690,10 +694,7 @@ window.app.renderNumericEpisodeGrid = () => {
 
         if (isSupportedByLang) {
             interactiveActionAttr = `onclick="window.app.resolveEpisodeStreamAndRoute('${targetEpisodeSlugId}', ${epNumber}, '${data.id}')"`;
-            
-            // COMPACT STYLING ACCENTS APPLIED: font size scaled to text-base font-black for visibility
             if (isAlreadyWatched) {
-                // Highlighted Watched Outline Frame Accents
                 buttonStyleClass = 'border-[#F47521]/40 text-[#F47521] bg-[#F47521]/5 cursor-pointer hover:bg-[#F47521] hover:text-black font-black text-base shadow-sm';
             } else {
                 buttonStyleClass = isFillerEpisode 
@@ -738,13 +739,12 @@ window.app.resolveEpisodeStreamAndRoute = async (episodeSlug, episodeNumber, ani
         }
 
         if (!verifiedStreamData) {
-            alert("Video sources are caching on server mirrors. Try again in a minute!");
+            alert("Sources are caching on host mirrors. Try another server!");
             return;
         }
 
         window.app.state.resolvedStreamManifest = verifiedStreamData;
 
-        // Sync local progression tokens right before launching the player context view loop
         const profile = window.app.state?.activeProfile || null;
         if (profile && profile.uid) {
             let mockProgressHistory = { lastWatchedEp: episodeNumber, lastSlug: episodeSlug, finishedEp: false, watchedHistoryList: [episodeNumber] };
