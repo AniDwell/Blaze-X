@@ -1,4 +1,4 @@
-// commentsss.js - Inline Threaded, Episodic & Real-Time Comment Engine
+// commentsss.js - Inline Real-Time Threaded, Episodic & Notified Comment Engine
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
@@ -19,7 +19,7 @@ window.app.components.commentsss = async () => {
     const isGuest = !profile || !profile.uid || profile.uid.startsWith('anon_');
 
     // Default SVG Avatar Helper
-    if (!window.app.getAvatarHtml) {
+    if (!window.app.getDefaultAvatarSVG) {
         window.app.getDefaultAvatarSVG = () => `
             <div class="w-10 h-10 rounded-full border border-white/10 shrink-0 flex items-center justify-center bg-[#111] overflow-hidden shadow-md">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-gray-400 mt-2">
@@ -92,11 +92,13 @@ window.app.components.commentsss = async () => {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const commentsRef = firestore.collection(window.app.db, "comments");
         
-        // Fetch ALL comments for this anime (we will group them by replyTo locally)
+        // Fetch ALL comments for this anime to build the tree locally
         const q = firestore.query(commentsRef, firestore.where("animeId", "==", animeId));
 
+        // Clean up previous listener to prevent memory leaks if re-rendering
         if (window.app.inlineCommentsUnsub) window.app.inlineCommentsUnsub();
 
+        // Attach Live Snapshot Listener
         window.app.inlineCommentsUnsub = firestore.onSnapshot(q, (snapshot) => {
             let comments = [];
             snapshot.forEach(doc => comments.push({ id: doc.id, ...doc.data() }));
@@ -192,7 +194,7 @@ window.app.components.commentsss = async () => {
                             </div>
 
                             ${hasReplies ? `
-                                <div class="replies-wrapper hidden flex flex-col gap-2 w-full">
+                                <div class="replies-wrapper hidden flex flex-col gap-2 mt-2 w-full">
                                     ${childRepliesHtml}
                                 </div>
                                 <button onclick="this.previousElementSibling.classList.toggle('hidden'); this.innerHTML = this.previousElementSibling.classList.contains('hidden') ? '<i class=\\'fas fa-chevron-down mr-1\\'></i> Show Replies' : '<i class=\\'fas fa-chevron-up mr-1\\'></i> Hide Replies'" class="text-[9px] font-bold text-[#F47521] mt-2 ml-1 self-start flex items-center hover:text-white transition-colors">
@@ -209,6 +211,7 @@ window.app.components.commentsss = async () => {
             
         }, (error) => {
             console.error("Inline Comments Snapshot Error:", error);
+            document.getElementById('inline-comments-list').innerHTML = `<div class="text-center text-red-500 text-xs py-10 w-full">Live sync failed. Check rules.</div>`;
         });
 
     } catch (e) {
@@ -269,6 +272,7 @@ window.app.deleteInlineComment = async (commentId) => {
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         await firestore.deleteDoc(firestore.doc(window.app.db, "comments", commentId));
+        // No manual reload needed, onSnapshot handles UI!
     } catch(e) { 
         if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to delete comment.", "error"); 
     }
@@ -284,14 +288,18 @@ window.app.toggleInlineCommentReaction = async (commentId, btnElement) => {
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const commentRef = firestore.doc(window.app.db, "comments", commentId);
+        
+        // Optimistic UI update
         const span = btnElement.querySelector('span');
         let currentLikes = parseInt(span.innerText);
 
         if (btnElement.classList.contains('text-[#F47521]')) {
-            // Remove Like
+            btnElement.classList.replace('text-[#F47521]', 'text-gray-500');
+            span.innerText = Math.max(0, currentLikes - 1);
             await firestore.updateDoc(commentRef, { likes: firestore.arrayRemove(profile.uid) });
         } else {
-            // Add Like
+            btnElement.classList.replace('text-gray-500', 'text-[#F47521]');
+            span.innerText = currentLikes + 1;
             await firestore.updateDoc(commentRef, { likes: firestore.arrayUnion(profile.uid) });
         }
     } catch (e) {
@@ -373,6 +381,8 @@ window.app.submitInlineComment = async (e) => {
         input.style.height = '44px'; 
         input.disabled = false;
         btn.innerHTML = paperPlaneSvg;
+        btn.classList.remove('bg-green-500');
+        btn.classList.add('bg-[#F47521]');
         
         window.app.cancelInlineReply();
         // UI updates automatically because of onSnapshot!
