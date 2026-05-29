@@ -1,304 +1,402 @@
-// carousel.js - WITH DYNAMIC ADD/REMOVE LIBRARY FEATURE
+// commentsss.js - Inline Real-Time Threaded, Episodic & Notified Comment Engine
 
-window.app.components.carousel = async () => {
-    const container = document.getElementById('carousel-container');
-    if (!container) return;
+window.app = window.app || {};
+window.app.components = window.app.components || {};
 
-    // 1. SHOW LOADING SCREEN IMMEDIATELY
-    container.innerHTML = `
-        <div class="w-full aspect-[4/5] md:aspect-[21/9] bg-black flex items-center justify-center border-b border-white/5">
-            <div class="tk-loader scale-50">
-                <div class="tk-dot tk-dot-1"></div>
-                <div class="tk-dot tk-dot-2"></div>
-            </div>
-        </div>
-    `;
+window.app.components.commentsss = async () => {
+    const root = document.getElementById('comments-section-root');
+    if (!root) return;
 
-    try {
-        const baseUrl = 'https://anikoto-api-xi.vercel.app';
-        
-        // Fetching from the official latest episodes route
-        const rawResponse = await fetch(`${baseUrl}/api/latest-episodes`);
-        const response = await rawResponse.json();
-        
-        const rawSlides = response.data || [];
+    const urlParams = new URLSearchParams(window.location.search);
+    const animeId = urlParams.get('id') || urlParams.get('anime') || window.app.state?.currentAnimePage?.id;
 
-        if (rawSlides.length === 0) {
-            container.innerHTML = `
-                <div class="p-6 text-center text-gray-500 text-xs border border-white/5 mx-4 rounded-xl bg-black tracking-widest uppercase">
-                    <i class="fas fa-exclamation-circle mr-1 text-[#F47521]"></i> Stream Offline
-                </div>
-            `;
-            return;
-        }
-
-        // 2. WAIT FOR ALL ANILIST MATCHES
-        const enrichedSlides = await Promise.all(rawSlides.map(async (slide) => {
-            const cleanTitle = (slide.title || '').replace(/\(Dub\)|\(Sub\)|Episode \d+/gi, '').trim();
-            const exactId = slide.id; 
-            
-            let finalImage = slide.image || 'https://via.placeholder.com/1280x720/111/fff?text=No+Image';
-            let finalRating = null;
-            let trendingScore = 0;
-            let finalDescription = 'No synopsis available.';
-
-            try {
-                const query = `query ($search: String) { 
-                    Media (search: $search, type: ANIME, sort: SEARCH_MATCH) { 
-                        trending 
-                        averageScore 
-                        description
-                        coverImage { extraLarge } 
-                    } 
-                }`;
-                const aniRes = await fetch('https://graphql.anilist.co', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                    body: JSON.stringify({ query, variables: { search: cleanTitle } })
-                });
-                
-                const aniData = await aniRes.json();
-                const media = aniData?.data?.Media;
-                if (media) {
-                    if (media.coverImage?.extraLarge) finalImage = media.coverImage.extraLarge;
-                    if (media.averageScore) finalRating = media.averageScore;
-                    if (media.trending) trendingScore = media.trending;
-                    
-                    if (media.description) {
-                        finalDescription = media.description.replace(/<[^>]*>?/gm, '').trim();
-                    }
-                }
-            } catch (e) {
-                console.log("AniList sync failed for:", cleanTitle);
-            }
-
-            return { ...slide, exactId, finalImage, finalRating, trendingScore, finalDescription };
-        }));
-
-        enrichedSlides.sort((a, b) => b.trendingScore - a.trendingScore);
-        const topSlides = enrichedSlides.slice(0, 5);
-
-        window.app.state.carouselItems = topSlides; 
-        window.app.state.carouselCurrentIndex = 0;
-
-        let imageSlidesHtml = '';
-        let dotsHtml = '';
-
-        topSlides.forEach((s, i) => {
-            imageSlidesHtml += `
-                <div class="absolute inset-0 cursor-pointer z-0 group overflow-hidden bg-black" id="slide-bg-${i}" style="opacity: ${i === 0 ? '1' : '0'}; z-index: ${i === 0 ? '20' : '10'}; transition: opacity 0.8s ease-in-out;" onclick="window.app.handleCarouselImageClick()">
-                    <img src="${s.finalImage}" class="absolute inset-0 w-full h-full object-cover object-[center_top] transition-transform duration-[10s] group-hover:scale-105">
-                </div>
-            `;
-
-            const dotClass = i === 0 
-                ? 'carousel-dot w-2 h-8 bg-[#F47521] transition-all duration-300 cursor-pointer pointer-events-auto shadow-md shrink-0 rounded-sm'
-                : 'carousel-dot w-2 h-2 bg-white/30 hover:bg-white/60 transition-all duration-300 cursor-pointer pointer-events-auto shadow-md shrink-0 rounded-sm';
-
-            dotsHtml += `
-                <div onclick="window.app.goToCarouselSlide(${i})" class="${dotClass}" id="dot-${i}"></div>
-            `;
-        });
-
-        // 3. RENDER FINAL UI
-        container.innerHTML = `
-            <div class="relative w-full aspect-[4/5] md:aspect-[21/9] max-h-[75vh] overflow-hidden bg-black border-b border-white/5">
-                
-                <div id="hero-slides" class="absolute inset-0 z-0">
-                    ${imageSlidesHtml}
-                    <div class="absolute bottom-0 left-0 right-0 h-[65%] bg-gradient-to-t from-black via-black/90 to-transparent md:hidden z-30 pointer-events-none"></div>
-                    <div class="absolute inset-0 bg-gradient-to-r from-black via-black/90 to-transparent hidden md:block w-[80%] z-30 pointer-events-none"></div>
-                </div>
-
-                <div id="carousel-ui-layer" class="absolute bottom-8 left-4 right-8 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:left-12 md:w-[40%] z-40 pr-4 transition-opacity duration-300 opacity-100">
-                </div>
-                
-                <div class="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 flex flex-col justify-center gap-2.5 z-[70]" id="carousel-indicators">
-                    ${dotsHtml}
-                </div>
-            </div>
-        `;
-
-        window.app.updateCarouselUI(0);
-        startAutoRotate();
-        
-    } catch (err) {
-        console.error("Carousel Script Error:", err);
-    }
-};
-
-// --- DYNAMIC UI UPDATER ---
-window.app.updateCarouselUI = (index) => {
-    const uiLayer = document.getElementById('carousel-ui-layer');
-    if (!uiLayer) return;
-
-    const data = window.app.state.carouselItems[index];
-    if (!data) return;
-
-    const profile = window.app.state.activeProfile;
-    
-    // Check if the anime is already in the user's library
-    let isAdded = false;
-    if (profile && profile.library && profile.uid && !profile.uid.startsWith('anon_')) {
-        isAdded = profile.library.some(item => item.id === data.exactId);
-    }
-
-    const ratingHtml = data.finalRating ? `<span class="flex items-center gap-1"><i class="fas fa-star"></i> ${data.finalRating}% SCORE</span>` : '';
-
-    // Dynamic Button State
-    const libraryBtnHtml = isAdded 
-        ? `<button onclick="window.app.handleCarouselLibraryClick(event, ${index})" class="bg-white text-black px-5 py-2 md:px-6 md:py-3 rounded font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors border border-white flex items-center gap-2">
-               <i class="fas fa-check text-green-500"></i> Added
-           </button>`
-        : `<button onclick="window.app.handleCarouselLibraryClick(event, ${index})" class="bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2">
-               <i class="fas fa-plus"></i> Library
-           </button>`;
-
-    uiLayer.style.opacity = '0';
-
-    setTimeout(() => {
-        uiLayer.innerHTML = `
-            <div class="flex items-center gap-3 text-[#F47521] text-[10px] md:text-xs font-black tracking-widest drop-shadow-md mb-2 md:mb-3 uppercase pointer-events-none">
-                <span class="bg-[#F47521]/10 border border-[#F47521]/30 px-2 py-0.5 rounded backdrop-blur-sm">#${index + 1} Trending</span>
-                ${ratingHtml}
-            </div>
-
-            <h2 class="text-3xl md:text-5xl lg:text-6xl font-black text-white mb-2 md:mb-3 drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] line-clamp-2 tracking-tight cursor-pointer leading-tight hover:text-[#F47521] transition-colors" onclick="window.app.handleCarouselImageClick()">${data.title || 'Unknown'}</h2>
-            
-            <p class="text-[11px] md:text-xs text-gray-300 line-clamp-3 md:line-clamp-4 mb-5 md:mb-6 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-relaxed font-medium pointer-events-none">${data.finalDescription}</p>
-            
-            <div class="flex gap-2.5 relative z-40">
-                <button onclick="window.app.handleCarouselImageClick()" class="bg-[#F47521] text-white px-6 py-2 md:px-8 md:py-3 rounded shadow-[0_0_15px_rgba(244,117,33,0.3)] font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-white hover:text-black transition-colors flex items-center gap-2">
-                    <i class="fas fa-play"></i> Watch Now
-                </button>
-                
-                ${libraryBtnHtml}
-            </div>
-        `;
-        uiLayer.style.opacity = '1';
-    }, 300);
-};
-
-window.app.handleCarouselImageClick = () => {
-    const currentIndex = window.app.state.carouselCurrentIndex;
-    const currentSlideData = window.app.state.carouselItems[currentIndex];
-    
-    if (currentSlideData && currentSlideData.exactId) {
-        window.location.href = `info.html?id=${currentSlideData.exactId}`;
-    } else {
-        if (window.app.showCustomAlert) window.app.showCustomAlert("Unable to load details for this series.", "error");
-    }
-};
-
-window.app.goToCarouselSlide = (targetIndex) => {
-    const currentIndex = window.app.state.carouselCurrentIndex;
-    if (targetIndex === currentIndex) return;
-    if (window.app.state.carouselInterval) clearInterval(window.app.state.carouselInterval);
-    transitionSlide(currentIndex, targetIndex);
-    window.app.state.carouselCurrentIndex = targetIndex;
-    startAutoRotate();
-};
-
-function transitionSlide(oldIndex, newIndex) {
-    const oldSlide = document.getElementById(`slide-bg-${oldIndex}`);
-    const oldDot = document.getElementById(`dot-${oldIndex}`);
-    const newSlide = document.getElementById(`slide-bg-${newIndex}`);
-    const newDot = document.getElementById(`dot-${newIndex}`);
-
-    if (oldSlide) {
-        oldSlide.style.opacity = '0';
-        oldSlide.classList.replace('z-20', 'z-10');
-    }
-    if (newSlide) {
-        newSlide.style.opacity = '1';
-        newSlide.classList.replace('z-10', 'z-20');
-    }
-
-    if (oldDot) oldDot.className = "carousel-dot w-2 h-2 bg-white/30 hover:bg-white/60 transition-all duration-300 cursor-pointer pointer-events-auto shadow-md shrink-0 rounded-sm";
-    if (newDot) newDot.className = "carousel-dot w-2 h-8 bg-[#F47521] transition-all duration-300 cursor-pointer pointer-events-auto shadow-md shrink-0 rounded-sm";
-    
-    window.app.updateCarouselUI(newIndex);
-}
-
-function startAutoRotate() {
-    if (window.app.state.carouselInterval) clearInterval(window.app.state.carouselInterval);
-    window.app.state.carouselInterval = setInterval(() => {
-        if (window.app.state.currentView !== 'home' || !document.getElementById('hero-slides')) {
-            clearInterval(window.app.state.carouselInterval);
-            return;
-        }
-        const count = window.app.state.carouselItems.length;
-        const currentIndex = window.app.state.carouselCurrentIndex;
-        const nextIndex = (currentIndex + 1) % count;
-        transitionSlide(currentIndex, nextIndex);
-        window.app.state.carouselCurrentIndex = nextIndex;
-    }, 6000); 
-}
-
-// --- DYNAMIC LIBRARY LOGIC (ADD & REMOVE) ---
-window.app.handleCarouselLibraryClick = async (event, index) => {
-    event.stopPropagation(); 
-    const profile = window.app.state.activeProfile;
-    
-    // Auth Check
-    if (!profile || !profile.uid || profile.uid.startsWith('anon_')) {
-        if (window.app.components.auth) window.app.components.auth();
-        else if (window.app.showCustomAlert) window.app.showCustomAlert("Please log in to save to your Library!", "error");
+    if (!animeId) {
+        root.innerHTML = `<div class="text-center text-gray-500 text-xs py-10 w-full">Cannot load comments: Missing ID.</div>`;
         return;
     }
 
-    const rawData = window.app.state.carouselItems[index];
-    if (!rawData) return;
-    
-    if(!profile.library) profile.library = [];
-    
-    const formattedAnime = { 
-        id: rawData.exactId, 
-        title: rawData.title, 
-        img: rawData.finalImage 
-    };
+    const profile = window.app.state?.activeProfile || null;
+    const isGuest = !profile || !profile.uid || profile.uid.startsWith('anon_');
 
-    const existingItemIndex = profile.library.findIndex(item => item.id === formattedAnime.id);
-    const isCurrentlyAdded = existingItemIndex !== -1;
-    const btn = event.currentTarget || event.target.closest('button');
+    // Default SVG Avatar Helper
+    if (!window.app.getDefaultAvatarSVG) {
+        window.app.getDefaultAvatarSVG = () => `
+            <div class="w-10 h-10 rounded-full border border-white/10 shrink-0 flex items-center justify-center bg-[#111] overflow-hidden shadow-md">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-gray-400 mt-2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+            </div>
+        `;
+
+        window.app.getAvatarHtml = (url) => {
+            if (!url || url.includes('placeholder.com') || url.includes('pfp') || url.trim() === '') {
+                return window.app.getDefaultAvatarSVG();
+            }
+            return `<img src="${url}" class="w-10 h-10 rounded-full object-cover border border-white/10 shadow-md shrink-0">`;
+        };
+    }
+
+    const paperPlaneSvg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+    `;
+
+    // 1. RENDER INLINE SHELL
+    root.innerHTML = `
+        <div class="w-full flex flex-col min-h-[300px] max-h-[600px] bg-transparent">
+            
+            <div id="inline-comments-list" class="flex-1 overflow-y-auto hide-scrollbar p-4 flex flex-col gap-4 relative bg-[#0a0a0a] rounded-t-xl border-b border-white/5">
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <div class="tk-loader scale-75"><div class="tk-dot tk-dot-1"></div><div class="tk-dot tk-dot-2"></div></div>
+                </div>
+            </div>
+
+            <div class="p-4 bg-[#111] rounded-b-xl border-t-0 shrink-0">
+                ${isGuest 
+                    ? `<div class="w-full text-center py-2"><p class="text-xs text-gray-400 font-bold uppercase tracking-widest mb-2">Join the conversation</p><button onclick="if(window.app.components.auth) window.app.components.auth()" class="bg-[#F47521] text-black px-6 py-2 rounded font-black text-[10px] uppercase shadow-lg hover:bg-white transition-colors">Log In / Register</button></div>`
+                    : `<form id="inline-comment-form" onsubmit="window.app.submitInlineComment(event)" class="flex gap-3 items-end relative">
+                        <input type="hidden" id="inline-edit-comment-id" value="">
+                        <input type="hidden" id="inline-reply-to-id" value="">
+                        
+                        ${window.app.getAvatarHtml(profile?.photoURL || profile?.pfpLink)}
+                        
+                        <div class="flex-1 bg-black border border-white/10 rounded-xl flex flex-col focus-within:border-[#F47521] transition-colors relative">
+                            <textarea id="inline-comment-textarea" rows="1" placeholder="Write a comment..." class="w-full bg-transparent text-white text-xs p-3 outline-none resize-none hide-scrollbar min-h-[44px] max-h-32" oninput="this.style.height = ''; this.style.height = this.scrollHeight + 'px'"></textarea>
+                            
+                            <div id="inline-reply-tag-indicator" class="hidden absolute -top-8 left-0 bg-[#F47521] text-black px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest shadow-md flex items-center gap-2">
+                                Replying to <span id="inline-reply-tag-name" class="font-bold border-b border-black/30"></span> 
+                                <button type="button" onclick="window.app.cancelInlineReply()" class="hover:text-white"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        
+                        <button type="submit" id="inline-post-comment-btn" class="bg-[#F47521] text-black w-10 h-10 rounded-xl flex items-center justify-center shrink-0 hover:bg-white hover:scale-105 transition-all shadow-lg">
+                            ${paperPlaneSvg}
+                        </button>
+                       </form>`
+                }
+            </div>
+
+        </div>
+    `;
+
+    // 2. FETCH & RENDER COMMENTS (LIVE LISTENER WITH THREADING)
+    if (!window.app.db) {
+        document.getElementById('inline-comments-list').innerHTML = `<div class="text-center text-gray-500 text-xs py-10 w-full">Database connection error.</div>`;
+        return;
+    }
 
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-        const userRef = firestore.doc(window.app.db, "users", profile.uid);
+        const commentsRef = firestore.collection(window.app.db, "comments");
+        
+        // Fetch ALL comments for this anime to build the tree locally
+        const q = firestore.query(commentsRef, firestore.where("animeId", "==", animeId));
 
-        if (isCurrentlyAdded) {
-            // --- REMOVE FROM LIBRARY ---
-            const itemToRemove = profile.library[existingItemIndex];
-            profile.library.splice(existingItemIndex, 1); 
-            localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
+        // Clean up previous listener to prevent memory leaks if re-rendering
+        if (window.app.inlineCommentsUnsub) window.app.inlineCommentsUnsub();
 
-            // Instant UI Update to 'Not Added' State
-            if (btn) {
-                btn.className = "bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2";
-                btn.innerHTML = `<i class="fas fa-plus"></i> Library`;
+        // Attach Live Snapshot Listener
+        window.app.inlineCommentsUnsub = firestore.onSnapshot(q, (snapshot) => {
+            let comments = [];
+            snapshot.forEach(doc => comments.push({ id: doc.id, ...doc.data() }));
+
+            // Sort globally by time (newest root comments first)
+            comments.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+            
+            const listContainer = document.getElementById('inline-comments-list');
+            
+            if (comments.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="flex flex-col items-center justify-center py-10 opacity-90 h-full animate-fade-in w-full">
+                        <img src="https://media.tenor.com/VOoSARm1t7wAAAAm/anime-girl.webp" alt="No Comments" class="w-28 h-28 object-contain mb-3 drop-shadow-xl rounded-xl">
+                        <p class="text-[10px] font-black uppercase tracking-widest text-white mb-1">No comments here</p>
+                        <p class="text-[9px] text-gray-500 font-medium">Be the first one to comment!</p>
+                    </div>
+                `;
+                return;
             }
 
-            // Sync with Firestore
-            await firestore.updateDoc(userRef, { library: firestore.arrayRemove(itemToRemove) });
-            if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
+            const myUid = profile?.uid || 'guest';
 
-        } else {
-            // --- ADD TO LIBRARY ---
-            profile.library.unshift(formattedAnime);
-            localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
+            // Recursive function to render comments and their nested replies
+            const renderCommentTree = (commentList, parentId = null, depth = 0) => {
+                const currentLevelComments = commentList.filter(c => (c.replyTo || null) === parentId);
+                
+                // Prioritize "my" comments at the top level
+                if (depth === 0) {
+                    const mine = currentLevelComments.filter(c => c.userId === myUid);
+                    const others = currentLevelComments.filter(c => c.userId !== myUid);
+                    currentLevelComments.length = 0;
+                    currentLevelComments.push(...mine, ...others);
+                }
 
-            // Instant UI Update to 'Added' State
-            if (btn) {
-                btn.className = "bg-white text-black px-5 py-2 md:px-6 md:py-3 rounded font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors border border-white flex items-center gap-2";
-                btn.innerHTML = `<i class="fas fa-check text-green-500"></i> Added`;
-            }
+                if (currentLevelComments.length === 0) return '';
 
-            // Sync with Firestore
-            await firestore.updateDoc(userRef, { library: firestore.arrayUnion(formattedAnime) });
-            if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
-        }
-    } catch (error) { 
-        console.error("Firebase update failed:", error); 
-        if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to sync with cloud.", "error");
+                let html = '';
+                currentLevelComments.forEach(comment => {
+                    const isMine = comment.userId === myUid;
+                    const displayAvatar = isMine ? (profile?.photoURL || profile?.pfpLink || comment.userAvatar) : comment.userAvatar;
+                    
+                    const menuOptions = isMine 
+                        ? `<button onclick="window.app.editInlineComment('${comment.id}', '${comment.text.replace(/'/g, "\\'")}')" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-pen mr-2"></i> Edit</button>
+                           <button onclick="window.app.deleteInlineComment('${comment.id}')" class="w-full text-left px-3 py-2 text-red-400 hover:bg-white/10 hover:text-red-500 transition-colors"><i class="fas fa-trash mr-2"></i> Delete</button>` 
+                        : `<button onclick="window.location.href='profile.html?user=${comment.userId}'" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-user mr-2"></i> View Profile</button>
+                           <button onclick="window.location.href='cht.html?user=${comment.userId}'" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-comment-dots mr-2"></i> Discuss</button>`;
+
+                    const likesCount = Array.isArray(comment.likes) ? comment.likes.length : 0;
+                    const hasLiked = Array.isArray(comment.likes) && comment.likes.includes(myUid);
+                    const likeColor = hasLiked ? 'text-[#F47521]' : 'text-gray-500 hover:text-white';
+
+                    // Threading Styles
+                    const marginStyle = depth > 0 ? `margin-left: ${Math.min(depth * 1.5, 3)}rem;` : '';
+                    const borderStyle = depth > 0 ? `border-l-2 border-[#F47521]/30 pl-3 mt-3` : `bg-white/5 border border-white/5 p-3 rounded-xl mt-4`;
+
+                    const childRepliesHtml = renderCommentTree(commentList, comment.id, depth + 1);
+                    const hasReplies = childRepliesHtml !== '';
+
+                    html += `
+                        <div class="flex flex-col relative animate-fade-in ${borderStyle}" style="${marginStyle}">
+                            <div class="flex gap-3">
+                                ${window.app.getAvatarHtml(displayAvatar)}
+                                
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <div class="flex items-center gap-2 min-w-0">
+                                            <span class="bg-[#111] border border-white/10 text-gray-400 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm">EP ${comment.episodeNumber || '1'}</span>
+                                            <h4 class="text-white font-bold text-xs truncate">${comment.userName || 'Anonymous'}</h4>
+                                            ${isMine ? `<span class="bg-[#F47521] text-black text-[8px] font-black uppercase px-1.5 py-[1px] rounded">You</span>` : ''}
+                                            <span class="text-gray-500 text-[9px] whitespace-nowrap hidden sm:inline">${window.app.formatTimeAgo ? window.app.formatTimeAgo(comment.timestamp) : 'Recently'}</span>
+                                        </div>
+                                        
+                                        <div class="relative">
+                                            <button onclick="window.app.toggleInlineCommentMenu('${comment.id}')" class="menu-trigger-btn text-gray-500 hover:text-white w-6 h-6 flex items-center justify-center transition-colors">
+                                                <i class="fas fa-ellipsis-v text-[10px]"></i>
+                                            </button>
+                                            <div id="inline-menu-${comment.id}" class="comment-action-menu hidden absolute right-0 top-full mt-1 w-28 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-2xl z-50 overflow-hidden text-[10px] font-bold uppercase tracking-wider">
+                                                ${menuOptions}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p class="text-gray-300 text-[11px] leading-relaxed mt-1 whitespace-pre-wrap break-words">${comment.text}</p>
+                                    
+                                    <div class="flex items-center gap-4 mt-2">
+                                        <button onclick="window.app.toggleInlineCommentReaction('${comment.id}', this)" class="${likeColor} text-[9px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1">
+                                            <i class="fas fa-thumbs-up"></i> <span>${likesCount}</span>
+                                        </button>
+                                        <button onclick="window.app.prepareInlineReply('${comment.id}', '${comment.userName}')" class="text-gray-500 hover:text-white text-[9px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1">
+                                            <i class="fas fa-reply"></i> Reply
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            ${hasReplies ? `
+                                <div class="replies-wrapper hidden flex flex-col gap-2 mt-2 w-full">
+                                    ${childRepliesHtml}
+                                </div>
+                                <button onclick="this.previousElementSibling.classList.toggle('hidden'); this.innerHTML = this.previousElementSibling.classList.contains('hidden') ? '<i class=\\'fas fa-chevron-down mr-1\\'></i> Show Replies' : '<i class=\\'fas fa-chevron-up mr-1\\'></i> Hide Replies'" class="text-[9px] font-bold text-[#F47521] mt-2 ml-1 self-start flex items-center hover:text-white transition-colors">
+                                    <i class="fas fa-chevron-down mr-1"></i> Show Replies
+                                </button>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+                return html;
+            };
+
+            listContainer.innerHTML = renderCommentTree(comments, null, 0);
+            
+        }, (error) => {
+            console.error("Inline Comments Snapshot Error:", error);
+            document.getElementById('inline-comments-list').innerHTML = `<div class="text-center text-red-500 text-xs py-10 w-full">Live sync failed. Check rules.</div>`;
+        });
+
+    } catch (e) {
+        console.error("Comment Load Error:", e);
+        document.getElementById('inline-comments-list').innerHTML = `<div class="text-center text-red-500 text-xs py-10 w-full">Failed to load comments.</div>`;
     }
 };
+
+// --- ACTION LOGIC FOR INLINE SECTION ---
+
+window.app.toggleInlineCommentMenu = (commentId) => {
+    const menu = document.getElementById(`inline-menu-${commentId}`);
+    const isHidden = menu.classList.contains('hidden');
+    document.querySelectorAll('.comment-action-menu').forEach(m => m.classList.add('hidden'));
+    if (isHidden) menu.classList.remove('hidden');
+};
+
+window.app.prepareInlineReply = (commentId, username) => {
+    const input = document.getElementById('inline-comment-textarea');
+    const replyIdField = document.getElementById('inline-reply-to-id');
+    const tagIndicator = document.getElementById('inline-reply-tag-indicator');
+    const tagName = document.getElementById('inline-reply-tag-name');
+    
+    replyIdField.value = commentId;
+    tagName.innerText = `@${username}`;
+    tagIndicator.classList.remove('hidden');
+    
+    input.focus();
+};
+
+window.app.cancelInlineReply = () => {
+    const input = document.getElementById('inline-comment-textarea');
+    input.value = input.value.replace(/@\w+\s?/, '');
+    
+    const replyIdField = document.getElementById('inline-reply-to-id');
+    if (replyIdField) replyIdField.value = '';
+    
+    const tagIndicator = document.getElementById('inline-reply-tag-indicator');
+    if (tagIndicator) tagIndicator.classList.add('hidden');
+};
+
+window.app.editInlineComment = (commentId, text) => {
+    const input = document.getElementById('inline-comment-textarea');
+    const editIdField = document.getElementById('inline-edit-comment-id');
+    const btn = document.getElementById('inline-post-comment-btn');
+    
+    document.getElementById(`inline-menu-${commentId}`).classList.add('hidden');
+    input.value = text;
+    editIdField.value = commentId;
+    
+    btn.innerHTML = `<i class="fas fa-check text-xs"></i>`;
+    btn.classList.replace('bg-[#F47521]', 'bg-green-500');
+    input.focus();
+};
+
+window.app.deleteInlineComment = async (commentId) => {
+    if(!confirm("Delete this comment permanently?")) return;
+    try {
+        const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        await firestore.deleteDoc(firestore.doc(window.app.db, "comments", commentId));
+        // No manual reload needed, onSnapshot handles UI!
+    } catch(e) { 
+        if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to delete comment.", "error"); 
+    }
+};
+
+window.app.toggleInlineCommentReaction = async (commentId, btnElement) => {
+    const profile = window.app.state.activeProfile;
+    if (!profile || !profile.uid || profile.uid.startsWith('anon_')) {
+        if(window.app.components.auth) window.app.components.auth();
+        return;
+    }
+
+    try {
+        const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        const commentRef = firestore.doc(window.app.db, "comments", commentId);
+        
+        // Optimistic UI update
+        const span = btnElement.querySelector('span');
+        let currentLikes = parseInt(span.innerText);
+
+        if (btnElement.classList.contains('text-[#F47521]')) {
+            btnElement.classList.replace('text-[#F47521]', 'text-gray-500');
+            span.innerText = Math.max(0, currentLikes - 1);
+            await firestore.updateDoc(commentRef, { likes: firestore.arrayRemove(profile.uid) });
+        } else {
+            btnElement.classList.replace('text-gray-500', 'text-[#F47521]');
+            span.innerText = currentLikes + 1;
+            await firestore.updateDoc(commentRef, { likes: firestore.arrayUnion(profile.uid) });
+        }
+    } catch (e) {
+        console.error("Like failed", e);
+    }
+};
+
+window.app.submitInlineComment = async (e) => {
+    e.preventDefault();
+    const input = document.getElementById('inline-comment-textarea');
+    const editIdField = document.getElementById('inline-edit-comment-id');
+    const replyIdField = document.getElementById('inline-reply-to-id');
+    const btn = document.getElementById('inline-post-comment-btn');
+    const text = input.value.trim();
+    
+    if (!text) return;
+
+    const animeId = window.app.state?.currentAnimePage?.id;
+    const epNum = window.app.state?.currentPlayingEpNum || 1;
+    const profile = window.app.state.activeProfile;
+
+    const paperPlaneSvg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+    `;
+
+    btn.innerHTML = `<i class="fas fa-circle-notch fa-spin text-xs"></i>`;
+    input.disabled = true;
+
+    try {
+        const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        const commentsRef = firestore.collection(window.app.db, "comments");
+        const editId = editIdField.value;
+        const replyToId = replyIdField.value || null;
+
+        if (editId) {
+            // UPDATE
+            await firestore.updateDoc(firestore.doc(window.app.db, "comments", editId), { text: text, isEdited: true });
+            editIdField.value = "";
+            btn.innerHTML = paperPlaneSvg;
+            btn.classList.replace('bg-green-500', 'bg-[#F47521]');
+        } else {
+            // CREATE NEW OR REPLY
+            await firestore.addDoc(commentsRef, {
+                animeId: animeId,
+                episodeNumber: epNum,
+                userId: profile.uid,
+                userName: profile.displayName || profile.name || "User",
+                userAvatar: profile.photoURL || profile.pfpLink || '',
+                text: text,
+                timestamp: firestore.serverTimestamp(),
+                replyTo: replyToId,
+                likes: [],
+                dislikes: []
+            });
+
+            // 🚀 NOTIFICATION SYSTEM
+            if (replyToId) {
+                const parentComment = await firestore.getDoc(firestore.doc(window.app.db, "comments", replyToId));
+                const parentUid = parentComment.data().userId;
+                
+                if (parentUid !== profile.uid) {
+                    const notifRef = firestore.collection(window.app.db, `users/${parentUid}/notifications`);
+                    await firestore.addDoc(notifRef, {
+                        type: 'reply',
+                        fromUser: profile.name || "A user",
+                        animeId: animeId,
+                        episodeNumber: epNum,
+                        timestamp: firestore.serverTimestamp(),
+                        read: false
+                    });
+                }
+            }
+        }
+
+        input.value = '';
+        input.style.height = '44px'; 
+        input.disabled = false;
+        btn.innerHTML = paperPlaneSvg;
+        btn.classList.remove('bg-green-500');
+        btn.classList.add('bg-[#F47521]');
+        
+        window.app.cancelInlineReply();
+        // UI updates automatically because of onSnapshot!
+
+    } catch (err) {
+        if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to post comment.", "error");
+        input.disabled = false;
+        btn.innerHTML = paperPlaneSvg;
+    }
+};
+
+// Event listener for closing menus
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.menu-trigger-btn') && !e.target.closest('.comment-action-menu')) {
+        document.querySelectorAll('.comment-action-menu').forEach(m => m.classList.add('hidden'));
+    }
+});
