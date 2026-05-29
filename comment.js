@@ -3,7 +3,6 @@
 window.app = window.app || {};
 window.app.components = window.app.components || {};
 
-// --- GLOBAL HELPERS (Crash-proof) ---
 window.app.formatTimeAgo = window.app.formatTimeAgo || function (timestamp) {
     if (!timestamp) return "Just now";
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
@@ -36,7 +35,6 @@ window.app.getAvatarHtml = window.app.getAvatarHtml || function (url) {
     return `<img src="${url}" class="w-10 h-10 rounded-full object-cover border border-white/10 shadow-md shrink-0">`;
 };
 
-// --- COMPONENT INIT ---
 window.app.components.comment = async () => {
     const urlParams = new URLSearchParams(window.location.search);
     const animeId = urlParams.get('id') || urlParams.get('anime') || window.app.state?.currentAnimePage?.id;
@@ -55,12 +53,7 @@ window.app.components.comment = async () => {
         sheet.id = 'blazex-comments-sheet';
         sheet.className = 'fixed inset-x-0 bottom-0 z-[100] hidden flex-col justify-end overflow-hidden';
         
-        const paperPlaneSvg = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="22" y1="2" x2="11" y2="13"></line>
-                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-            </svg>
-        `;
+        const paperPlaneSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`;
 
         sheet.innerHTML = `
             <div id="comments-backdrop" class="absolute inset-0 bg-black/70 backdrop-blur-sm opacity-0 transition-opacity duration-300" onclick="window.app.closeComments()"></div>
@@ -111,14 +104,13 @@ window.app.components.comment = async () => {
         document.getElementById('comments-backdrop').classList.remove('opacity-0');
         const panel = document.getElementById('comments-panel');
         panel.style.transition = 'height 0.3s ease-out';
-        panel.style.height = '60vh'; // Opens a bit higher for better threaded view
+        panel.style.height = '60vh'; 
         window.app.state.commentHeight = 60; 
     }, 10);
 
     window.app.loadComments(animeId, profile);
 };
 
-// --- DRAGGABLE SHEET LOGIC ---
 window.app.initDraggableSheet = () => {
     const panel = document.getElementById('comments-panel');
     const handle = document.getElementById('drag-handle-area');
@@ -159,7 +151,7 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// --- REAL-TIME THREADED LISTENER ---
+// --- GLOBAL LIVE LISTENER ---
 window.app.loadComments = async (animeId, profile) => {
     const container = document.getElementById('comments-list-container');
     if (!window.app.db) {
@@ -193,6 +185,14 @@ window.app.loadComments = async (animeId, profile) => {
 
                 const myUid = profile?.uid || 'guest';
                 
+                const getDescendantCount = (parentId) => {
+                    let count = 0;
+                    const children = comments.filter(c => c.replyTo === parentId);
+                    count += children.length;
+                    children.forEach(child => { count += getDescendantCount(child.id); });
+                    return count;
+                };
+                
                 const renderCommentTree = (commentList, parentId = null, depth = 0) => {
                     const safeParentId = parentId || null;
                     const currentLevelComments = commentList.filter(c => (c.replyTo || null) === safeParentId);
@@ -203,6 +203,8 @@ window.app.loadComments = async (animeId, profile) => {
                             if (b.userId === myUid && a.userId !== myUid) return 1;
                             return 0; 
                         });
+                    } else {
+                        currentLevelComments.sort((a, b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
                     }
 
                     if (currentLevelComments.length === 0) return '';
@@ -229,12 +231,27 @@ window.app.loadComments = async (animeId, profile) => {
                         const likeColor = hasLiked ? 'text-green-500' : 'text-gray-500 hover:text-green-400';
                         const dislikeColor = hasDisliked ? 'text-red-500' : 'text-gray-500 hover:text-red-400';
 
-                        // Beautiful Nested Threading UI
                         const marginStyle = depth > 0 ? `margin-left: ${Math.min(depth * 1.5, 3)}rem;` : '';
                         const borderStyle = depth > 0 ? `border-l-2 border-[#F47521]/30 pl-3 mt-3` : `bg-white/5 border border-white/5 p-3 rounded-xl mt-4`;
 
+                        const descendantCount = getDescendantCount(comment.id);
                         const childRepliesHtml = renderCommentTree(commentList, comment.id, depth + 1);
-                        const hasReplies = childRepliesHtml !== '';
+
+                        let repliesSectionHtml = '';
+                        if (childRepliesHtml !== '') {
+                            if (depth === 0) {
+                                repliesSectionHtml = `
+                                    <div class="replies-wrapper hidden flex flex-col w-full mt-1">
+                                        ${childRepliesHtml}
+                                    </div>
+                                    <button onclick="this.previousElementSibling.classList.toggle('hidden'); this.innerHTML = this.previousElementSibling.classList.contains('hidden') ? '<i class=\\'fas fa-chevron-down mr-1\\'></i> View Replies (${descendantCount})' : '<i class=\\'fas fa-chevron-up mr-1\\'></i> Hide Replies'" class="text-[9px] font-bold text-[#F47521] mt-3 ml-1 self-start flex items-center hover:text-white transition-colors">
+                                        <i class="fas fa-chevron-down mr-1"></i> View Replies (${descendantCount})
+                                    </button>
+                                `;
+                            } else {
+                                repliesSectionHtml = `<div class="flex flex-col w-full mt-1">${childRepliesHtml}</div>`;
+                            }
+                        }
 
                         html += `
                             <div class="flex flex-col relative animate-fade-in ${borderStyle}" style="${marginStyle}">
@@ -243,7 +260,7 @@ window.app.loadComments = async (animeId, profile) => {
                                     <div class="flex-1 min-w-0">
                                         <div class="flex items-center justify-between gap-2">
                                             <div class="flex items-center gap-2 min-w-0">
-                                                <span class="bg-[#111] border border-white/10 text-gray-400 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm">EP ${comment.episodeNumber || '1'}</span>
+                                                <span class="bg-white/10 border border-[#F47521]/40 text-[#F47521] text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm">EP ${comment.episodeNumber || '1'}</span>
                                                 <h4 class="text-white font-bold text-xs truncate">${comment.userName || 'Anonymous'}</h4>
                                                 ${isMine ? `<span class="bg-[#F47521] text-black text-[8px] font-black uppercase px-1.5 py-[1px] rounded">You</span>` : ''}
                                                 <span class="text-gray-500 text-[9px] whitespace-nowrap hidden sm:inline">${window.app.formatTimeAgo(comment.timestamp)}</span>
@@ -264,7 +281,7 @@ window.app.loadComments = async (animeId, profile) => {
                                         </div>
                                     </div>
                                 </div>
-                                ${hasReplies ? `<div class="replies-wrapper hidden flex flex-col gap-2 w-full mt-2">${childRepliesHtml}</div><button onclick="this.previousElementSibling.classList.toggle('hidden'); this.innerHTML = this.previousElementSibling.classList.contains('hidden') ? '<i class=\\'fas fa-chevron-down mr-1\\'></i> View Replies' : '<i class=\\'fas fa-chevron-up mr-1\\'></i> Hide Replies'" class="text-[9px] font-bold text-[#F47521] mt-2 ml-1 self-start flex items-center hover:text-white transition-colors"><i class="fas fa-chevron-down mr-1"></i> View Replies</button>` : ''}
+                                ${repliesSectionHtml}
                             </div>
                         `;
                     });
@@ -285,7 +302,6 @@ window.app.loadComments = async (animeId, profile) => {
     }
 };
 
-// --- ACTION LOGIC ---
 window.app.prepareReply = (commentId, username) => {
     const input = document.getElementById('comment-textarea');
     const replyIdField = document.getElementById('reply-to-id');
@@ -318,44 +334,29 @@ window.app.editComment = (commentId, text) => {
     input.focus();
 };
 
-// SMART DELETE: Deletes Comment AND Associated Notification
 window.app.deleteComment = async (commentId) => {
     if(!confirm("Delete this comment permanently?")) return;
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const db = window.app.db;
-
-        // 1. Retrieve the comment to check if it has a replyTo parent
         const commentRef = firestore.doc(db, "comments", commentId);
         const commentSnap = await firestore.getDoc(commentRef);
         
         if (commentSnap.exists()) {
             const commentData = commentSnap.data();
-            
-            // 2. If it was a reply, find and delete the associated notification
             if (commentData.replyTo) {
                 const parentSnap = await firestore.getDoc(firestore.doc(db, "comments", commentData.replyTo));
                 if (parentSnap.exists()) {
                     const parentUid = parentSnap.data().userId;
-                    
-                    // Query notifications where the commentId matches this one
                     const notifRef = firestore.collection(db, `users/${parentUid}/notifications`);
                     const q = firestore.query(notifRef, firestore.where("commentId", "==", commentId));
                     const notifSnaps = await firestore.getDocs(q);
-                    
-                    notifSnaps.forEach(async (nDoc) => {
-                        await firestore.deleteDoc(nDoc.ref);
-                    });
+                    notifSnaps.forEach(async (nDoc) => { await firestore.deleteDoc(nDoc.ref); });
                 }
             }
         }
-        
-        // 3. Finally, delete the actual comment
         await firestore.deleteDoc(commentRef);
-
-    } catch(e) {
-        if(window.app.showCustomAlert) window.app.showCustomAlert("Failed to delete.", "error"); 
-    }
+    } catch(e) {}
 };
 
 window.app.toggleCommentReaction = async (commentId, type) => {
@@ -364,7 +365,6 @@ window.app.toggleCommentReaction = async (commentId, type) => {
         if(window.app.components.auth) window.app.components.auth();
         return;
     }
-    
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const commentRef = firestore.doc(window.app.db, "comments", commentId);
@@ -381,7 +381,7 @@ window.app.toggleCommentReaction = async (commentId, type) => {
             } else {
                 await firestore.updateDoc(commentRef, { 
                     likes: firestore.arrayUnion(profile.uid),
-                    dislikes: firestore.arrayRemove(profile.uid) // Remove from dislike if liking
+                    dislikes: firestore.arrayRemove(profile.uid) 
                 });
             }
         } else if (type === 'dislike') {
@@ -390,13 +390,11 @@ window.app.toggleCommentReaction = async (commentId, type) => {
             } else {
                 await firestore.updateDoc(commentRef, { 
                     dislikes: firestore.arrayUnion(profile.uid),
-                    likes: firestore.arrayRemove(profile.uid) // Remove from like if disliking
+                    likes: firestore.arrayRemove(profile.uid) 
                 });
             }
         }
-    } catch (e) {
-        console.error("Reaction failed", e);
-    }
+    } catch (e) {}
 };
 
 window.app.submitComment = async (e) => {
@@ -442,7 +440,6 @@ window.app.submitComment = async (e) => {
                 text, timestamp: firestore.serverTimestamp(), replyTo: replyToId, likes: [], dislikes: []
             });
 
-            // NOTIFICATION LOGIC (Passes newCommentRef.id so it can be deleted later)
             if (replyToId) {
                 const parentComment = await firestore.getDoc(firestore.doc(window.app.db, "comments", replyToId));
                 if (parentComment.exists() && parentComment.data().userId !== profile.uid) {
@@ -451,7 +448,7 @@ window.app.submitComment = async (e) => {
                         fromUser: profile.name || "A user", 
                         animeId, 
                         episodeNumber: epNum, 
-                        commentId: newCommentRef.id, // Linked ID for deletion
+                        commentId: newCommentRef.id,
                         timestamp: firestore.serverTimestamp(), 
                         read: false
                     });
