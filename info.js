@@ -8,7 +8,6 @@ window.app.components.info = async () => {
     let animeId = urlParams.get('id');
 
     if (!animeId || animeId === 'unknown' || animeId === 'undefined') {
-        // Universal 404 trigger if ID is completely busted
         if (window.BlazeX && window.BlazeX.show404) {
             window.BlazeX.show404('info-container', 'Invalid Anime ID. We cannot locate this series.');
         } else {
@@ -39,11 +38,10 @@ window.app.components.info = async () => {
         try {
             const baseUrl = 'https://anikoto-api-xi.vercel.app';
             
-            // 1. Fetch metadata directly from /api/info
+            // 1. Fetch metadata
             const infoResponse = await fetch(`${baseUrl}/api/info?id=${animeId}`);
             const infoJson = await infoResponse.json();
             
-            // Trigger 404 if anime doesn't exist in backend
             if (!infoJson || !infoJson.success || !infoJson.data) {
                 if(window.BlazeX && window.BlazeX.show404) {
                     window.BlazeX.show404('info-container', 'The anime you are looking for has been removed or does not exist.');
@@ -54,7 +52,7 @@ window.app.components.info = async () => {
             
             const baseAnime = infoJson.data;
 
-            // 2. Fetch corresponding episode lists matching /api/episodes/{param} strictly
+            // 2. Fetch episodes
             let episodesList = [];
             try {
                 const epsResponse = await fetch(`${baseUrl}/api/episodes/${animeId}`);
@@ -62,7 +60,7 @@ window.app.components.info = async () => {
                 if (epsJson && epsJson.success && Array.isArray(epsJson.data)) episodesList = epsJson.data;
             } catch (e) { console.log("Episode list download skipped."); }
 
-            // 3. Fetch Schedule Countdown Data straight from /api/schedule/:id
+            // 3. Fetch Schedule Countdown
             let scheduleData = null;
             try {
                 const schedRes = await fetch(`${baseUrl}/api/schedule/${animeId}`);
@@ -85,16 +83,8 @@ window.app.components.info = async () => {
                     characters(perPage: 24, sort: [ROLE, RELEVANCE]) {
                         edges {
                             role
-                            node {
-                                id
-                                name { full }
-                                image { large }
-                            }
-                            voiceActors(language: JAPANESE, sort: [RELEVANCE]) {
-                                id
-                                name { full }
-                                image { large }
-                            }
+                            node { id name { full } image { large } }
+                            voiceActors(language: JAPANESE, sort: [RELEVANCE]) { id name { full } image { large } }
                         }
                     }
                 } 
@@ -109,9 +99,8 @@ window.app.components.info = async () => {
                 });
                 const json = await aniRes.json();
                 aniData = json?.data?.Media || {};
-            } catch (e) { console.log("AniList character-voice graph layer failed initialization sync."); }
+            } catch (e) { console.log("AniList sync failed."); }
 
-            // Fallback structural allocations
             const finalTitle = baseAnime.title || aniData.title?.english || aniData.title?.romaji || 'Unknown Title';
             const finalJpTitle = baseAnime.japanese_title || aniData.title?.native || 'N/A';
             const finalDesc = baseAnime.description || aniData.description || 'No description available.';
@@ -142,14 +131,13 @@ window.app.components.info = async () => {
                 rawPayload: baseAnime
             };
 
-            // Setup UI views defaults
             window.app.state.activeInfoTab = 'episodes'; 
             window.app.state.activeMetaTab = 'characters'; 
             window.app.state.epSearchValue = '';
-            window.app.state.epRangeFilter = null; // Let it auto-assign based on the chunks
+            window.app.state.epRangeFilter = null; 
             window.app.state.activeLanguageType = 'sub';
 
-            // Smart progression watch tracker calculations
+            // --- PROGRESSION & WATCH TRACKER ---
             const profile = window.app.state?.activeProfile || null;
             let playBtnText = "Play E01";
             let targetEpisodeSlug = episodesList.length > 0 ? (episodesList[0].slug || "1") : '1';
@@ -165,6 +153,7 @@ window.app.components.info = async () => {
                             targetEpisodeSlug = trackObj.lastSlug || String(targetEpNum);
 
                             if (trackObj.finishedEp === true) {
+                                // If they finished the episode, recommend the next one
                                 const totalAvailableEps = episodesList.length;
                                 if (targetEpNum < totalAvailableEps) {
                                     targetEpNum += 1;
@@ -175,10 +164,11 @@ window.app.components.info = async () => {
                                     playBtnText = `Replay Last Ep`;
                                 }
                             } else {
+                                // If they are in the middle of it
                                 playBtnText = `Resume E${targetEpNum < 10 ? '0' + targetEpNum : targetEpNum}`;
                             }
                         }
-                    } catch(e) { console.log("History tracking parsing handled securely."); }
+                    } catch(e) {}
                 }
             }
 
@@ -235,6 +225,21 @@ function renderAnimeInfoShell() {
         });
     }
 
+    // --- LIBRARY BUTTON DYNAMIC RENDER ---
+    const profile = window.app.state?.activeProfile || null;
+    let isAdded = false;
+    if (profile && profile.library && profile.uid && !profile.uid.startsWith('anon_')) {
+        isAdded = profile.library.some(item => item.id === data.id);
+    }
+
+    const libraryBtnHtml = isAdded 
+        ? `<button onclick="window.app.toggleLibrary(event, '${data.id}', '${data.title.replace(/'/g, "\\'")}', '${data.poster}')" class="bg-white text-black px-6 py-3.5 rounded-lg shadow-md font-black text-xs md:text-sm uppercase tracking-wider hover:bg-gray-200 transition-colors border border-white flex items-center gap-2">
+               <i class="fas fa-check text-green-500"></i> Added
+           </button>`
+        : `<button onclick="window.app.toggleLibrary(event, '${data.id}', '${data.title.replace(/'/g, "\\'")}', '${data.poster}')" class="bg-white/10 backdrop-blur-md text-white px-6 py-3.5 rounded-lg shadow-md font-bold text-xs md:text-sm uppercase tracking-wider hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2">
+               <i class="fas fa-plus"></i> Library
+           </button>`;
+
     container.innerHTML = `
         <div class="w-full flex flex-col bg-[#050505] min-h-screen pb-24">
             
@@ -267,9 +272,7 @@ function renderAnimeInfoShell() {
                                 <i class="fas fa-play"></i> ${data.smartPlayText}
                             </button>` : ''}
                             
-                            <button onclick="window.app.addToLibrary('${data.id}', '${data.title.replace(/'/g, "\\'")}', '${data.poster}')" class="bg-white/10 backdrop-blur-md text-white px-6 py-3.5 rounded-lg shadow-md font-bold text-xs md:text-sm uppercase tracking-wider hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2">
-                                <i class="fas fa-plus"></i> Library
-                            </button>
+                            ${libraryBtnHtml}
                         </div>
 
                         <div class="relative w-full max-w-3xl transition-all duration-300">
@@ -310,6 +313,60 @@ function renderAnimeInfoShell() {
     injectVerifiedAlternativePills();
     setupDropdownListener();
 }
+
+// --- DYNAMIC LIBRARY TOGGLE LOGIC ---
+window.app.toggleLibrary = async (event, id, title, img) => {
+    const profile = window.app.state?.activeProfile || null;
+    
+    // Auth Check
+    if (!profile || !profile.uid || profile.uid.startsWith('anon_')) {
+        if (window.app.components.auth) window.app.components.auth();
+        else if (window.app.showCustomAlert) window.app.showCustomAlert("Please log in to save to your Library!", "error");
+        return;
+    }
+
+    if (!profile.library) profile.library = [];
+    
+    const formattedAnime = { id, title, img };
+    const existingItemIndex = profile.library.findIndex(item => item.id === id);
+    const isCurrentlyAdded = existingItemIndex !== -1;
+    const btn = event.currentTarget;
+
+    try {
+        const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        const userRef = firestore.doc(window.app.db, "users", profile.uid);
+
+        if (isCurrentlyAdded) {
+            // Remove from library
+            const itemToRemove = profile.library[existingItemIndex];
+            profile.library.splice(existingItemIndex, 1);
+            localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
+
+            if (btn) {
+                btn.className = "bg-white/10 backdrop-blur-md text-white px-6 py-3.5 rounded-lg shadow-md font-bold text-xs md:text-sm uppercase tracking-wider hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2";
+                btn.innerHTML = `<i class="fas fa-plus"></i> Library`;
+            }
+
+            await firestore.updateDoc(userRef, { library: firestore.arrayRemove(itemToRemove) });
+            if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
+        } else {
+            // Add to library
+            profile.library.unshift(formattedAnime);
+            localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
+
+            if (btn) {
+                btn.className = "bg-white text-black px-6 py-3.5 rounded-lg shadow-md font-black text-xs md:text-sm uppercase tracking-wider hover:bg-gray-200 transition-colors border border-white flex items-center gap-2";
+                btn.innerHTML = `<i class="fas fa-check text-green-500"></i> Added`;
+            }
+
+            await firestore.updateDoc(userRef, { library: firestore.arrayUnion(formattedAnime) });
+            if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
+        }
+    } catch (error) {
+        console.error("Firebase update failed:", error);
+        if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to sync with cloud.", "error");
+    }
+};
 
 window.app.renderInfoInlineTabContent = () => {
     const activeTab = window.app.state.activeInfoTab;
@@ -389,7 +446,6 @@ function setupDropdownListener() {
     });
 }
 
-// 🚀 FIXED: Global toggleDropdown function so the 1-100 selector works flawlessly
 window.app.toggleDropdown = () => {
     const menu = document.getElementById('custom-dropdown-menu');
     const icon = document.getElementById('custom-dropdown-icon');
@@ -413,31 +469,6 @@ window.app.togglePageDesc = () => {
         descP.className = "text-xs md:text-sm text-gray-300 line-clamp-3 leading-relaxed drop-shadow-md pr-4 transition-all duration-300";
         btn.innerHTML = `See More <i class="fas fa-chevron-down ml-1"></i>`;
     }
-};
-
-window.app.addToLibrary = async (id, title, img) => {
-    const profile = window.app.state?.activeProfile || null;
-    if (!profile || !profile.uid) {
-        if (window.app.components.auth) window.app.components.auth();
-        else alert("Please log in to save to your Library!");
-        return;
-    }
-    const formattedAnimeEntry = { id, title, img };
-    if (profile.watchlist && profile.watchlist.some(item => item.id == formattedAnimeEntry.id)) return alert("Already in Library!");
-    if(!profile.watchlist) profile.watchlist = [];
-    profile.watchlist.unshift(formattedAnimeEntry);
-    
-    const clickedBtn = event.currentTarget;
-    if (clickedBtn) {
-        const originalBtnHtml = clickedBtn.innerHTML;
-        clickedBtn.innerHTML = `<i class="fas fa-check text-green-400"></i> Added`;
-        setTimeout(() => clickedBtn.innerHTML = originalBtnHtml, 2000);
-    }
-    try {
-        const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-        const userFirestoreRef = firestore.doc(window.app.db, "users", profile.uid);
-        await firestore.updateDoc(userFirestoreRef, { watchlist: firestore.arrayUnion(formattedAnimeEntry) });
-    } catch (error) { console.error("Firebase library sync failed:", error); }
 };
 
 // ============================================================================
