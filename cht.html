@@ -26,7 +26,25 @@
         .glass-header { background: rgba(5, 5, 5, 0.85); backdrop-filter: blur(10px); }
     </style>
 
-    <script src="auth.js"></script> 
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+        import { getFirestore } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
+            authDomain: "blaze-x-db2f5.firebaseapp.com",
+            projectId: "blaze-x-db2f5",
+            storageBucket: "blaze-x-db2f5.firebasestorage.app",
+            messagingSenderId: "770812306638",
+            appId: "1:770812306638:web:eaf5ded647861f32c25c9f"
+        };
+
+        window.app = window.app || {};
+        window.app.firebaseApp = initializeApp(firebaseConfig);
+        window.app.db = getFirestore(window.app.firebaseApp);
+    </script>
+
+    <script src="auth.js"></script>
 </head>
 <body class="flex flex-col h-[100dvh] bg-[#050505]">
 
@@ -106,8 +124,6 @@
     </div>
 
     <script>
-        window.app = window.app || {};
-        
         let currentUser = null;
         let targetUser = null;
         let chatId = null;
@@ -131,31 +147,22 @@
             }
 
             try {
-                // Initialize Firebase dynamically if not loaded globally
+                // Initialize Auth and Firestore
                 const { getAuth, onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
                 const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
                 
-                // Fallback check: Ensures window.app is configured properly
-                if (!window.app || !window.app.firebaseApp) {
-                    console.error("Firebase is not initialized. Please ensure your config script (like app.js) is linked in cht.html.");
-                    document.getElementById('chat-loader').innerHTML = '<p class="text-red-500 text-xs font-bold text-center">Database Connection Error.<br>Please include firebase config script in &lt;head&gt;.</p>';
-                    return;
-                }
-
                 const auth = getAuth(window.app.firebaseApp);
-                window.db = window.app.db || firestore.getFirestore(window.app.firebaseApp);
+                window.db = window.app.db;
                 window.fs = firestore;
 
                 // 2. LIVE AUTH CHECK
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
-                        // Real Auth User
                         const userDoc = await fs.getDoc(fs.doc(db, "users", user.uid));
                         currentUser = userDoc.exists() ? userDoc.data() : { uid: user.uid, name: user.displayName || "User" };
                     } else {
-                        // Check local storage for guests
                         const localGuest = localStorage.getItem('blazex_user_profile');
-                        if (localGuest) {
+                        if (localGuest && JSON.parse(localGuest).uid.startsWith('anon_')) {
                             currentUser = JSON.parse(localGuest);
                         } else {
                             if(window.app.showCustomAlert) window.app.showCustomAlert("Please log in to chat.", "error");
@@ -285,15 +292,14 @@
                 imgHtml = `<img src="${msg.imageUrl}" class="w-full max-w-[200px] md:max-w-[250px] rounded-lg mb-1 cursor-pointer mt-1">`;
             }
 
-            // Safely encode text to prevent HTML breaks
             const safeText = msg.text ? msg.text.replace(/</g, "&lt;").replace(/>/g, "&gt;") : '';
 
             const html = `
                 <div id="msg-${msg.id}" class="message-bubble relative max-w-[80%] px-3 py-2 ${alignClass} shadow-md group" 
-                     data-id="${msg.id}" data-text="${msg.text || ''}" data-isme="${isMe}">
+                     data-id="${msg.id}" data-text="${safeText}" data-isme="${isMe}">
                     ${replyHtml}
                     ${imgHtml}
-                    ${msg.text ? `<p class="text-sm break-words">${safeText}</p>` : ''}
+                    ${safeText ? `<p class="text-sm break-words">${safeText}</p>` : ''}
                     <div class="flex items-center justify-end gap-1 mt-1 opacity-70">
                         <span class="text-[8px] font-bold tracking-wider">${timeStr}</span>
                         ${msg.isEdited ? `<span class="text-[8px] italic ml-1">(edited)</span>` : ''}
@@ -350,7 +356,6 @@
                 cancelReply();
             } catch(e) { 
                 if(window.app.showCustomAlert) window.app.showCustomAlert("Failed to send message.", "error"); 
-                else alert("Failed to send.");
             }
 
             input.disabled = false;
@@ -379,7 +384,6 @@
                 }
             } catch(e) { 
                 if(window.app.showCustomAlert) window.app.showCustomAlert("Image upload failed.", "error"); 
-                else alert("Image upload failed. Try again.");
             }
             
             btn.innerHTML = `<i class="fas fa-paper-plane text-sm relative right-[1px] bottom-[1px]"></i>`;
@@ -472,7 +476,7 @@
             }, 10);
         }
 
-        function closeMsgOptions(e) {
+        window.closeMsgOptions = (e) => {
             if (e && e.target.id !== 'msg-options-modal' && e.target.tagName !== 'BUTTON') return;
             const modal = document.getElementById('msg-options-modal');
             const panel = document.getElementById('msg-options-panel');
@@ -482,14 +486,14 @@
             setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
         }
 
-        function optionReply() {
+        window.optionReply = () => {
             const id = document.getElementById('opt-msg-id').value;
             const text = document.getElementById('opt-msg-text').value || "Photo";
             setReplyState(id, text, "Message");
             closeMsgOptions();
         }
 
-        function optionEdit() {
+        window.optionEdit = () => {
             const id = document.getElementById('opt-msg-id').value;
             const text = document.getElementById('opt-msg-text').value;
             isEditingId = id;
@@ -498,7 +502,7 @@
             closeMsgOptions();
         }
 
-        async function optionDelete() {
+        window.optionDelete = async () => {
             if(!confirm("Delete this message?")) return;
             const id = document.getElementById('opt-msg-id').value;
             try {
@@ -507,7 +511,7 @@
             closeMsgOptions();
         }
 
-        function optionShare() {
+        window.optionShare = () => {
             const text = document.getElementById('opt-msg-text').value;
             closeMsgOptions();
             if (window.app.components && window.app.components.share && text) {
