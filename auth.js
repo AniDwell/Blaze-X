@@ -1,4 +1,4 @@
-// auth.js - REBUILT WITH CROPPER.JS & ENHANCED FIRESTORE DB
+// auth.js - REBUILT WITH FIRESTORE FIXES & NO LOCAL STORAGE (EXCEPT GUEST)
 
 // Dynamically load Cropper.js CSS and JS if not already loaded
 if (!document.getElementById('cropperjs-css')) {
@@ -66,6 +66,7 @@ window.app.showCustomAlert = (message, type = 'error', actionText = null, action
 
 // --- MODAL INITIALIZATION ---
 window.app.components.auth = () => {
+    // Basic check to see if user is in memory
     if (window.app.state && window.app.state.activeProfile && window.app.state.activeProfile.uid && !window.app.state.activeProfile.uid.startsWith('anon_')) {
         window.location.href = 'profile.html';
         return;
@@ -86,7 +87,7 @@ window.app.components.auth = () => {
                 content: ''; position: absolute; bottom: -5px; left: 20px;
                 border-width: 6px 6px 0; border-style: solid; border-color: #ffffff transparent transparent transparent;
             }
-            .cropper-view-box, .cropper-face { border-radius: 50%; } /* Makes crop box circular */
+            .cropper-view-box, .cropper-face { border-radius: 50%; } 
         </style>
         
         <div id="crop-modal" class="fixed inset-0 z-[300] bg-black/95 flex flex-col items-center justify-center hidden">
@@ -216,7 +217,6 @@ window.app.triggerPfpCropFlow = (event) => {
         
         document.getElementById('crop-modal').classList.remove('hidden');
         
-        // Initialize Cropper JS (1:1 ratio for PFP)
         if (globalCropperInstance) globalCropperInstance.destroy();
         globalCropperInstance = new Cropper(imageTarget, {
             aspectRatio: 1,
@@ -226,8 +226,6 @@ window.app.triggerPfpCropFlow = (event) => {
         });
     };
     reader.readAsDataURL(file);
-    
-    // Clear input so same file can be selected again
     event.target.value = '';
 };
 
@@ -247,7 +245,6 @@ window.app.executeCropAndUpload = () => {
     btn.innerHTML = `<i class="fas fa-circle-notch fa-spin text-sm"></i>`;
     btn.disabled = true;
 
-    // Get the cropped area as a Blob
     globalCropperInstance.getCroppedCanvas({
         width: 300,
         height: 300,
@@ -320,6 +317,12 @@ window.app.switchAuthView = (view) => {
 // --- ENHANCED FIREBASE DB STRUCTURE ---
 // ==========================================
 
+// Helper to initialize Firestore safely
+const getDb = async () => {
+    const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+    return window.app.db || firestore.getFirestore(window.app.firebaseApp);
+};
+
 window.app.handleLogin = async (e) => {
     e.preventDefault();
     const btn = document.getElementById('btn-login');
@@ -342,7 +345,7 @@ window.app.handleLogin = async (e) => {
         
     } catch (error) {
         if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-            window.app.showCustomAlert("Account not found. Please Sign Up.", 'error');
+            window.app.showCustomAlert("Account not found or wrong password.", 'error');
         } else {
             window.app.showCustomAlert(error.message.replace('Firebase:', '').trim(), 'error');
         }
@@ -365,35 +368,39 @@ window.app.handleRegister = async (e) => {
         const pfp = window.app.state.authSelectedPfp; 
 
         // 1. Create Auth Account
-        const { getAuth, createUserWithEmailAndPassword } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+        const { getAuth, createUserWithEmailAndPassword, updateProfile } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
         const auth = getAuth(window.app.firebaseApp);
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
-        // 2. Prepare Structured Profile Data for Firestore
+        // Update Auth Profile for Google/Auth sync
+        await updateProfile(user, { displayName: name, photoURL: pfp });
+
+        // 2. Prepare Structured Profile Data
         const newProfile = {
             uid: user.uid,
             name: name,
             email: email,
-            pfpLink: pfp, // Updated key 
-            library: [], // Anime saved to user's library
-            watchProgress: {}, // Resumed Data Mapping (e.g., { 'one-piece': { ep: 5, timestamp: 124 } })
-            history: [], // Quick history array
+            pfpLink: pfp, 
+            library: [], 
+            watchProgress: {}, 
+            history: [], 
             createdAt: new Date().toISOString()
         };
 
-        // 3. Create Dedicated Document inside 'users' collection using UID
+        // 3. Create Dedicated Document inside 'users' collection
         try {
             const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-            const userDocRef = firestore.doc(window.app.db, "users", user.uid);
+            const db = await getDb();
+            const userDocRef = firestore.doc(db, "users", user.uid);
             await firestore.setDoc(userDocRef, newProfile);
         } catch (dbError) {
-            console.warn("Firestore write blocked.", dbError);
+            console.error("Firestore Write Failed:", dbError);
+            throw new Error("Database blocked account creation. Check Firestore Security Rules.");
         }
 
-        // 4. Save Locally and Redirect
+        // 4. Update Memory State (NO LOCAL STORAGE FOR REGISTERED USERS)
         window.app.state.activeProfile = newProfile;
-        localStorage.setItem('blazex_user_profile', JSON.stringify(newProfile));
         
         window.app.closeAuthModal();
         window.location.href = 'profile.html';
@@ -418,34 +425,7 @@ window.app.handleGoogleLogin = async () => {
         const result = await signInWithPopup(auth, provider);
         const user = result.user;
 
-        // Same Structured Data
-        let profileData = {
-            uid: user.uid,
-            name: user.displayName || 'Google User',
-            email: user.email,
-            pfpLink: user.photoURL || `pfp${Math.floor(Math.random() * 10) + 1}.jpeg`,
-            library: [],
-            watchProgress: {},
-            history: [],
-            createdAt: new Date().toISOString()
-        };
-
-        try {
-            const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-            const userDocRef = firestore.doc(window.app.db, "users", user.uid);
-            const docSnap = await firestore.getDoc(userDocRef);
-            
-            if (docSnap.exists()) {
-                profileData = docSnap.data();
-            } else {
-                await firestore.setDoc(userDocRef, profileData);
-            }
-        } catch(dbErr) {
-            console.warn("Firestore sync failed.");
-        }
-
-        window.app.state.activeProfile = profileData;
-        localStorage.setItem('blazex_user_profile', JSON.stringify(profileData));
+        await window.app.syncProfileAfterAuth(user);
         
         window.app.closeAuthModal();
         window.location.href = 'profile.html';
@@ -476,6 +456,8 @@ window.app.handleGuestCreation = (e) => {
     };
 
     window.app.state.activeProfile = guestProfile;
+    
+    // EXCEPTION: ONLY Guest mode uses localStorage
     localStorage.setItem('blazex_user_profile', JSON.stringify(guestProfile));
 
     window.app.closeAuthModal();
@@ -506,18 +488,21 @@ window.app.handlePasswordReset = async (e) => {
     }
 };
 
+// --- SELF-HEALING FIRESTORE SYNC ---
 window.app.syncProfileAfterAuth = async (firebaseUser) => {
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-        const userDocRef = firestore.doc(window.app.db, "users", firebaseUser.uid);
+        const db = await getDb();
+        const userDocRef = firestore.doc(db, "users", firebaseUser.uid);
         const docSnap = await firestore.getDoc(userDocRef);
         
         if (docSnap.exists()) {
-            const data = docSnap.data();
-            window.app.state.activeProfile = data;
-            localStorage.setItem('blazex_user_profile', JSON.stringify(data));
+            // User exists in DB, load into memory
+            window.app.state.activeProfile = docSnap.data();
+            // NO LOCAL STORAGE HERE
         } else {
-            const fallbackProfile = {
+            // FORCE RE-CREATION: Auth exists, but DB is empty
+            const newProfile = {
                 uid: firebaseUser.uid,
                 name: firebaseUser.displayName || "User",
                 email: firebaseUser.email,
@@ -527,10 +512,13 @@ window.app.syncProfileAfterAuth = async (firebaseUser) => {
                 history: [],
                 createdAt: new Date().toISOString()
             };
-            window.app.state.activeProfile = fallbackProfile;
-            localStorage.setItem('blazex_user_profile', JSON.stringify(fallbackProfile));
+            
+            await firestore.setDoc(userDocRef, newProfile);
+            window.app.state.activeProfile = newProfile;
+            // NO LOCAL STORAGE HERE
         }
     } catch(syncErr) {
-        console.warn("Could not sync profile from Firestore.");
+        console.error("Firestore Sync Error:", syncErr);
+        throw new Error("Database sync failed. Please check Firestore Security Rules.");
     }
 };
