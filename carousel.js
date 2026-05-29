@@ -1,4 +1,4 @@
-// carousel.js
+// carousel.js - WITH DYNAMIC ADD/REMOVE LIBRARY FEATURE
 
 window.app.components.carousel = async () => {
     const container = document.getElementById('carousel-container');
@@ -21,7 +21,6 @@ window.app.components.carousel = async () => {
         const rawResponse = await fetch(`${baseUrl}/api/latest-episodes`);
         const response = await rawResponse.json();
         
-        // Extract the data array based on the API docs {"success": true, "data": [...]}
         const rawSlides = response.data || [];
 
         if (rawSlides.length === 0) {
@@ -33,11 +32,9 @@ window.app.components.carousel = async () => {
             return;
         }
 
-        // 2. WAIT FOR ALL ANILIST MATCHES (Loader stays on screen during this)
+        // 2. WAIT FOR ALL ANILIST MATCHES
         const enrichedSlides = await Promise.all(rawSlides.map(async (slide) => {
             const cleanTitle = (slide.title || '').replace(/\(Dub\)|\(Sub\)|Episode \d+/gi, '').trim();
-            
-            // STRICTLY USE EXACT ID FROM API JSON
             const exactId = slide.id; 
             
             let finalImage = slide.image || 'https://via.placeholder.com/1280x720/111/fff?text=No+Image';
@@ -67,7 +64,6 @@ window.app.components.carousel = async () => {
                     if (media.averageScore) finalRating = media.averageScore;
                     if (media.trending) trendingScore = media.trending;
                     
-                    // Sanitize raw HTML elements and tags from AniList markdown responses smoothly
                     if (media.description) {
                         finalDescription = media.description.replace(/<[^>]*>?/gm, '').trim();
                     }
@@ -79,7 +75,6 @@ window.app.components.carousel = async () => {
             return { ...slide, exactId, finalImage, finalRating, trendingScore, finalDescription };
         }));
 
-        // Sort by trending score (highest first) and take top 5
         enrichedSlides.sort((a, b) => b.trendingScore - a.trendingScore);
         const topSlides = enrichedSlides.slice(0, 5);
 
@@ -89,7 +84,6 @@ window.app.components.carousel = async () => {
         let imageSlidesHtml = '';
         let dotsHtml = '';
 
-        // Build Background Image Slides
         topSlides.forEach((s, i) => {
             imageSlidesHtml += `
                 <div class="absolute inset-0 cursor-pointer z-0 group overflow-hidden bg-black" id="slide-bg-${i}" style="opacity: ${i === 0 ? '1' : '0'}; z-index: ${i === 0 ? '20' : '10'}; transition: opacity 0.8s ease-in-out;" onclick="window.app.handleCarouselImageClick()">
@@ -106,7 +100,7 @@ window.app.components.carousel = async () => {
             `;
         });
 
-        // 3. RENDER FINAL UI (Removes loader)
+        // 3. RENDER FINAL UI
         container.innerHTML = `
             <div class="relative w-full aspect-[4/5] md:aspect-[21/9] max-h-[75vh] overflow-hidden bg-black border-b border-white/5">
                 
@@ -141,7 +135,24 @@ window.app.updateCarouselUI = (index) => {
     const data = window.app.state.carouselItems[index];
     if (!data) return;
 
+    const profile = window.app.state.activeProfile;
+    
+    // Check if the anime is already in the user's library
+    let isAdded = false;
+    if (profile && profile.library && profile.uid && !profile.uid.startsWith('anon_')) {
+        isAdded = profile.library.some(item => item.id === data.exactId);
+    }
+
     const ratingHtml = data.finalRating ? `<span class="flex items-center gap-1"><i class="fas fa-star"></i> ${data.finalRating}% SCORE</span>` : '';
+
+    // Dynamic Button State
+    const libraryBtnHtml = isAdded 
+        ? `<button onclick="window.app.handleCarouselLibraryClick(event, ${index})" class="bg-white text-black px-5 py-2 md:px-6 md:py-3 rounded font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors border border-white flex items-center gap-2">
+               <i class="fas fa-check text-green-500"></i> Added
+           </button>`
+        : `<button onclick="window.app.handleCarouselLibraryClick(event, ${index})" class="bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2">
+               <i class="fas fa-plus"></i> Library
+           </button>`;
 
     uiLayer.style.opacity = '0';
 
@@ -161,16 +172,13 @@ window.app.updateCarouselUI = (index) => {
                     <i class="fas fa-play"></i> Watch Now
                 </button>
                 
-                <button onclick="window.app.handleCarouselLibraryClick(event, ${index})" class="bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2">
-                    <i class="fas fa-plus"></i> Library
-                </button>
+                ${libraryBtnHtml}
             </div>
         `;
         uiLayer.style.opacity = '1';
     }, 300);
 };
 
-// --- SAFE ROUTING LOGIC FOR IMAGES & BUTTONS ---
 window.app.handleCarouselImageClick = () => {
     const currentIndex = window.app.state.carouselCurrentIndex;
     const currentSlideData = window.app.state.carouselItems[currentIndex];
@@ -182,7 +190,6 @@ window.app.handleCarouselImageClick = () => {
     }
 };
 
-// --- ROTATION & SLIDE CONTROLS ---
 window.app.goToCarouselSlide = (targetIndex) => {
     const currentIndex = window.app.state.carouselCurrentIndex;
     if (targetIndex === currentIndex) return;
@@ -228,60 +235,70 @@ function startAutoRotate() {
     }, 6000); 
 }
 
-// --- UPDATED LIBRARY LOGIC ---
+// --- DYNAMIC LIBRARY LOGIC (ADD & REMOVE) ---
 window.app.handleCarouselLibraryClick = async (event, index) => {
-    event.stopPropagation(); // Prevent the image background click from routing to info.html
+    event.stopPropagation(); 
     const profile = window.app.state.activeProfile;
     
-    // Check if user is logged in (reject anonymous/guests too)
+    // Auth Check
     if (!profile || !profile.uid || profile.uid.startsWith('anon_')) {
         if (window.app.components.auth) window.app.components.auth();
-        else if (window.app.showCustomAlert) window.app.showCustomAlert("Please log in or create an account to save to your Library!", "error");
+        else if (window.app.showCustomAlert) window.app.showCustomAlert("Please log in to save to your Library!", "error");
         return;
     }
 
     const rawData = window.app.state.carouselItems[index];
     if (!rawData) return;
     
+    if(!profile.library) profile.library = [];
+    
     const formattedAnime = { 
         id: rawData.exactId, 
         title: rawData.title, 
         img: rawData.finalImage 
     };
-    
-    // Ensure array exists
-    if(!profile.library) profile.library = [];
-    
-    // Check if already in library
-    if (profile.library.some(item => item.id === formattedAnime.id)) {
-        if (window.app.showCustomAlert) window.app.showCustomAlert("This series is already in your Library!", "error");
-        return;
-    }
-    
-    // Add locally to state
-    profile.library.unshift(formattedAnime);
-    localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
-    
-    // Visual button update
-    const btn = event.currentTarget || event.target.closest('button');
-    if (btn) {
-        const originalHtml = btn.innerHTML;
-        btn.innerHTML = `<i class="fas fa-check text-green-400"></i> Added`;
-        btn.classList.add('border-green-400', 'text-green-400');
-        setTimeout(() => {
-            btn.innerHTML = originalHtml;
-            btn.classList.remove('border-green-400', 'text-green-400');
-        }, 2000);
-    }
 
-    // Sync with Firestore using the NEW schema key: 'library'
+    const existingItemIndex = profile.library.findIndex(item => item.id === formattedAnime.id);
+    const isCurrentlyAdded = existingItemIndex !== -1;
+    const btn = event.currentTarget || event.target.closest('button');
+
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const userRef = firestore.doc(window.app.db, "users", profile.uid);
-        await firestore.updateDoc(userRef, { library: firestore.arrayUnion(formattedAnime) });
-        if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
+
+        if (isCurrentlyAdded) {
+            // --- REMOVE FROM LIBRARY ---
+            const itemToRemove = profile.library[existingItemIndex];
+            profile.library.splice(existingItemIndex, 1); 
+            localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
+
+            // Instant UI Update to 'Not Added' State
+            if (btn) {
+                btn.className = "bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2";
+                btn.innerHTML = `<i class="fas fa-plus"></i> Library`;
+            }
+
+            // Sync with Firestore
+            await firestore.updateDoc(userRef, { library: firestore.arrayRemove(itemToRemove) });
+            if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
+
+        } else {
+            // --- ADD TO LIBRARY ---
+            profile.library.unshift(formattedAnime);
+            localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
+
+            // Instant UI Update to 'Added' State
+            if (btn) {
+                btn.className = "bg-white text-black px-5 py-2 md:px-6 md:py-3 rounded font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors border border-white flex items-center gap-2";
+                btn.innerHTML = `<i class="fas fa-check text-green-500"></i> Added`;
+            }
+
+            // Sync with Firestore
+            await firestore.updateDoc(userRef, { library: firestore.arrayUnion(formattedAnime) });
+            if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
+        }
     } catch (error) { 
         console.error("Firebase update failed:", error); 
-        if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to save to cloud.", "error");
+        if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to sync with cloud.", "error");
     }
 };
