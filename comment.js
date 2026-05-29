@@ -1,4 +1,4 @@
-// comment.js - Universal Bottom-Sheet Commenting Engine for Blaze-X
+// comment.js - Interactive Draggable Bottom-Sheet Commenting Engine
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
@@ -20,19 +20,20 @@ window.app.components.comment = async () => {
     if (!sheet) {
         sheet = document.createElement('div');
         sheet.id = 'blazex-comments-sheet';
-        sheet.className = 'fixed inset-0 z-[100] hidden flex-col justify-end';
+        sheet.className = 'fixed inset-0 z-[100] hidden flex-col justify-end touch-none'; // touch-none prevents page scroll while dragging
+        
         sheet.innerHTML = `
             <div id="comments-backdrop" class="absolute inset-0 bg-black/70 backdrop-blur-sm opacity-0 transition-opacity duration-300" onclick="window.app.closeComments()"></div>
             
-            <div id="comments-panel" class="relative bg-[#0a0a0a] w-full md:max-w-2xl md:mx-auto h-[85vh] md:h-[90vh] rounded-t-3xl md:rounded-3xl border border-white/10 flex flex-col transition-transform duration-300 translate-y-full shadow-[0_-10px_40px_rgba(244,117,33,0.1)] md:mb-5">
+            <div id="comments-panel" class="relative bg-[#0a0a0a] w-full md:max-w-2xl md:mx-auto h-[50vh] rounded-t-3xl md:rounded-3xl border border-white/10 flex flex-col translate-y-full shadow-[0_-10px_40px_rgba(244,117,33,0.1)] md:mb-5" style="transition: transform 0.3s ease, height 0.3s ease;">
                 
-                <div class="w-full flex justify-center py-3 cursor-pointer" onclick="window.app.closeComments()">
-                    <div class="w-12 h-1.5 bg-white/20 rounded-full"></div>
+                <div id="comments-drag-handle" class="w-full flex justify-center py-4 cursor-grab active:cursor-grabbing">
+                    <div class="w-12 h-1.5 bg-white/20 rounded-full pointer-events-none"></div>
                 </div>
 
                 <div class="px-5 pb-3 border-b border-white/5 flex items-center justify-between">
                     <h2 class="text-white font-black uppercase tracking-widest text-sm flex items-center gap-2">
-                        <i class="fas fa-comments text-[#F47521]"></i> Community Discussion
+                        <i class="fas fa-comments text-[#F47521]"></i> Community
                     </h2>
                     <button onclick="window.app.closeComments()" class="text-gray-400 hover:text-white transition-colors bg-white/5 w-8 h-8 rounded-full flex items-center justify-center">
                         <i class="fas fa-times"></i>
@@ -58,24 +59,80 @@ window.app.components.comment = async () => {
                                 </div>
                             </div>
                             <button type="submit" id="post-comment-btn" class="bg-[#F47521] text-black w-10 h-10 rounded-xl flex items-center justify-center shrink-0 hover:bg-white hover:scale-105 transition-all shadow-lg">
-                                <i class="fas fa-paper-plane text-xs"></i>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4 ml-[-2px] mt-[2px]">
+                                    <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
                             </button>
                            </form>`
                     }
                 </div>
 
             </div>
-        </div>
         `;
         document.body.appendChild(sheet);
+
+        // --- DRAG LOGIC SETUP ---
+        const panel = document.getElementById('comments-panel');
+        const handle = document.getElementById('comments-drag-handle');
+        let startY = 0;
+        let startHeight = 0;
+        let isDragging = false;
+
+        const onDragStart = (e) => {
+            isDragging = true;
+            startY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+            startHeight = panel.getBoundingClientRect().height;
+            panel.style.transition = 'none'; // Disable transition for smooth dragging
+        };
+
+        const onDragMove = (e) => {
+            if (!isDragging) return;
+            const currentY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+            const deltaY = startY - currentY;
+            const newHeight = startHeight + deltaY;
+            
+            // Limit max height to 90vh
+            const maxPx = window.innerHeight * 0.9;
+            if (newHeight <= maxPx && newHeight > 100) {
+                panel.style.height = `${newHeight}px`;
+            }
+        };
+
+        const onDragEnd = () => {
+            if (!isDragging) return;
+            isDragging = false;
+            panel.style.transition = 'transform 0.3s ease, height 0.3s ease'; // Re-enable transition
+            
+            const currentHeight = panel.getBoundingClientRect().height;
+            const screenHeight = window.innerHeight;
+            
+            // Snap Logic
+            if (currentHeight > screenHeight * 0.7) {
+                panel.style.height = '90vh'; // Expand to full
+            } else if (currentHeight < screenHeight * 0.3) {
+                window.app.closeComments(); // Close if dragged too low
+            } else {
+                panel.style.height = '50vh'; // Snap back to half
+            }
+        };
+
+        handle.addEventListener('mousedown', onDragStart);
+        handle.addEventListener('touchstart', onDragStart, { passive: true });
+        window.addEventListener('mousemove', onDragMove);
+        window.addEventListener('touchmove', onDragMove, { passive: false });
+        window.addEventListener('mouseup', onDragEnd);
+        window.addEventListener('touchend', onDragEnd);
     }
 
     // 2. OPEN ANIMATION
+    const panel = document.getElementById('comments-panel');
+    panel.style.height = '50vh'; // Reset to half-screen every time it opens
+    
     sheet.classList.remove('hidden');
     sheet.classList.add('flex');
     setTimeout(() => {
         document.getElementById('comments-backdrop').classList.remove('opacity-0');
-        document.getElementById('comments-panel').classList.remove('translate-y-full');
+        panel.classList.remove('translate-y-full');
     }, 10);
 
     // 3. FETCH & RENDER COMMENTS
@@ -111,20 +168,13 @@ window.app.formatTimeAgo = (timestamp) => {
     return date.toLocaleDateString();
 };
 
-// Toggle 3-Dots Menu
 window.app.toggleCommentMenu = (commentId) => {
     const menu = document.getElementById(`menu-${commentId}`);
     const isHidden = menu.classList.contains('hidden');
-    
-    // Close all other menus first
     document.querySelectorAll('.comment-action-menu').forEach(m => m.classList.add('hidden'));
-    
-    if (isHidden) {
-        menu.classList.remove('hidden');
-    }
+    if (isHidden) menu.classList.remove('hidden');
 };
 
-// Close menus when clicking outside
 document.addEventListener('click', (e) => {
     if (!e.target.closest('.menu-trigger-btn') && !e.target.closest('.comment-action-menu')) {
         document.querySelectorAll('.comment-action-menu').forEach(m => m.classList.add('hidden'));
@@ -150,9 +200,6 @@ window.app.loadComments = async (animeId, profile) => {
             comments.push({ id: doc.id, ...doc.data() });
         });
 
-        // Sorting Logic: 
-        // 1. Sort by time (newest first)
-        // 2. Put Current User's comments at the absolute top
         comments.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
         
         const myUid = profile?.uid || 'guest';
@@ -160,12 +207,13 @@ window.app.loadComments = async (animeId, profile) => {
         const otherComments = comments.filter(c => c.userId !== myUid);
         const sortedComments = [...myComments, ...otherComments];
 
+        // NEW: Empty State with GIF
         if (sortedComments.length === 0) {
             container.innerHTML = `
-                <div class="flex flex-col items-center justify-center py-16 opacity-50">
-                    <i class="fas fa-ghost text-5xl mb-4 text-gray-600"></i>
-                    <p class="text-xs font-bold uppercase tracking-widest text-gray-400">It's quiet here...</p>
-                    <p class="text-[10px] text-gray-500 mt-1">Be the first to share your thoughts!</p>
+                <div class="flex flex-col items-center justify-center py-10 opacity-80 h-full">
+                    <img src="https://media.tenor.com/VOoSARm1t7wAAAAm/anime-girl.webp" class="w-32 h-32 object-contain mb-4 drop-shadow-xl" alt="No Comments">
+                    <p class="text-sm font-black uppercase tracking-widest text-white text-center">No comment here</p>
+                    <p class="text-[10px] font-bold text-gray-400 mt-1 uppercase">Be the first one to comment</p>
                 </div>
             `;
             return;
@@ -188,7 +236,7 @@ window.app.loadComments = async (animeId, profile) => {
 
             html += `
                 <div class="flex gap-3 bg-white/5 border border-white/5 p-3 rounded-xl animate-fade-in relative group">
-                    <img src="${comment.userAvatar || 'https://via.placeholder.com/100/222/fff?text=U'}" class="w-10 h-10 rounded-full object-cover border border-white/10 shrink-0">
+                    <img src="${comment.userAvatar || 'https://via.placeholder.com/100/222/fff?text=U'}" class="w-10 h-10 rounded-full object-cover border border-white/10 shrink-0 shadow-md">
                     
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center justify-between gap-2">
@@ -215,7 +263,7 @@ window.app.loadComments = async (animeId, profile) => {
                             <button onclick="window.app.prepareReply('${comment.userName}')" class="text-gray-500 hover:text-white text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1">
                                 <i class="fas fa-reply"></i> Reply
                             </button>
-                            </div>
+                        </div>
                     </div>
                 </div>
             `;
@@ -242,13 +290,11 @@ window.app.editComment = (commentId, text) => {
     const editIdField = document.getElementById('edit-comment-id');
     const btn = document.getElementById('post-comment-btn');
     
-    // Close menu
     document.getElementById(`menu-${commentId}`).classList.add('hidden');
     
     input.value = text;
     editIdField.value = commentId;
     
-    // Change Button Icon to Check/Update
     btn.innerHTML = `<i class="fas fa-check text-xs"></i>`;
     btn.classList.replace('bg-[#F47521]', 'bg-green-500');
     
@@ -262,7 +308,6 @@ window.app.deleteComment = async (commentId) => {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         await firestore.deleteDoc(firestore.doc(window.app.db, "comments", commentId));
         
-        // Refresh
         const urlParams = new URLSearchParams(window.location.search);
         const animeId = urlParams.get('id') || urlParams.get('anime') || window.app.state?.currentAnimePage?.id;
         window.app.loadComments(animeId, window.app.state.activeProfile);
@@ -299,12 +344,16 @@ window.app.submitComment = async (e) => {
             const docRef = firestore.doc(window.app.db, "comments", editId);
             await firestore.updateDoc(docRef, { 
                 text: text,
-                isEdited: true
+                isEdited: true,
+                userAvatar: profile.photoURL || 'https://via.placeholder.com/100/222/fff?text=U' // Ensure current PFP is synced
             });
             
-            // Reset Edit State
             editIdField.value = "";
-            btn.innerHTML = `<i class="fas fa-paper-plane text-xs"></i>`;
+            btn.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4 ml-[-2px] mt-[2px]">
+                    <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            `;
             btn.classList.replace('bg-green-500', 'bg-[#F47521]');
         } else {
             // CREATE NEW
@@ -312,25 +361,31 @@ window.app.submitComment = async (e) => {
                 animeId: animeId,
                 userId: profile.uid,
                 userName: profile.displayName || profile.name || "User",
-                userAvatar: profile.photoURL || 'https://via.placeholder.com/100/222/fff?text=U',
+                userAvatar: profile.photoURL || 'https://via.placeholder.com/100/222/fff?text=U', // Saving the current PFP
                 text: text,
                 timestamp: firestore.serverTimestamp()
             });
         }
 
         input.value = '';
-        input.style.height = '44px'; // Reset height
+        input.style.height = '44px'; 
         input.disabled = false;
-        btn.innerHTML = `<i class="fas fa-paper-plane text-xs"></i>`;
+        btn.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4 ml-[-2px] mt-[2px]">
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        `;
         
-        // Reload comments
         window.app.loadComments(animeId, profile);
 
     } catch (err) {
         console.error("Post Error:", err);
         alert("Failed to post comment.");
         input.disabled = false;
-        btn.innerHTML = `<i class="fas fa-paper-plane text-xs"></i>`;
+        btn.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4 ml-[-2px] mt-[2px]">
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        `;
     }
 };
-
