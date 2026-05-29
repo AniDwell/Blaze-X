@@ -1,4 +1,4 @@
-9<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -12,9 +12,15 @@
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
         .line-clamp-4 { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+        
         /* Modal Animation */
         .modal-enter { animation: slideUp 0.3s ease-out forwards; }
         @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        
+        /* Custom Dropdown Animation */
+        .dropdown-open .custom-options { display: block; animation: fadeIn 0.2s ease-out; }
+        .dropdown-open .dropdown-icon { transform: rotate(180deg); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body class="bg-[#050505] text-white font-sans min-h-screen pb-20 overflow-x-hidden">
@@ -77,37 +83,82 @@
                 <button id="close-filter-btn" class="text-gray-400 hover:text-white p-2"><i class="fas fa-times text-lg"></i></button>
             </div>
             
-            <div class="p-4 overflow-y-auto space-y-4 text-xs font-bold text-gray-300">
+            <div class="p-4 overflow-y-auto space-y-5 text-xs font-bold text-gray-300">
                 <div class="grid grid-cols-2 gap-4">
-                    <label class="flex flex-col gap-1">Type
-                        <select id="f-type" class="bg-white/5 border border-white/10 rounded p-2 text-white"><option value="">ALL</option><option value="1">TV</option><option value="2">Movie</option><option value="3">OVA</option><option value="4">ONA</option><option value="5">Special</option></select>
-                    </label>
-                    <label class="flex flex-col gap-1">Status
-                        <select id="f-status" class="bg-white/5 border border-white/10 rounded p-2 text-white"><option value="">ALL</option><option value="1">Finished Airing</option><option value="2">Currently Airing</option><option value="3">Not Yet Aired</option></select>
-                    </label>
-                    <label class="flex flex-col gap-1">Language
-                        <select id="f-lang" class="bg-white/5 border border-white/10 rounded p-2 text-white"><option value="">ALL</option><option value="sub">SUB</option><option value="dub">DUB</option></select>
-                    </label>
-                    <label class="flex flex-col gap-1">Sort By
-                        <select id="f-sort" class="bg-white/5 border border-white/10 rounded p-2 text-white"><option value="default">Default</option><option value="score">Score</option><option value="latest">Latest</option></select>
-                    </label>
+                    
+                    <div class="flex flex-col gap-1 relative custom-select-wrapper" id="wrap-type">
+                        <span>Type</span>
+                        <div class="custom-select flex justify-between items-center bg-white/5 border border-white/10 rounded p-2 text-white cursor-pointer select-none" data-value="">
+                            <span class="selected-text">ALL</span>
+                            <i class="fas fa-chevron-down text-xs transition-transform dropdown-icon"></i>
+                        </div>
+                        <div class="custom-options absolute z-50 w-full top-full mt-1 bg-[#1a1a1a] border border-white/10 rounded hidden shadow-xl max-h-32 overflow-y-auto">
+                            <div class="p-2 hover:bg-[#F47521] hover:text-black cursor-pointer transition" data-value="">ALL</div>
+                            <div class="p-2 hover:bg-[#F47521] hover:text-black cursor-pointer transition" data-value="1">TV</div>
+                            <div class="p-2 hover:bg-[#F47521] hover:text-black cursor-pointer transition" data-value="2">Movie</div>
+                            <div class="p-2 hover:bg-[#F47521] hover:text-black cursor-pointer transition" data-value="3">OVA</div>
+                            <div class="p-2 hover:bg-[#F47521] hover:text-black cursor-pointer transition" data-value="4">ONA</div>
+                            <div class="p-2 hover:bg-[#F47521] hover:text-black cursor-pointer transition" data-value="5">Special</div>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col gap-1 relative custom-select-wrapper" id="wrap-status">
+                        <span>Status</span>
+                        <div class="custom-select flex justify-between items-center bg-white/5 border border-white/10 rounded p-2 text-white cursor-pointer select-none" data-value="">
+                            <span class="selected-text">ALL</span>
+                            <i class="fas fa-chevron-down text-xs transition-transform dropdown-icon"></i>
+                        </div>
+                        <div class="custom-options absolute z-50 w-full top-full mt-1 bg-[#1a1a1a] border border-white/10 rounded hidden shadow-xl max-h-32 overflow-y-auto">
+                            <div class="p-2 hover:bg-[#F47521] hover:text-black cursor-pointer transition" data-value="">ALL</div>
+                            <div class="p-2 hover:bg-[#F47521] hover:text-black cursor-pointer transition" data-value="1">Finished Airing</div>
+                            <div class="p-2 hover:bg-[#F47521] hover:text-black cursor-pointer transition" data-value="2">Currently Airing</div>
+                            <div class="p-2 hover:bg-[#F47521] hover:text-black cursor-pointer transition" data-value="3">Not Yet Aired</div>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col gap-1 relative custom-select-wrapper" id="wrap-lang">
+                        <span>Language</span>
+                        <div class="custom-select flex justify-between items-center bg-white/5 border border-white/10 rounded p-2 text-white cursor-pointer select-none" data-value="">
+                            <span class="selected-text">ALL</span>
+                            <i class="fas fa-chevron-down text-xs transition-transform dropdown-icon"></i>
+                        </div>
+                        <div class="custom-options absolute z-50 w-full top-full mt-1 bg-[#1a1a1a] border border-white/10 rounded hidden shadow-xl">
+                            <div class="p-2 hover:bg-[#F47521] hover:text-black cursor-pointer transition" data-value="">ALL</div>
+                            <div class="p-2 hover:bg-[#F47521] hover:text-black cursor-pointer transition" data-value="sub">SUB</div>
+                            <div class="p-2 hover:bg-[#F47521] hover:text-black cursor-pointer transition" data-value="dub">DUB</div>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col gap-1 relative custom-select-wrapper" id="wrap-sort">
+                        <span>Sort By</span>
+                        <div class="custom-select flex justify-between items-center bg-white/5 border border-white/10 rounded p-2 text-white cursor-pointer select-none" data-value="default">
+                            <span class="selected-text">Default</span>
+                            <i class="fas fa-chevron-down text-xs transition-transform dropdown-icon"></i>
+                        </div>
+                        <div class="custom-options absolute z-50 w-full top-full mt-1 bg-[#1a1a1a] border border-white/10 rounded hidden shadow-xl">
+                            <div class="p-2 hover:bg-[#F47521] hover:text-black cursor-pointer transition" data-value="default">Default</div>
+                            <div class="p-2 hover:bg-[#F47521] hover:text-black cursor-pointer transition" data-value="score">Score</div>
+                            <div class="p-2 hover:bg-[#F47521] hover:text-black cursor-pointer transition" data-value="latest">Latest</div>
+                        </div>
+                    </div>
+
                 </div>
 
                 <label class="flex flex-col gap-1">Genres (Comma separated)
-                    <input type="text" id="f-genres" placeholder="e.g. Action, Comedy" class="bg-white/5 border border-white/10 rounded p-2 text-white placeholder-gray-600">
+                    <input type="text" id="f-genres" placeholder="e.g. Action, Comedy" class="bg-white/5 border border-white/10 rounded p-2 text-white placeholder-gray-600 outline-none focus:border-[#F47521]">
                 </label>
 
                 <div class="border-t border-white/5 pt-4">
-                    <p class="mb-2">Air Date Range</p>
+                    <p class="mb-2 text-gray-400">Air Date Range</p>
                     <div class="grid grid-cols-3 gap-2">
-                        <input type="number" id="f-sy" placeholder="Start YYYY" class="bg-white/5 border border-white/10 rounded p-2 text-white">
-                        <input type="number" id="f-sm" placeholder="MM" class="bg-white/5 border border-white/10 rounded p-2 text-white">
-                        <input type="number" id="f-sd" placeholder="DD" class="bg-white/5 border border-white/10 rounded p-2 text-white">
+                        <input type="number" id="f-sy" placeholder="Start YYYY" class="bg-white/5 border border-white/10 rounded p-2 text-white outline-none focus:border-[#F47521]">
+                        <input type="number" id="f-sm" placeholder="MM" class="bg-white/5 border border-white/10 rounded p-2 text-white outline-none focus:border-[#F47521]">
+                        <input type="number" id="f-sd" placeholder="DD" class="bg-white/5 border border-white/10 rounded p-2 text-white outline-none focus:border-[#F47521]">
                     </div>
                     <div class="grid grid-cols-3 gap-2 mt-2">
-                        <input type="number" id="f-ey" placeholder="End YYYY" class="bg-white/5 border border-white/10 rounded p-2 text-white">
-                        <input type="number" id="f-em" placeholder="MM" class="bg-white/5 border border-white/10 rounded p-2 text-white">
-                        <input type="number" id="f-ed" placeholder="DD" class="bg-white/5 border border-white/10 rounded p-2 text-white">
+                        <input type="number" id="f-ey" placeholder="End YYYY" class="bg-white/5 border border-white/10 rounded p-2 text-white outline-none focus:border-[#F47521]">
+                        <input type="number" id="f-em" placeholder="MM" class="bg-white/5 border border-white/10 rounded p-2 text-white outline-none focus:border-[#F47521]">
+                        <input type="number" id="f-ed" placeholder="DD" class="bg-white/5 border border-white/10 rounded p-2 text-white outline-none focus:border-[#F47521]">
                     </div>
                 </div>
             </div>
@@ -119,19 +170,7 @@
         </div>
     </div>
 
-    <script src="search.js"></script>
     <script src="404.js"></script>
-<script src="search.js"></script> ```
-2. Apne `search.js` ko open karo aur **`render404State`** wale function (around line 240) ko is code se replace kar do:
-
-```javascript
- // --- HELPER: Render 404 Image State ---
- const render404State = (message = "Nothing matched your search.") => {
-     topResultCard.innerHTML = '';
-     resultsListContainer.innerHTML = ''; // Purana content clear karo
-     
-     // Universal 404 component ko call kar rahe hain aur usko container ki ID de rahe hain
-     window.BlazeX.show404('results-list-container', message);
- };
+    <script src="search.js"></script>
 </body>
 </html>
