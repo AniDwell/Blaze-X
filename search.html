@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search - Blaze-X</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Custom scrollbar and animations */
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    </style>
+</head>
+<body class="bg-[#050505] text-white font-sans min-h-screen pb-20">
+
+    <div class="sticky top-0 z-50 bg-[#050505]/90 backdrop-blur-md px-4 py-4 border-b border-white/10">
+        <div class="relative max-w-2xl mx-auto flex items-center">
+            <button onclick="history.back()" class="mr-4 text-gray-400 hover:text-white transition">
+                <i class="fas fa-arrow-left text-xl"></i>
+            </button>
+            <div class="relative w-full">
+                <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500"></i>
+                <input type="text" id="search-input" autocomplete="off" placeholder="Search anime, genres..." 
+                    class="w-full bg-white/5 border border-white/10 rounded-full py-3 pl-12 pr-10 text-sm text-white focus:outline-none focus:border-[#F47521] focus:ring-1 focus:ring-[#F47521] transition-all">
+                <button id="clear-search-btn" class="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-white hidden">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <main class="max-w-2xl mx-auto px-4 pt-6">
+        
+        <div id="idle-view" class="block animate-fade-in">
+            <div class="mb-8">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xs font-black uppercase tracking-widest text-gray-400">Recent Searches</h2>
+                    <button id="clear-all-history" class="text-[10px] text-red-500 uppercase font-bold hidden hover:underline">Clear All</button>
+                </div>
+                <div id="history-container" class="flex flex-wrap gap-2">
+                    </div>
+                <p id="history-hint" class="text-[9px] text-gray-500 mt-2 hidden italic">Long-press to delete a specific search.</p>
+            </div>
+
+            <div>
+                <h2 class="text-xs font-black uppercase tracking-widest text-[#F47521] mb-4">Top Trending Anime</h2>
+                <div id="trending-container" class="flex overflow-x-auto gap-4 pb-4 hide-scrollbar snap-x">
+                    </div>
+            </div>
+        </div>
+
+        <div id="typing-view" class="hidden animate-fade-in">
+            <h2 class="text-xs font-black uppercase tracking-widest text-gray-400 mb-4">Suggestions</h2>
+            <div id="suggestions-container" class="space-y-1">
+                </div>
+        </div>
+
+        <div id="results-view" class="hidden animate-fade-in">
+            <h2 class="text-xs font-black uppercase tracking-widest text-white mb-4">Search Results</h2>
+            
+            <div id="top-result-card" class="mb-6">
+                </div>
+
+            <div id="results-list-container" class="space-y-4">
+                </div>
+        </div>
+
+    </main>
+
+    <script src="search.js"></script>
+</body>
+</html>
