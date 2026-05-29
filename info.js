@@ -8,12 +8,17 @@ window.app.components.info = async () => {
     let animeId = urlParams.get('id');
 
     if (!animeId || animeId === 'unknown' || animeId === 'undefined') {
-        container.innerHTML = `
-            <div class="mt-32 text-center text-gray-400 font-bold uppercase">
-                <i class="fas fa-search text-4xl mb-4 text-[#F47521]"></i><br>Invalid Anime ID in URL<br>
-                <button onclick="window.location.href='index.html'" class="mt-6 text-xs text-white bg-white/10 px-6 py-2 rounded hover:bg-[#F47521]">Go Home</button>
-            </div>
-        `;
+        // Universal 404 trigger if ID is completely busted
+        if (window.BlazeX && window.BlazeX.show404) {
+            window.BlazeX.show404('info-container', 'Invalid Anime ID. We cannot locate this series.');
+        } else {
+            container.innerHTML = `
+                <div class="mt-32 text-center text-gray-400 font-bold uppercase">
+                    <i class="fas fa-search text-4xl mb-4 text-[#F47521]"></i><br>Invalid Anime ID in URL<br>
+                    <button onclick="window.location.href='index.html'" class="mt-6 text-xs text-white bg-white/10 px-6 py-2 rounded hover:bg-[#F47521]">Go Home</button>
+                </div>
+            `;
+        }
         return;
     }
 
@@ -37,7 +42,16 @@ window.app.components.info = async () => {
             // 1. Fetch metadata directly from /api/info
             const infoResponse = await fetch(`${baseUrl}/api/info?id=${animeId}`);
             const infoJson = await infoResponse.json();
-            if (!infoJson || !infoJson.success || !infoJson.data) throw new Error("Anime metadata parsing aborted.");
+            
+            // Trigger 404 if anime doesn't exist in backend
+            if (!infoJson || !infoJson.success || !infoJson.data) {
+                if(window.BlazeX && window.BlazeX.show404) {
+                    window.BlazeX.show404('info-container', 'The anime you are looking for has been removed or does not exist.');
+                    return;
+                }
+                throw new Error("Anime metadata parsing aborted.");
+            }
+            
             const baseAnime = infoJson.data;
 
             // 2. Fetch corresponding episode lists matching /api/episodes/{param} strictly
@@ -58,7 +72,7 @@ window.app.components.info = async () => {
                 }
             } catch (e) { console.log("Schedule countdown unpopulated."); }
 
-            // --- DEEP ANILIST API GRAPHQL INTEGRATION (CHARACTERS & VA SYNC ADDED HERE) ---
+            // --- DEEP ANILIST API GRAPHQL INTEGRATION ---
             let aniData = {};
             const hasValidAniId = baseAnime.anilistId && !isNaN(baseAnime.anilistId);
             
@@ -108,7 +122,6 @@ window.app.components.info = async () => {
                 extractedRelations = aniData.relations.nodes.filter(node => node.type === 'ANIME');
             }
 
-            // Extract native character edge loops safely from inside AniList object layer
             let parsedAniCharacters = [];
             if (aniData.characters && Array.isArray(aniData.characters.edges)) {
                 parsedAniCharacters = aniData.characters.edges;
@@ -123,7 +136,7 @@ window.app.components.info = async () => {
                 banner: finalBanner,
                 episodes: episodesList, 
                 relations: extractedRelations,
-                characters: parsedAniCharacters, // Populated entirely from real-time AniList payload metrics
+                characters: parsedAniCharacters,
                 aniList: aniData,
                 scheduleCountdown: scheduleData,
                 rawPayload: baseAnime
@@ -133,7 +146,7 @@ window.app.components.info = async () => {
             window.app.state.activeInfoTab = 'episodes'; 
             window.app.state.activeMetaTab = 'characters'; 
             window.app.state.epSearchValue = '';
-            window.app.state.epRangeFilter = '1-100';
+            window.app.state.epRangeFilter = null; // Let it auto-assign based on the chunks
             window.app.state.activeLanguageType = 'sub';
 
             // Smart progression watch tracker calculations
@@ -177,7 +190,11 @@ window.app.components.info = async () => {
 
         } catch (error) {
             console.error("Master Layout Assembly Failed:", error);
-            container.innerHTML = `<div class="w-full h-screen flex flex-col items-center justify-center -mt-10"><i class="fas fa-exclamation-triangle text-5xl text-[#F47521] mb-4"></i><h2 class="text-2xl font-black text-white mb-2">Oops! Something went wrong.</h2><p class="text-gray-400 text-sm mb-6">${error.message}</p><button onclick="window.location.reload()" class="bg-white/10 px-6 py-2 rounded font-bold text-sm tracking-wide">Try Again</button></div>`;
+            if (window.BlazeX && window.BlazeX.show404) {
+                window.BlazeX.show404('info-container', 'A critical error occurred while loading this series.');
+            } else {
+                container.innerHTML = `<div class="w-full h-screen flex flex-col items-center justify-center -mt-10"><i class="fas fa-exclamation-triangle text-5xl text-[#F47521] mb-4"></i><h2 class="text-2xl font-black text-white mb-2">Oops! Something went wrong.</h2><p class="text-gray-400 text-sm mb-6">${error.message}</p><button onclick="window.location.reload()" class="bg-white/10 px-6 py-2 rounded font-bold text-sm tracking-wide">Try Again</button></div>`;
+            }
         }
     };
 
@@ -265,22 +282,18 @@ function renderAnimeInfoShell() {
 
             <div class="w-full max-w-7xl mx-auto px-4 md:px-12 mt-8 flex flex-col gap-8">
                 
-                <!-- SEASONS PILL SLIDER -->
                 <div id="verified-relations-pill-box" class="w-full hidden">
                     <h3 class="text-white text-xs font-black mb-3 uppercase tracking-widest text-gray-400">Seasons & Alternative Media</h3>
                     <div id="relations-horizontal-slider" class="w-full flex gap-3 overflow-x-auto pb-3 hide-scrollbar snap-x"></div>
                 </div>
 
-                <!-- TAB SWITCH BUTTONS BAR -->
                 <div class="flex items-center justify-center w-full max-w-2xl border-b border-white/10 text-xs md:text-sm font-bold uppercase tracking-widest pt-2">
                     <button onclick="window.app.switchInfoTab('episodes')" id="tab-episodes" class="flex-1 text-center pb-3 transition-colors ${window.app.state.activeInfoTab === 'episodes' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white'}">Episodes</button>
                     <button onclick="window.app.switchInfoTab('information')" id="tab-information" class="flex-1 text-center pb-3 transition-colors ${window.app.state.activeInfoTab === 'information' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white'}">Information</button>
                 </div>
                 
-                <!-- SUB-VIEW CONTAINER FOR CHOSEN TAB CONTENT -->
                 <div id="dynamic-tab-content-area" class="py-2"></div>
 
-                <!-- RECOMMENDATIONS SECTION -->
                 ${recommendationsHtml !== '' ? `
                 <div class="w-full border-t border-white/5 pt-8 mt-4">
                     <h3 class="text-white text-sm md:text-base font-black uppercase tracking-widest text-gray-300 mb-4"><i class="fas fa-heart text-[#F47521] mr-1.5"></i> If You Liked This, Watch These</h3>
@@ -376,6 +389,20 @@ function setupDropdownListener() {
     });
 }
 
+// 🚀 FIXED: Global toggleDropdown function so the 1-100 selector works flawlessly
+window.app.toggleDropdown = () => {
+    const menu = document.getElementById('custom-dropdown-menu');
+    const icon = document.getElementById('custom-dropdown-icon');
+    if (!menu) return;
+    if(menu.classList.contains('hidden')) {
+        menu.classList.remove('hidden');
+        if(icon) icon.style.transform = 'rotate(180deg)';
+    } else {
+        menu.classList.add('hidden');
+        if(icon) icon.style.transform = 'rotate(0deg)';
+    }
+};
+
 window.app.togglePageDesc = () => {
     const descP = document.getElementById('info-desc');
     const btn = document.getElementById('read-more-btn');
@@ -412,7 +439,6 @@ window.app.addToLibrary = async (id, title, img) => {
         await firestore.updateDoc(userFirestoreRef, { watchlist: firestore.arrayUnion(formattedAnimeEntry) });
     } catch (error) { console.error("Firebase library sync failed:", error); }
 };
-
 
 // ============================================================================
 // --- EMBEDDED COMPONENT SUB-MODULE 1: INFORMATION TAB VIEW LAYOUT ENGINE ---
@@ -451,7 +477,6 @@ window.app.components.informationtab = () => {
 
     const activeMeta = window.app.state.activeMetaTab || 'characters';
     
-    // --- UPDATED: PARSES NESTED EDGES DATA RECOVERED NATIVELY FROM ANILIST ---
     let characterCardsHtml = '';
     if (data.characters && data.characters.length > 0) {
         data.characters.forEach(edge => {
@@ -471,7 +496,6 @@ window.app.components.informationtab = () => {
 
             characterCardsHtml += `
                 <div class="bg-[#111] p-2 rounded-lg border border-white/5 shadow-inner flex items-center justify-between gap-2 hover:border-white/20 transition-colors w-full">
-                    <!-- Left Character Segment -->
                     <div class="flex items-center gap-2 min-w-0 max-w-[55%]">
                         <img src="${charNode.image?.large || 'https://via.placeholder.com/120/222/fff?text=?'}" class="w-9 h-11 rounded object-cover border border-white/10 shrink-0 shadow-md">
                         <div class="min-w-0">
@@ -479,7 +503,6 @@ window.app.components.informationtab = () => {
                             <div class="text-[9px] text-gray-400 truncate mt-0.5 uppercase tracking-wide font-bold">${roleType.toLowerCase()}</div>
                         </div>
                     </div>
-                    <!-- Right Voice Actor Segment -->
                     ${vaHtml}
                 </div>
             `;
@@ -627,7 +650,7 @@ window.app.components.episodestab = () => {
                 </div>
             </div>
 
-            <div id="numeric-episodes-grid" class="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-14 lg:grid-cols-18 gap-2 w-full"></div>
+            <div id="numeric-episodes-grid" class="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-14 lg:grid-cols-18 gap-2 w-full max-h-[350px] overflow-y-auto hide-scrollbar pr-1 pb-2"></div>
 
             ${scheduleContainerHtml}
         </div>
@@ -764,7 +787,11 @@ window.app.resolveEpisodeStreamAndRoute = async (episodeSlug, episodeNumber, ani
         }
 
         if (!verifiedStreamData) {
-            alert("Sources are caching on host mirrors. Try another server!");
+            if (window.BlazeX && window.BlazeX.show404) {
+                window.BlazeX.show404('dynamic-tab-content-area', 'Sources are caching on host mirrors. Try another server!');
+            } else {
+                alert("Sources are caching on host mirrors. Try another server!");
+            }
             return;
         }
 
