@@ -26,7 +26,8 @@
         .glass-header { background: rgba(5, 5, 5, 0.85); backdrop-filter: blur(10px); }
     </style>
 
-    </head>
+    <script src="auth.js"></script> 
+</head>
 <body class="flex flex-col h-[100dvh] bg-[#050505]">
 
     <header class="glass-header w-full h-16 border-b border-white/10 flex items-center px-4 shrink-0 z-50 fixed top-0">
@@ -123,7 +124,8 @@
             const targetUid = urlParams.get('user');
 
             if (!targetUid) {
-                alert("Target user ID missing in URL.");
+                if(window.app.showCustomAlert) window.app.showCustomAlert("Target user ID missing in URL.", "error");
+                else alert("Target user ID missing in URL.");
                 window.location.href = 'index.html';
                 return;
             }
@@ -135,8 +137,8 @@
                 
                 // Fallback check: Ensures window.app is configured properly
                 if (!window.app || !window.app.firebaseApp) {
-                    console.error("Firebase is not initialized. Please ensure your config script is linked in cht.html.");
-                    document.getElementById('chat-loader').innerHTML = '<p class="text-red-500 text-xs font-bold text-center">Database Connection Error.<br>Please include firebase config.</p>';
+                    console.error("Firebase is not initialized. Please ensure your config script (like app.js) is linked in cht.html.");
+                    document.getElementById('chat-loader').innerHTML = '<p class="text-red-500 text-xs font-bold text-center">Database Connection Error.<br>Please include firebase config script in &lt;head&gt;.</p>';
                     return;
                 }
 
@@ -156,14 +158,16 @@
                         if (localGuest) {
                             currentUser = JSON.parse(localGuest);
                         } else {
-                            alert("Please log in to chat.");
+                            if(window.app.showCustomAlert) window.app.showCustomAlert("Please log in to chat.", "error");
+                            else alert("Please log in to chat.");
                             window.location.href = 'index.html';
                             return;
                         }
                     }
 
                     if(currentUser.uid === targetUid) {
-                        alert("You cannot chat with yourself.");
+                        if(window.app.showCustomAlert) window.app.showCustomAlert("You cannot chat with yourself.", "error");
+                        else alert("You cannot chat with yourself.");
                         window.history.back();
                         return;
                     }
@@ -174,7 +178,8 @@
                     // 3. Fetch Target User Data
                     const targetSnap = await fs.getDoc(fs.doc(db, "users", targetUid));
                     if (!targetSnap.exists()) {
-                        alert("User does not exist."); 
+                        if(window.app.showCustomAlert) window.app.showCustomAlert("User does not exist.", "error");
+                        else alert("User does not exist.");
                         window.history.back();
                         return;
                     }
@@ -280,12 +285,15 @@
                 imgHtml = `<img src="${msg.imageUrl}" class="w-full max-w-[200px] md:max-w-[250px] rounded-lg mb-1 cursor-pointer mt-1">`;
             }
 
+            // Safely encode text to prevent HTML breaks
+            const safeText = msg.text ? msg.text.replace(/</g, "&lt;").replace(/>/g, "&gt;") : '';
+
             const html = `
                 <div id="msg-${msg.id}" class="message-bubble relative max-w-[80%] px-3 py-2 ${alignClass} shadow-md group" 
                      data-id="${msg.id}" data-text="${msg.text || ''}" data-isme="${isMe}">
                     ${replyHtml}
                     ${imgHtml}
-                    ${msg.text ? `<p class="text-sm break-words">${msg.text.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>` : ''}
+                    ${msg.text ? `<p class="text-sm break-words">${safeText}</p>` : ''}
                     <div class="flex items-center justify-end gap-1 mt-1 opacity-70">
                         <span class="text-[8px] font-bold tracking-wider">${timeStr}</span>
                         ${msg.isEdited ? `<span class="text-[8px] italic ml-1">(edited)</span>` : ''}
@@ -340,7 +348,10 @@
 
                 input.value = ''; input.style.height = '40px';
                 cancelReply();
-            } catch(e) { alert("Failed to send message. Please try again."); }
+            } catch(e) { 
+                if(window.app.showCustomAlert) window.app.showCustomAlert("Failed to send message.", "error"); 
+                else alert("Failed to send.");
+            }
 
             input.disabled = false;
             btn.innerHTML = `<i class="fas fa-paper-plane text-sm relative right-[1px] bottom-[1px]"></i>`;
@@ -366,7 +377,10 @@
                         text: "Photo", imageUrl: data.data.url, senderId: currentUser.uid, timestamp: fs.serverTimestamp()
                     });
                 }
-            } catch(e) { alert("Image upload failed. Try again."); }
+            } catch(e) { 
+                if(window.app.showCustomAlert) window.app.showCustomAlert("Image upload failed.", "error"); 
+                else alert("Image upload failed. Try again.");
+            }
             
             btn.innerHTML = `<i class="fas fa-paper-plane text-sm relative right-[1px] bottom-[1px]"></i>`;
             e.target.value = ''; 
