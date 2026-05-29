@@ -4,20 +4,21 @@ window.app.components.player = async () => {
     const playerRoot = document.getElementById('blazex-player-root');
     if (!playerRoot) return;
 
-    // 1. Read URL Parameters
+    // 1. Read URL Parameters matching the working API structure
     const urlParams = new URLSearchParams(window.location.search);
-    const episodeId = urlParams.get('id'); // e.g., frieren-beyond-journeys-end-18542?ep=107257
+    const animeId = urlParams.get('anime'); // Maps to the API's ?id=
+    const currentEpNum = urlParams.get('ep') || '1'; // Maps to the API's &ep=
     const audioType = urlParams.get('type') || 'sub';
     const targetServer = urlParams.get('server') || 'hd-1';
 
-    if (!episodeId) {
-        playerRoot.innerHTML = `<p class="text-red-500 font-bold uppercase tracking-widest text-xs">Error: Missing Episode ID</p>`;
+    if (!animeId || !currentEpNum) {
+        playerRoot.innerHTML = `<p class="text-red-500 font-bold uppercase tracking-widest text-xs">Error: Missing Anime ID or Episode Number</p>`;
         return;
     }
 
     const baseUrl = 'https://anikoto-api-xi.vercel.app';
 
-    // 2. Dynamically Load HLS.js (Industry standard for playing .m3u8 anime streams)
+    // 2. Dynamically Load HLS.js for .m3u8 playback
     if (typeof window.Hls === 'undefined') {
         await new Promise((resolve) => {
             const script = document.createElement('script');
@@ -28,49 +29,64 @@ window.app.components.player = async () => {
     }
 
     try {
-        // 3. FETCH STREAM DATA (Primary -> Fallback Routing)
+        // 3. FETCH STREAM DATA (Using the Exact Working Endpoint Structure)
         let streamData = null;
         let isFallback = false;
 
         const fetchStream = async (endpoint) => {
-            const res = await fetch(`${baseUrl}${endpoint}?id=${encodeURIComponent(episodeId)}&server=${targetServer}&type=${audioType}`);
-            const json = await res.json();
-            if (json.success && json.results && json.results.streamingLink && json.results.streamingLink.length > 0) {
-                return json.results;
+            // Generating the exact URL that you just confirmed is working:
+            // e.g., /api/stream?id=Dorohedoro-season-2-bqfe6&ep=1&server=hd-1&type=sub
+            const targetUrl = `${baseUrl}${endpoint}?id=${animeId}&ep=${currentEpNum}&server=${targetServer}&type=${audioType}`;
+            console.log(`[Player] Initiating connection to: ${targetUrl}`);
+
+            try {
+                const res = await fetch(targetUrl);
+                
+                // HTML Error Page Fallback Check
+                const contentType = res.headers.get("content-type");
+                if (!contentType || !contentType.includes("application/json")) {
+                    console.warn(`[Player] Endpoint returned HTML instead of JSON. Fallback required.`);
+                    return null;
+                }
+
+                const json = await res.json();
+                
+                // Parsing the exact JSON schema provided by the Vercel API
+                if (json.success && json.data && json.data.m3u8) {
+                    return json.data;
+                }
+            } catch (err) {
+                console.error(`[Player] Network error:`, err);
             }
             return null;
         };
 
-        // Try Primary Server Endpoint
+        // Try Primary Stream First
         streamData = await fetchStream('/api/stream');
         
-        // Try Fallback Endpoint if Primary fails or returns empty
+        // Try Fallback if Primary Fails
         if (!streamData) {
-            console.log("Primary stream failed, attempting fallback...");
+            console.log("[Player] Primary failed, switching to fallback node...");
             streamData = await fetchStream('/api/stream/fallback');
             isFallback = true;
         }
 
-        if (!streamData) throw new Error("No streaming sources available for this episode.");
+        if (!streamData) throw new Error("API returned no playable video source. Check server status.");
 
-        // Extract Data
-        const streamInfo = streamData.streamingLink[0];
-        const streamUrl = streamInfo.link.file;
-        const tracks = streamInfo.tracks || [];
+        // 4. MAP EXTRACTED DATA
+        const streamUrl = streamData.m3u8; 
+        const tracks = streamData.subtitles || []; 
         
-        // Extract Timestamps (Fallback to 0 if none provided)
-        const introStart = streamInfo.intro?.start || 0;
-        const introEnd = streamInfo.intro?.end || 0;
-        const outroStart = streamInfo.outro?.start || 0;
-        const outroEnd = streamInfo.outro?.end || 0;
+        const introStart = streamData.intro?.start || 0;
+        const introEnd = streamData.intro?.end || 0;
+        const outroStart = streamData.outro?.start || 0;
+        const outroEnd = streamData.outro?.end || 0;
 
-        // 4. BUILD VIDEO PLAYER UI
+        // 5. BUILD VIDEO PLAYER UI
         playerRoot.innerHTML = `
             <video id="main-video-player" controls crossorigin="anonymous" playsinline class="w-full h-full object-contain bg-black outline-none shadow-2xl">
-                <!-- Subtitles injected dynamically -->
-            </video>
+                </video>
             
-            <!-- Custom Skip Buttons Overlay -->
             <button id="skip-intro-btn" class="absolute bottom-20 right-6 bg-white text-black font-black uppercase tracking-widest text-[10px] md:text-xs px-4 py-2 rounded shadow-lg transition-transform transform translate-x-[150%] opacity-0 hover:bg-[#F47521] hover:text-white z-50">
                 Skip Intro <i class="fas fa-forward ml-1"></i>
             </button>
@@ -78,12 +94,12 @@ window.app.components.player = async () => {
                 Skip Outro / Next Ep <i class="fas fa-step-forward ml-1"></i>
             </button>
             
-            ${isFallback ? '<div class="absolute top-4 left-4 bg-red-500/80 text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded">Fallback Server Active</div>' : ''}
+            ${isFallback ? '<div class="absolute top-4 left-4 bg-red-500/80 text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded shadow-md pointer-events-none">Fallback Node Active</div>' : ''}
         `;
 
         const video = document.getElementById('main-video-player');
 
-        // 5. INJECT SUBTITLE TRACKS
+        // 6. INJECT SUBTITLE TRACKS NATIVELY
         tracks.forEach(track => {
             if (track.kind === 'captions' || track.kind === 'subtitles') {
                 const trackEl = document.createElement('track');
@@ -96,21 +112,19 @@ window.app.components.player = async () => {
             }
         });
 
-        // 6. INITIALIZE HLS STREAM
+        // 7. INITIALIZE HLS STREAM ENGINE
         if (Hls.isSupported()) {
             const hls = new Hls({
-                maxBufferLength: 30, // Optimized buffering
+                maxBufferLength: 30,
                 maxMaxBufferLength: 60,
             });
             hls.loadSource(streamUrl);
             hls.attachMedia(video);
             
             hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                // Attempt autoplay (might be blocked by browser policies until user interacts)
-                video.play().catch(e => console.log("Autoplay prevented by browser policies. Waiting for user interaction."));
+                video.play().catch(e => console.log("Autoplay prevented by browser interactions logic."));
             });
 
-            // Handle HLS Errors smoothly
             hls.on(Hls.Events.ERROR, function (event, data) {
                 if (data.fatal) {
                     switch (data.type) {
@@ -130,51 +144,48 @@ window.app.components.player = async () => {
             });
 
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            // Safari Native HLS Support
+            // Safari Native Playback
             video.src = streamUrl;
             video.addEventListener('loadedmetadata', function() {
-                video.play().catch(e => console.log("Autoplay prevented by browser."));
+                video.play().catch(e => console.log("Autoplay prevented."));
             });
         }
 
-        // 7. AUTO-SKIP & OVERLAY BUTTON LOGIC
+        // 8. AUTO-SKIP LOGIC OVERLAYS
         const skipIntroBtn = document.getElementById('skip-intro-btn');
         const skipOutroBtn = document.getElementById('skip-outro-btn');
 
         video.addEventListener('timeupdate', () => {
             const t = video.currentTime;
             
-            // Re-check local storage in real-time in case user toggled it while watching
             const autoSkipIntro = localStorage.getItem('blazex_autoskip_intro') === 'true';
             const autoSkipOutro = localStorage.getItem('blazex_autoskip_outro') === 'true';
 
-            // Intro Skip Logic
+            // Intro Skip UI/Logic
             if (introEnd > 0 && t >= introStart && t < introEnd) {
                 if (autoSkipIntro) {
-                    video.currentTime = introEnd; // Auto jump
+                    video.currentTime = introEnd; 
                 } else {
-                    skipIntroBtn.classList.remove('translate-x-[150%]', 'opacity-0'); // Show button
+                    skipIntroBtn.classList.remove('translate-x-[150%]', 'opacity-0'); 
                 }
             } else {
-                skipIntroBtn.classList.add('translate-x-[150%]', 'opacity-0'); // Hide button
+                skipIntroBtn.classList.add('translate-x-[150%]', 'opacity-0'); 
             }
 
-            // Outro Skip Logic
+            // Outro Skip UI/Logic
             if (outroEnd > 0 && t >= outroStart && t < outroEnd) {
                 if (autoSkipOutro) {
-                    window.app.triggerNextEpisode(); // Auto jump to next episode
+                    window.app.triggerNextEpisode(); 
                 } else {
-                    skipOutroBtn.classList.remove('translate-x-[150%]', 'opacity-0'); // Show button
+                    skipOutroBtn.classList.remove('translate-x-[150%]', 'opacity-0'); 
                 }
             } else {
-                skipOutroBtn.classList.add('translate-x-[150%]', 'opacity-0'); // Hide button
+                skipOutroBtn.classList.add('translate-x-[150%]', 'opacity-0'); 
             }
         });
 
-        // Button Click Listeners
         skipIntroBtn.addEventListener('click', () => { video.currentTime = introEnd; });
         skipOutroBtn.addEventListener('click', () => { window.app.triggerNextEpisode(); });
-
 
     } catch (error) {
         console.error("Player Instantiation Failed:", error);
@@ -182,41 +193,11 @@ window.app.components.player = async () => {
             <div class="flex flex-col items-center justify-center text-center p-6 w-full h-full bg-[#0a0a0a]">
                 <i class="fas fa-video-slash text-4xl text-red-500 mb-3"></i>
                 <p class="text-white font-black text-sm uppercase tracking-wider">Stream Unavailable</p>
-                <p class="text-gray-400 text-[10px] mt-1 max-w-xs leading-relaxed">${error.message}</p>
-                <button onclick="window.location.reload()" class="mt-4 border border-white/20 bg-white/5 px-6 py-2 rounded-lg text-[10px] font-bold uppercase text-white hover:bg-[#F47521] hover:border-[#F47521] hover:text-black transition-colors shadow-lg">Retry Connection</button>
+                <p class="text-gray-400 text-[10px] mt-2 max-w-sm leading-relaxed">${error.message}</p>
+                <button onclick="window.location.reload()" class="mt-6 border border-white/20 bg-white/5 px-6 py-2 rounded-lg text-[10px] font-bold uppercase text-white hover:bg-[#F47521] hover:border-[#F47521] hover:text-black transition-colors shadow-lg">Retry Connection</button>
             </div>
         `;
     }
 };
 
-// --- HELPER FUNCTION: Trigger Next Episode ---
-window.app.triggerNextEpisode = () => {
-    const episodesList = window.app.state.currentEpisodesListProcessed || [];
-    const currentEpNum = window.app.state.currentPlayingEpNum;
-    
-    if (episodesList.length > 0 && currentEpNum) {
-        // Find the next episode object
-        const nextEpObj = episodesList.find(e => (e.num || e.episode_no) == (currentEpNum + 1));
-        
-        if (nextEpObj) {
-            const nextSlug = nextEpObj.slug || nextEpObj.id;
-            const animeId = window.app.state.currentAnimePage.id;
-            const currentLang = window.app.state.activeLanguageType || 'sub';
-            const currentServer = new URLSearchParams(window.location.search).get('server') || 'hd-1';
-            
-            // Redirect to next episode
-            window.location.href = `play.html?id=${encodeURIComponent(nextSlug)}&anime=${animeId}&ep=${currentEpNum + 1}&type=${currentLang}&server=${currentServer}`;
-            return;
-        }
-    }
-    
-    // Fallback if no next episode exists
-    if(window.app.showCustomAlert) {
-        window.app.showCustomAlert("You have reached the latest episode!", "success");
-    } else {
-        alert("You have reached the latest episode!");
-    }
-};
-
-// Global Execution
-// The player component is invoked directly by play.js after the UI is built.
+// Global routing for next episode is handled in play.js
