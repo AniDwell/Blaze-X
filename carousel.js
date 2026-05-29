@@ -46,7 +46,6 @@ window.app.components.carousel = async () => {
             let finalDescription = 'No synopsis available.';
 
             try {
-                // FIXED: Explicitly added description to the GraphQL query string extraction layout block
                 const query = `query ($search: String) { 
                     Media (search: $search, type: ANIME, sort: SEARCH_MATCH) { 
                         trending 
@@ -118,7 +117,7 @@ window.app.components.carousel = async () => {
                 </div>
 
                 <div id="carousel-ui-layer" class="absolute bottom-8 left-4 right-8 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:left-12 md:w-[40%] z-40 pr-4 transition-opacity duration-300 opacity-100">
-                    </div>
+                </div>
                 
                 <div class="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 flex flex-col justify-center gap-2.5 z-[70]" id="carousel-indicators">
                     ${dotsHtml}
@@ -142,7 +141,6 @@ window.app.updateCarouselUI = (index) => {
     const data = window.app.state.carouselItems[index];
     if (!data) return;
 
-    const id = data.exactId || 'unknown';
     const ratingHtml = data.finalRating ? `<span class="flex items-center gap-1"><i class="fas fa-star"></i> ${data.finalRating}% SCORE</span>` : '';
 
     uiLayer.style.opacity = '0';
@@ -180,7 +178,7 @@ window.app.handleCarouselImageClick = () => {
     if (currentSlideData && currentSlideData.exactId) {
         window.location.href = `info.html?id=${currentSlideData.exactId}`;
     } else {
-        alert("Unable to load details for this series.");
+        if (window.app.showCustomAlert) window.app.showCustomAlert("Unable to load details for this series.", "error");
     }
 };
 
@@ -230,14 +228,18 @@ function startAutoRotate() {
     }, 6000); 
 }
 
-// --- LIBRARY LOGIC ---
+// --- UPDATED LIBRARY LOGIC ---
 window.app.handleCarouselLibraryClick = async (event, index) => {
+    event.stopPropagation(); // Prevent the image background click from routing to info.html
     const profile = window.app.state.activeProfile;
-    if (!profile || !profile.uid) {
+    
+    // Check if user is logged in (reject anonymous/guests too)
+    if (!profile || !profile.uid || profile.uid.startsWith('anon_')) {
         if (window.app.components.auth) window.app.components.auth();
-        else alert("Please log in or create an account to save to your Library!");
+        else if (window.app.showCustomAlert) window.app.showCustomAlert("Please log in or create an account to save to your Library!", "error");
         return;
     }
+
     const rawData = window.app.state.carouselItems[index];
     if (!rawData) return;
     
@@ -247,20 +249,39 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
         img: rawData.finalImage 
     };
     
-    if (profile.watchlist && profile.watchlist.some(item => item.id == formattedAnime.id)) return alert("This series is already in your Library!");
+    // Ensure array exists
+    if(!profile.library) profile.library = [];
     
-    if(!profile.watchlist) profile.watchlist = [];
-    profile.watchlist.unshift(formattedAnime);
+    // Check if already in library
+    if (profile.library.some(item => item.id === formattedAnime.id)) {
+        if (window.app.showCustomAlert) window.app.showCustomAlert("This series is already in your Library!", "error");
+        return;
+    }
     
+    // Add locally to state
+    profile.library.unshift(formattedAnime);
+    localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
+    
+    // Visual button update
     const btn = event.currentTarget || event.target.closest('button');
     if (btn) {
         const originalHtml = btn.innerHTML;
         btn.innerHTML = `<i class="fas fa-check text-green-400"></i> Added`;
-        setTimeout(() => btn.innerHTML = originalHtml, 2000);
+        btn.classList.add('border-green-400', 'text-green-400');
+        setTimeout(() => {
+            btn.innerHTML = originalHtml;
+            btn.classList.remove('border-green-400', 'text-green-400');
+        }, 2000);
     }
+
+    // Sync with Firestore using the NEW schema key: 'library'
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const userRef = firestore.doc(window.app.db, "users", profile.uid);
-        await firestore.updateDoc(userRef, { watchlist: firestore.arrayUnion(formattedAnime) });
-    } catch (error) { console.error("Firebase update failed:", error); }
+        await firestore.updateDoc(userRef, { library: firestore.arrayUnion(formattedAnime) });
+        if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
+    } catch (error) { 
+        console.error("Firebase update failed:", error); 
+        if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to save to cloud.", "error");
+    }
 };
