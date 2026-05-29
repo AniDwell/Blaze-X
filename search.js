@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // API Configuration
     const API_BASE = 'https://anikoto-api-xi.vercel.app';
+    const ANILIST_URL = 'https://graphql.anilist.co';
     let typingTimer;
 
     // --- 1. INITIALIZATION & TRENDING ---
@@ -25,14 +26,14 @@ document.addEventListener('DOMContentLoaded', () => {
         await loadTrending();
     };
 
-    // We use /api/filter for the home screen trending list
+    // Keep Idle View (Trending) synced with your backend database
     const loadTrending = async () => {
         try {
             const res = await fetch(`${API_BASE}/api/filter`);
             const json = await res.json();
             
             if (json.success && json.results.data) {
-                const trendingData = json.results.data.slice(0, 10); // Take top 10
+                const trendingData = json.results.data.slice(0, 10);
                 
                 trendingContainer.innerHTML = trendingData.map(anime => `
                     <div onclick="window.location.href='play.html?anime=${anime.id}'" class="min-w-[120px] max-w-[120px] cursor-pointer snap-start group">
@@ -80,7 +81,6 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `).join('');
 
-        // Long Press Logic
         document.querySelectorAll('.history-item').forEach(item => {
             let pressTimer;
             const term = item.getAttribute('data-term');
@@ -107,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderHistory();
     });
 
-    // --- 3. INPUT HANDLING & VIEW SWITCHING ---
+    // --- 3. INPUT HANDLING ---
     const switchView = (view) => {
         idleView.classList.add('hidden');
         typingView.classList.add('hidden');
@@ -147,77 +147,92 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- 4. FETCH SUGGESTIONS (Uses /api/search/suggest) ---
+    // --- 4. FETCH SUGGESTIONS (Uses AniList GraphQL) ---
     const fetchSuggestions = async (term) => {
+        const query = `
+            query ($search: String) {
+                Page(page: 1, perPage: 6) {
+                    media(type: ANIME, search: $search, sort: SEARCH_MATCH) {
+                        id title { romaji english } coverImage { medium } format startDate { year }
+                    }
+                }
+            }
+        `;
         try {
-            const res = await fetch(`${API_BASE}/api/search/suggest?keyword=${encodeURIComponent(term)}`);
+            const res = await fetch(ANILIST_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query, variables: { search: term } })
+            });
             const json = await res.json();
-            
-            if (!json.success || !json.results || json.results.length === 0) {
+            const media = json.data?.Page?.media || [];
+
+            if (media.length === 0) {
                 suggestionsContainer.innerHTML = `<div class="p-4 text-xs text-gray-500">No suggestions found.</div>`;
                 return;
             }
 
-            // Render top 6 suggestions
-            suggestionsContainer.innerHTML = json.results.slice(0, 6).map(anime => `
-                <div onclick="document.getElementById('search-input').value='${anime.title.replace(/'/g, "\\'")}'; handleSearchSubmit('${anime.title.replace(/'/g, "\\'")}')" 
+            suggestionsContainer.innerHTML = media.map(anime => {
+                const title = anime.title.english || anime.title.romaji;
+                const safeTitle = title.replace(/'/g, "\\'");
+                return `
+                <div onclick="document.getElementById('search-input').value='${safeTitle}'; handleSearchSubmit('${safeTitle}')" 
                      class="flex items-center gap-3 p-2 hover:bg-white/5 rounded-lg cursor-pointer transition">
-                    <img src="${anime.poster}" class="w-8 h-10 object-cover rounded shadow">
+                    <img src="${anime.coverImage.medium}" class="w-8 h-10 object-cover rounded shadow">
                     <div class="flex flex-col">
-                        <span class="text-sm font-semibold truncate text-white">${anime.title}</span>
-                        <span class="text-[9px] text-gray-500 font-black uppercase tracking-widest">${anime.showType || 'Anime'} • ${anime.releaseDate || 'N/A'}</span>
+                        <span class="text-sm font-semibold truncate text-white">${title}</span>
+                        <span class="text-[9px] text-gray-500 font-black uppercase tracking-widest">${anime.format || 'Anime'} • ${anime.startDate?.year || 'N/A'}</span>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
         } catch (err) {
-            suggestionsContainer.innerHTML = `<div class="p-4 text-xs text-red-500">Network Error.</div>`;
+            suggestionsContainer.innerHTML = `<div class="p-4 text-xs text-red-500">Network Error checking suggestions.</div>`;
         }
     };
 
-    // --- 5. FULL SEARCH SUBMIT (Uses /api/filter for rich data) ---
+    // --- 5. FULL SEARCH SUBMIT (Uses Vercel /api/search) ---
     const handleSearchSubmit = async (term) => {
         searchInput.blur();
         saveHistory(term);
         switchView('results');
         
-        topResultCard.innerHTML = `<div class="animate-pulse w-full h-48 bg-white/5 rounded-xl"></div>`;
-        resultsListContainer.innerHTML = `<div class="p-4 text-center text-xs text-[#F47521]"><i class="fas fa-circle-notch fa-spin"></i> Extracting full database...</div>`;
+        topResultCard.innerHTML = `<div class="animate-pulse w-full h-40 bg-white/5 rounded-xl"></div>`;
+        resultsListContainer.innerHTML = `<div class="p-4 text-center text-xs text-[#F47521]"><i class="fas fa-circle-notch fa-spin"></i> Searching database...</div>`;
 
         try {
-            // Using /api/filter?keyword=... because it returns the description object for the Top Card
-            const res = await fetch(`${API_BASE}/api/filter?keyword=${encodeURIComponent(term)}`);
+            // Using your exact backend endpoint for search
+            const res = await fetch(`${API_BASE}/api/search?keyword=${encodeURIComponent(term)}`);
             const json = await res.json();
             
-            if (!json.success || !json.results.data || json.results.data.length === 0) {
+            if (!json.success || !json.results || json.results.length === 0) {
                 topResultCard.innerHTML = '';
-                resultsListContainer.innerHTML = `<div class="text-center p-10"><i class="fas fa-ghost text-4xl text-gray-600 mb-3"></i><p class="text-sm text-gray-500">No anime found matching "${term}".</p></div>`;
+                resultsListContainer.innerHTML = `<div class="text-center p-10"><i class="fas fa-ghost text-4xl text-gray-600 mb-3"></i><p class="text-sm text-gray-500">No anime found matching "${term}" in our database.</p></div>`;
                 return;
             }
 
-            const results = json.results.data;
+            const results = json.results;
             const topAnime = results[0];
             const restAnime = results.slice(1);
 
-            // Featured Card Extraction
-            const subEps = topAnime.tvInfo?.sub || '?';
-            const dubEps = topAnime.tvInfo?.dub || 0;
-            const showType = topAnime.tvInfo?.showType || 'TV';
+            const topSubEps = topAnime.tvInfo?.sub || '?';
+            const topDubEps = topAnime.tvInfo?.dub || 0;
+            const topShowType = topAnime.tvInfo?.showType || 'TV';
 
             // Top Result Render
             topResultCard.innerHTML = `
                 <div onclick="window.location.href='play.html?anime=${topAnime.id}'" class="flex flex-col md:flex-row gap-4 bg-gradient-to-br from-[#121212] to-black p-3 rounded-xl border border-white/10 cursor-pointer hover:border-[#F47521]/50 transition group shadow-2xl">
-                    <img src="${topAnime.poster}" class="w-28 md:w-36 h-40 md:h-48 object-cover rounded-lg shadow-lg group-hover:scale-105 transition-transform duration-300">
+                    <img src="${topAnime.poster}" class="w-28 md:w-36 h-40 object-cover rounded-lg shadow-lg group-hover:scale-105 transition-transform duration-300">
                     <div class="flex flex-col justify-center flex-1">
-                        <span class="text-[9px] font-black uppercase tracking-widest text-[#F47521] mb-1"><i class="fas fa-fire mr-1"></i> Top Match</span>
+                        <span class="text-[9px] font-black uppercase tracking-widest text-[#F47521] mb-1"><i class="fas fa-fire mr-1"></i> Top Database Match</span>
                         <h3 class="text-base md:text-lg font-black leading-tight text-white mb-1">${topAnime.title}</h3>
-                        <p class="text-[10px] text-gray-500 mb-2 italic">${topAnime.japanese_title || ''}</p>
-                        <p class="text-[10px] text-gray-300 line-clamp-3 mb-3 leading-relaxed">${topAnime.description || 'Action packed anime series.'}</p>
+                        <p class="text-[10px] text-gray-500 mb-3 italic">${topAnime.japanese_title || ''}</p>
                         
                         <div class="flex items-center gap-3 text-[10px] font-bold mt-auto">
-                            <span class="border border-white/20 text-gray-300 px-1.5 py-0.5 rounded uppercase">${showType}</span>
+                            <span class="border border-white/20 text-gray-300 px-1.5 py-0.5 rounded uppercase">${topShowType}</span>
+                            <span class="text-gray-400"><i class="fas fa-clock mr-1"></i>${topAnime.tvInfo?.duration || '24m'}</span>
                             <div class="flex gap-1 ml-auto">
-                                <span class="bg-[#F47521]/20 text-[#F47521] px-1.5 py-0.5 rounded border border-[#F47521]/30"><i class="fas fa-closed-captioning"></i> ${subEps}</span>
-                                ${dubEps > 0 ? `<span class="bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded border border-purple-500/30"><i class="fas fa-microphone"></i> ${dubEps}</span>` : ''}
+                                <span class="bg-[#F47521]/20 text-[#F47521] px-1.5 py-0.5 rounded border border-[#F47521]/30"><i class="fas fa-closed-captioning"></i> ${topSubEps}</span>
+                                ${topDubEps > 0 ? `<span class="bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded border border-purple-500/30"><i class="fas fa-microphone"></i> ${topDubEps}</span>` : ''}
                             </div>
                         </div>
                     </div>
