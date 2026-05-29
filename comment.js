@@ -195,7 +195,11 @@ window.app.loadComments = async (animeId, profile) => {
                 
                 const renderCommentTree = (commentList, parentId = null, depth = 0) => {
                     const safeParentId = parentId || null;
-                    const currentLevelComments = commentList.filter(c => (c.replyTo || null) === safeParentId);
+                    // Safely normalize replyTo to null if it's undefined
+                    const currentLevelComments = commentList.filter(c => {
+                        const cReplyTo = c.replyTo || null;
+                        return cReplyTo === safeParentId;
+                    });
                     
                     if (depth === 0) {
                         currentLevelComments.sort((a, b) => {
@@ -212,7 +216,6 @@ window.app.loadComments = async (animeId, profile) => {
                         const isMine = comment.userId === myUid;
                         const displayAvatar = isMine ? (profile?.photoURL || profile?.pfpLink || comment.userAvatar) : comment.userAvatar;
                         
-                        // FIX: Encoded safely to prevent HTML breakage
                         const safeText = encodeURIComponent(comment.text || "");
                         const escapedTextHtml = (comment.text || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
                         
@@ -347,11 +350,19 @@ window.app.submitComment = async (e) => {
     const text = input.value.trim();
     if (!text) return;
 
-    const animeId = window.app.state?.currentAnimePage?.id;
-    const epNum = window.app.state?.currentPlayingEpNum || 1;
-    const profile = window.app.state.activeProfile;
+    // 🚀 FIX: Bulletproof URL Extraction 
+    const urlParams = new URLSearchParams(window.location.search);
+    const animeId = urlParams.get('id') || urlParams.get('anime') || window.app.state?.currentAnimePage?.id;
+    const epNum = urlParams.get('ep') || window.app.state?.currentPlayingEpNum || 1;
+    
+    if (!animeId) {
+        if (window.app.showCustomAlert) window.app.showCustomAlert("Error: Cannot find anime ID.", "error");
+        return;
+    }
 
+    const profile = window.app.state.activeProfile;
     const paperPlaneSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`;
+    
     btn.innerHTML = `<i class="fas fa-circle-notch fa-spin text-xs"></i>`;
     input.disabled = true;
 
