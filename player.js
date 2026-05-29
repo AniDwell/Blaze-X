@@ -8,7 +8,7 @@ window.app.components.player = async () => {
     const setBootStatus = (msg, isError = false) => {
         if (isError) {
             playerRoot.innerHTML = `
-                <div class="flex flex-col items-center justify-center text-center p-6 w-full h-full bg-[#050505] border border-red-500/20 rounded-xl">
+                <div class="flex flex-col items-center justify-center text-center p-6 w-full h-full bg-[#050505] border border-red-500/20 rounded-xl shadow-2xl">
                     <i class="fas fa-exclamation-triangle text-3xl text-red-500 mb-2 animate-pulse"></i>
                     <h3 class="text-white font-black text-sm uppercase tracking-widest">Playback Halted</h3>
                     <p class="text-red-400 font-mono text-[10px] mt-2 bg-red-500/10 px-3 py-1 rounded border border-red-500/20 max-w-md">${msg}</p>
@@ -17,12 +17,12 @@ window.app.components.player = async () => {
             `;
         } else {
             playerRoot.innerHTML = `
-                <div class="flex flex-col items-center justify-center text-center p-6 w-full h-full bg-black">
+                <div class="flex flex-col items-center justify-center text-center p-6 w-full h-full bg-[#050505] rounded-xl border border-white/5">
                     <div class="tk-loader scale-125 z-0 mb-6">
                         <div class="tk-dot tk-dot-1"></div>
                         <div class="tk-dot tk-dot-2"></div>
                     </div>
-                    <p class="text-[#F47521] font-mono font-bold uppercase tracking-widest text-[9px] md:text-[10px] bg-[#F47521]/10 border border-[#F47521]/20 px-4 py-1.5 rounded shadow-lg animate-pulse">${msg}</p>
+                    <p class="text-[#F47521] font-mono font-bold uppercase tracking-widest text-[9px] md:text-[10px] bg-[#F47521]/5 border border-[#F47521]/20 px-4 py-1.5 rounded shadow-lg animate-pulse">${msg}</p>
                 </div>
             `;
         }
@@ -42,8 +42,10 @@ window.app.components.player = async () => {
     }
 
     const baseUrl = 'https://anikoto-api-xi.vercel.app';
-    // TUMHARA NAYA BULLETPROOF CLOUDFLARE PROXY
-    const customProxyUrl = 'https://icy-wave-30d8.prashant-yash69.workers.dev/?url='; 
+    
+    // TUMHARA NAYA MANIFEST-REWRITING CLOUDFLARE PROXY
+    // Dhyan do: '/proxy?url=' lagaya hai exactly jaise tumhare worker me hai
+    const customProxyUrl = 'https://icy-wave-30d8.prashant-yash69.workers.dev/proxy?url='; 
 
     setBootStatus("STEP 2/4: Injecting HLS Decoding Engine...");
     
@@ -75,10 +77,12 @@ window.app.components.player = async () => {
             try {
                 const res = await fetch(targetUrl);
                 if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
+                
                 const contentType = res.headers.get("content-type");
                 if (!contentType || !contentType.includes("application/json")) {
                     throw new Error("API Route crashed (HTML Error received).");
                 }
+                
                 const json = await res.json();
                 if (json.success && json.data && json.data.m3u8) return json.data;
             } catch (err) { 
@@ -116,6 +120,9 @@ window.app.components.player = async () => {
         const outroStart = streamData.outro?.start || 0;
         const outroEnd = streamData.outro?.end || 0;
 
+        // PREPARE FINAL PROXIED URL (Adds the target stream and the referer to bypass Cloudflare)
+        const proxiedStreamUrl = customProxyUrl + encodeURIComponent(streamUrl) + '&referer=' + encodeURIComponent(targetReferer);
+
         // PLAYER HTML ARCHITECTURE
         playerRoot.innerHTML = `
             <video id="main-video-player" controls crossorigin="anonymous" playsinline class="w-full h-full object-contain bg-black outline-none shadow-2xl animate-fade-in"></video>
@@ -132,32 +139,30 @@ window.app.components.player = async () => {
 
         const video = document.getElementById('main-video-player');
 
-        // SUBTITLES VIA PROXY
+        // SUBTITLES VIA PROXY (VTT files also routed through proxy with referer)
         tracks.forEach(track => {
             if (track.kind === 'captions' || track.kind === 'subtitles') {
                 const trackEl = document.createElement('track');
                 trackEl.kind = track.kind;
                 trackEl.label = track.label || 'English';
                 trackEl.srclang = track.label ? track.label.substring(0, 2).toLowerCase() : 'en';
-                trackEl.src = customProxyUrl + encodeURIComponent(track.file); 
+                
+                trackEl.src = customProxyUrl + encodeURIComponent(track.file) + '&referer=' + encodeURIComponent(targetReferer); 
+                
                 if (track.default) trackEl.default = true;
                 video.appendChild(trackEl);
             }
         });
 
-        // 🚀 THE ULTIMATE FIX: PROXIED HLS.JS ENGINE
+        // 🚀 THE CLEANED-UP HLS.JS ENGINE (Thanks to your Manifest-Rewriting Worker)
         if (Hls.isSupported()) {
             const hls = new Hls({
                 maxBufferLength: 30,
                 maxMaxBufferLength: 60,
-                // Passing every request through your V2 Cloudflare worker with the secret Referer header
-                xhrSetup: function (xhr, url) {
-                    xhr.open('GET', customProxyUrl + encodeURIComponent(url), true);
-                    xhr.setRequestHeader('x-proxy-referer', targetReferer);
-                }
+                // No xhrSetup needed here anymore! The proxy handles everything internally.
             });
             
-            hls.loadSource(streamUrl);
+            hls.loadSource(proxiedStreamUrl);
             hls.attachMedia(video);
             
             hls.on(Hls.Events.MANIFEST_PARSED, function() {
@@ -167,7 +172,7 @@ window.app.components.player = async () => {
             hls.on(Hls.Events.ERROR, function (event, data) {
                 if (data.fatal) {
                     if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-                        setBootStatus(`Cloudflare/Host Block: Proxy failed to bypass anti-hotlinking. Details: ${data.details}`, true);
+                        setBootStatus(`Cloudflare/Host Block: Proxy failed to fetch chunks. Details: ${data.details}`, true);
                         hls.destroy();
                     } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
                         hls.recoverMediaError();
@@ -179,13 +184,13 @@ window.app.components.player = async () => {
             });
 
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            // Safari Fallback
-            video.src = customProxyUrl + encodeURIComponent(streamUrl);
+            // Safari Fallback (Will work perfectly because proxy rewrites the m3u8 natively)
+            video.src = proxiedStreamUrl;
             video.addEventListener('loadedmetadata', function() {
                 video.play().catch(e => console.log("Autoplay blocked."));
             });
             video.addEventListener('error', function(e) {
-                setBootStatus("Native playback rejected proxy stream.", true);
+                setBootStatus("Native playback rejected proxied stream.", true);
             });
         }
 
