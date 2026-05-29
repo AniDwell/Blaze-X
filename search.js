@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const topResultCard = document.getElementById('top-result-card');
     const resultsListContainer = document.getElementById('results-list-container');
     
-    // API Configuration
+    // API Configurations
     const API_BASE = 'https://anikoto-api-xi.vercel.app';
     const ANILIST_URL = 'https://graphql.anilist.co';
     let typingTimer;
@@ -26,21 +26,21 @@ document.addEventListener('DOMContentLoaded', () => {
         await loadTrending();
     };
 
-    // Keep Idle View (Trending) synced with your backend database
+    // Load Trending from your API
     const loadTrending = async () => {
         try {
-            const res = await fetch(`${API_BASE}/api/filter`);
+            const res = await fetch(`${API_BASE}/api/search?keyword=action`); // Fallback default search for trending
             const json = await res.json();
             
-            if (json.success && json.results.data) {
-                const trendingData = json.results.data.slice(0, 10);
+            if (json.success && json.data) {
+                const trendingData = json.data.slice(0, 10);
                 
                 trendingContainer.innerHTML = trendingData.map(anime => `
-                    <div onclick="window.location.href='play.html?anime=${anime.id}'" class="min-w-[120px] max-w-[120px] cursor-pointer snap-start group">
+                    <div onclick="window.location.href='info.html?id=${anime.id}'" class="min-w-[120px] max-w-[120px] cursor-pointer snap-start group">
                         <div class="relative w-full h-[180px] rounded-lg overflow-hidden mb-2 shadow-lg">
-                            <img src="${anime.poster}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="${anime.title}">
+                            <img src="${anime.image}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="${anime.title}">
                             <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
-                            ${anime.tvInfo?.showType ? `<span class="absolute bottom-2 left-2 text-[8px] font-black uppercase bg-[#F47521] text-white px-1.5 py-0.5 rounded">${anime.tvInfo.showType}</span>` : ''}
+                            ${anime.type ? `<span class="absolute bottom-2 left-2 text-[8px] font-black uppercase bg-[#F47521] text-white px-1.5 py-0.5 rounded">${anime.type}</span>` : ''}
                         </div>
                         <h3 class="text-xs font-bold text-white truncate group-hover:text-[#F47521] transition-colors">${anime.title}</h3>
                     </div>
@@ -81,6 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `).join('');
 
+        // Long Press Logic for Deletion
         document.querySelectorAll('.history-item').forEach(item => {
             let pressTimer;
             const term = item.getAttribute('data-term');
@@ -147,13 +148,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- 4. FETCH SUGGESTIONS (Uses AniList GraphQL) ---
+    // --- 4. FETCH SUGGESTIONS (AniList GraphQL) ---
     const fetchSuggestions = async (term) => {
         const query = `
             query ($search: String) {
                 Page(page: 1, perPage: 6) {
                     media(type: ANIME, search: $search, sort: SEARCH_MATCH) {
-                        id title { romaji english } coverImage { medium } format startDate { year }
+                        title { romaji english } coverImage { medium } format startDate { year }
                     }
                 }
             }
@@ -172,12 +173,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
+            // Expose the redirection logic globally so onclick can access it
+            window.handleSuggestionClick = async (title) => {
+                searchInput.value = title;
+                suggestionsContainer.innerHTML = `<div class="p-4 text-center text-xs text-[#F47521]"><i class="fas fa-circle-notch fa-spin"></i> Locating in database...</div>`;
+                try {
+                    // Instantly query your backend to get the real slug
+                    const backendRes = await fetch(`${API_BASE}/api/search?keyword=${encodeURIComponent(title)}`);
+                    const backendJson = await backendRes.json();
+                    
+                    if (backendJson.success && backendJson.data && backendJson.data.length > 0) {
+                        // Found it! Redirect straight to info.html
+                        window.location.href = `info.html?id=${backendJson.data[0].id}`;
+                    } else {
+                        // Not found in DB, fallback to normal search view
+                        handleSearchSubmit(title);
+                    }
+                } catch (e) {
+                    handleSearchSubmit(title);
+                }
+            };
+
             suggestionsContainer.innerHTML = media.map(anime => {
                 const title = anime.title.english || anime.title.romaji;
                 const safeTitle = title.replace(/'/g, "\\'");
                 return `
-                <div onclick="document.getElementById('search-input').value='${safeTitle}'; handleSearchSubmit('${safeTitle}')" 
-                     class="flex items-center gap-3 p-2 hover:bg-white/5 rounded-lg cursor-pointer transition">
+                <div onclick="handleSuggestionClick('${safeTitle}')" class="flex items-center gap-3 p-2 hover:bg-white/5 rounded-lg cursor-pointer transition">
                     <img src="${anime.coverImage.medium}" class="w-8 h-10 object-cover rounded shadow">
                     <div class="flex flex-col">
                         <span class="text-sm font-semibold truncate text-white">${title}</span>
@@ -190,7 +211,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // --- 5. FULL SEARCH SUBMIT (Uses Vercel /api/search) ---
+    // --- 5. FULL SEARCH SUBMIT (Vercel API) ---
     const handleSearchSubmit = async (term) => {
         searchInput.blur();
         saveHistory(term);
@@ -200,36 +221,36 @@ document.addEventListener('DOMContentLoaded', () => {
         resultsListContainer.innerHTML = `<div class="p-4 text-center text-xs text-[#F47521]"><i class="fas fa-circle-notch fa-spin"></i> Searching database...</div>`;
 
         try {
-            // Using your exact backend endpoint for search
+            // Fetching exactly based on your debug JSON format
             const res = await fetch(`${API_BASE}/api/search?keyword=${encodeURIComponent(term)}`);
             const json = await res.json();
             
-            if (!json.success || !json.results || json.results.length === 0) {
+            // Checking json.data instead of json.results
+            if (!json.success || !json.data || json.data.length === 0) {
                 topResultCard.innerHTML = '';
                 resultsListContainer.innerHTML = `<div class="text-center p-10"><i class="fas fa-ghost text-4xl text-gray-600 mb-3"></i><p class="text-sm text-gray-500">No anime found matching "${term}" in our database.</p></div>`;
                 return;
             }
 
-            const results = json.results;
+            const results = json.data; // Using .data array
             const topAnime = results[0];
             const restAnime = results.slice(1);
 
-            const topSubEps = topAnime.tvInfo?.sub || '?';
-            const topDubEps = topAnime.tvInfo?.dub || 0;
-            const topShowType = topAnime.tvInfo?.showType || 'TV';
+            const topSubEps = topAnime.sub || '?';
+            const topDubEps = topAnime.dub || 0;
+            const topShowType = topAnime.type || 'TV';
 
-            // Top Result Render
+            // Top Result Render (Horizontal Card)
+            // Redirects straight to info.html
             topResultCard.innerHTML = `
-                <div onclick="window.location.href='play.html?anime=${topAnime.id}'" class="flex flex-col md:flex-row gap-4 bg-gradient-to-br from-[#121212] to-black p-3 rounded-xl border border-white/10 cursor-pointer hover:border-[#F47521]/50 transition group shadow-2xl">
-                    <img src="${topAnime.poster}" class="w-28 md:w-36 h-40 object-cover rounded-lg shadow-lg group-hover:scale-105 transition-transform duration-300">
+                <div onclick="window.location.href='info.html?id=${topAnime.id}'" class="flex flex-col md:flex-row gap-4 bg-gradient-to-br from-[#121212] to-black p-3 rounded-xl border border-white/10 cursor-pointer hover:border-[#F47521]/50 transition group shadow-2xl">
+                    <img src="${topAnime.image}" class="w-28 md:w-36 h-40 object-cover rounded-lg shadow-lg group-hover:scale-105 transition-transform duration-300">
                     <div class="flex flex-col justify-center flex-1">
                         <span class="text-[9px] font-black uppercase tracking-widest text-[#F47521] mb-1"><i class="fas fa-fire mr-1"></i> Top Database Match</span>
-                        <h3 class="text-base md:text-lg font-black leading-tight text-white mb-1">${topAnime.title}</h3>
-                        <p class="text-[10px] text-gray-500 mb-3 italic">${topAnime.japanese_title || ''}</p>
+                        <h3 class="text-base md:text-lg font-black leading-tight text-white mb-2">${topAnime.title}</h3>
                         
-                        <div class="flex items-center gap-3 text-[10px] font-bold mt-auto">
+                        <div class="flex items-center gap-3 text-[10px] font-bold mt-auto pb-1">
                             <span class="border border-white/20 text-gray-300 px-1.5 py-0.5 rounded uppercase">${topShowType}</span>
-                            <span class="text-gray-400"><i class="fas fa-clock mr-1"></i>${topAnime.tvInfo?.duration || '24m'}</span>
                             <div class="flex gap-1 ml-auto">
                                 <span class="bg-[#F47521]/20 text-[#F47521] px-1.5 py-0.5 rounded border border-[#F47521]/30"><i class="fas fa-closed-captioning"></i> ${topSubEps}</span>
                                 ${topDubEps > 0 ? `<span class="bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded border border-purple-500/30"><i class="fas fa-microphone"></i> ${topDubEps}</span>` : ''}
@@ -240,17 +261,17 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
 
             // List View Render
+            // All redirect straight to info.html
             resultsListContainer.innerHTML = restAnime.map(anime => {
-                const aSub = anime.tvInfo?.sub || '?';
-                const aDub = anime.tvInfo?.dub || 0;
-                const aType = anime.tvInfo?.showType || 'TV';
+                const aSub = anime.sub || '?';
+                const aDub = anime.dub || 0;
+                const aType = anime.type || 'TV';
 
                 return `
-                <div onclick="window.location.href='play.html?anime=${anime.id}'" class="flex gap-3 items-center bg-white/5 p-2 rounded-lg cursor-pointer hover:bg-white/10 transition border border-transparent hover:border-white/10">
-                    <img src="${anime.poster}" class="w-14 h-20 object-cover rounded shadow">
+                <div onclick="window.location.href='info.html?id=${anime.id}'" class="flex gap-3 items-center bg-white/5 p-2 rounded-lg cursor-pointer hover:bg-white/10 transition border border-transparent hover:border-white/10">
+                    <img src="${anime.image}" class="w-14 h-20 object-cover rounded shadow">
                     <div class="flex-1 min-w-0">
                         <h4 class="text-sm font-bold text-white truncate">${anime.title}</h4>
-                        <p class="text-[10px] text-gray-500 mt-0.5 truncate">${anime.japanese_title || ''}</p>
                         
                         <div class="flex gap-2 mt-2 items-center text-[9px] font-black uppercase tracking-wider">
                             <span class="text-gray-400 border border-gray-600 px-1 py-0.5 rounded">${aType}</span>
