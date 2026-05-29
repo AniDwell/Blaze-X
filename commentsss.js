@@ -1,4 +1,4 @@
-// commentsss.js - Inline Real-Time Comment Section Engine
+// commentsss.js - Inline Threaded, Episodic & Real-Time Comment Engine
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
@@ -18,24 +18,25 @@ window.app.components.commentsss = async () => {
     const profile = window.app.state?.activeProfile || null;
     const isGuest = !profile || !profile.uid || profile.uid.startsWith('anon_');
 
-    // Default SVG Avatar (Fallback for users without PFP)
+    // Default SVG Avatar Helper
     if (!window.app.getAvatarHtml) {
+        window.app.getDefaultAvatarSVG = () => `
+            <div class="w-10 h-10 rounded-full border border-white/10 shrink-0 flex items-center justify-center bg-[#111] overflow-hidden shadow-md">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-gray-400 mt-2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+            </div>
+        `;
+
         window.app.getAvatarHtml = (url) => {
             if (!url || url.includes('placeholder.com') || url.includes('pfp') || url.trim() === '') {
-                return `
-                    <div class="w-10 h-10 rounded-full border border-white/10 shrink-0 flex items-center justify-center bg-[#111] overflow-hidden shadow-md">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-gray-400 mt-2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="12" cy="7" r="4"></circle>
-                        </svg>
-                    </div>
-                `;
+                return window.app.getDefaultAvatarSVG();
             }
             return `<img src="${url}" class="w-10 h-10 rounded-full object-cover border border-white/10 shadow-md shrink-0">`;
         };
     }
 
-    // Straight Paper Plane SVG
     const paperPlaneSvg = `
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="22" y1="2" x2="11" y2="13"></line>
@@ -43,7 +44,7 @@ window.app.components.commentsss = async () => {
         </svg>
     `;
 
-    // 1. RENDER INLINE SHELL (List Area + Input Area)
+    // 1. RENDER INLINE SHELL
     root.innerHTML = `
         <div class="w-full flex flex-col min-h-[300px] max-h-[600px] bg-transparent">
             
@@ -58,13 +59,19 @@ window.app.components.commentsss = async () => {
                     ? `<div class="w-full text-center py-2"><p class="text-xs text-gray-400 font-bold uppercase tracking-widest mb-2">Join the conversation</p><button onclick="if(window.app.components.auth) window.app.components.auth()" class="bg-[#F47521] text-black px-6 py-2 rounded font-black text-[10px] uppercase shadow-lg hover:bg-white transition-colors">Log In / Register</button></div>`
                     : `<form id="inline-comment-form" onsubmit="window.app.submitInlineComment(event)" class="flex gap-3 items-end relative">
                         <input type="hidden" id="inline-edit-comment-id" value="">
+                        <input type="hidden" id="inline-reply-to-id" value="">
+                        
                         ${window.app.getAvatarHtml(profile?.photoURL || profile?.pfpLink)}
+                        
                         <div class="flex-1 bg-black border border-white/10 rounded-xl flex flex-col focus-within:border-[#F47521] transition-colors relative">
                             <textarea id="inline-comment-textarea" rows="1" placeholder="Write a comment..." class="w-full bg-transparent text-white text-xs p-3 outline-none resize-none hide-scrollbar min-h-[44px] max-h-32" oninput="this.style.height = ''; this.style.height = this.scrollHeight + 'px'"></textarea>
+                            
                             <div id="inline-reply-tag-indicator" class="hidden absolute -top-8 left-0 bg-[#F47521] text-black px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest shadow-md flex items-center gap-2">
-                                Replying to <span id="inline-reply-tag-name"></span> <button type="button" onclick="window.app.cancelInlineReply()" class="hover:text-white"><i class="fas fa-times"></i></button>
+                                Replying to <span id="inline-reply-tag-name" class="font-bold border-b border-black/30"></span> 
+                                <button type="button" onclick="window.app.cancelInlineReply()" class="hover:text-white"><i class="fas fa-times"></i></button>
                             </div>
                         </div>
+                        
                         <button type="submit" id="inline-post-comment-btn" class="bg-[#F47521] text-black w-10 h-10 rounded-xl flex items-center justify-center shrink-0 hover:bg-white hover:scale-105 transition-all shadow-lg">
                             ${paperPlaneSvg}
                         </button>
@@ -75,7 +82,7 @@ window.app.components.commentsss = async () => {
         </div>
     `;
 
-    // 2. FETCH & RENDER COMMENTS (LIVE LISTENER)
+    // 2. FETCH & RENDER COMMENTS (LIVE LISTENER WITH THREADING)
     if (!window.app.db) {
         document.getElementById('inline-comments-list').innerHTML = `<div class="text-center text-gray-500 text-xs py-10 w-full">Database connection error.</div>`;
         return;
@@ -84,27 +91,22 @@ window.app.components.commentsss = async () => {
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const commentsRef = firestore.collection(window.app.db, "comments");
+        
+        // Fetch ALL comments for this anime (we will group them by replyTo locally)
         const q = firestore.query(commentsRef, firestore.where("animeId", "==", animeId));
 
-        // Cleanup existing listener if re-rendering
         if (window.app.inlineCommentsUnsub) window.app.inlineCommentsUnsub();
 
         window.app.inlineCommentsUnsub = firestore.onSnapshot(q, (snapshot) => {
             let comments = [];
             snapshot.forEach(doc => comments.push({ id: doc.id, ...doc.data() }));
 
+            // Sort globally by time (newest root comments first)
             comments.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
             
-            const myUid = profile?.uid || 'guest';
-            const myComments = comments.filter(c => c.userId === myUid);
-            const otherComments = comments.filter(c => c.userId !== myUid);
-            
-            // Priority: Your comments at the top, then others
-            const sortedComments = [...myComments, ...otherComments];
-
             const listContainer = document.getElementById('inline-comments-list');
             
-            if (sortedComments.length === 0) {
+            if (comments.length === 0) {
                 listContainer.innerHTML = `
                     <div class="flex flex-col items-center justify-center py-10 opacity-90 h-full animate-fade-in w-full">
                         <img src="https://media.tenor.com/VOoSARm1t7wAAAAm/anime-girl.webp" alt="No Comments" class="w-28 h-28 object-contain mb-3 drop-shadow-xl rounded-xl">
@@ -115,49 +117,95 @@ window.app.components.commentsss = async () => {
                 return;
             }
 
-            let html = '';
-            sortedComments.forEach(comment => {
-                const isMine = comment.userId === myUid;
-                const displayAvatar = isMine ? (profile?.photoURL || profile?.pfpLink || comment.userAvatar) : comment.userAvatar;
-                
-                const menuOptions = isMine 
-                    ? `<button onclick="window.app.editInlineComment('${comment.id}', '${comment.text.replace(/'/g, "\\'")}')" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-pen mr-2"></i> Edit</button>
-                       <button onclick="window.app.deleteInlineComment('${comment.id}')" class="w-full text-left px-3 py-2 text-red-400 hover:bg-white/10 hover:text-red-500 transition-colors"><i class="fas fa-trash mr-2"></i> Delete</button>` 
-                    : `<button onclick="window.location.href='profile.html?user=${comment.userId}'" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-user mr-2"></i> View Profile</button>
-                       <button onclick="window.location.href='cht.html?user=${comment.userId}'" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-comment-dots mr-2"></i> Discuss</button>`;
+            const myUid = profile?.uid || 'guest';
 
-                html += `
-                    <div class="flex gap-3 bg-white/5 border border-white/5 p-3 rounded-xl animate-fade-in relative group">
-                        ${window.app.getAvatarHtml(displayAvatar)}
-                        
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center justify-between gap-2">
-                                <div class="flex items-center gap-2 min-w-0">
-                                    <h4 class="text-white font-bold text-xs truncate">${comment.userName || 'Anonymous'}</h4>
-                                    ${isMine ? `<span class="bg-[#F47521] text-black text-[8px] font-black uppercase px-1.5 py-[1px] rounded">You</span>` : ''}
-                                    <span class="text-gray-500 text-[9px] whitespace-nowrap">${window.app.formatTimeAgo ? window.app.formatTimeAgo(comment.timestamp) : 'Recently'}</span>
-                                </div>
+            // Recursive function to render comments and their nested replies
+            const renderCommentTree = (commentList, parentId = null, depth = 0) => {
+                const currentLevelComments = commentList.filter(c => (c.replyTo || null) === parentId);
+                
+                // Prioritize "my" comments at the top level
+                if (depth === 0) {
+                    const mine = currentLevelComments.filter(c => c.userId === myUid);
+                    const others = currentLevelComments.filter(c => c.userId !== myUid);
+                    currentLevelComments.length = 0;
+                    currentLevelComments.push(...mine, ...others);
+                }
+
+                if (currentLevelComments.length === 0) return '';
+
+                let html = '';
+                currentLevelComments.forEach(comment => {
+                    const isMine = comment.userId === myUid;
+                    const displayAvatar = isMine ? (profile?.photoURL || profile?.pfpLink || comment.userAvatar) : comment.userAvatar;
+                    
+                    const menuOptions = isMine 
+                        ? `<button onclick="window.app.editInlineComment('${comment.id}', '${comment.text.replace(/'/g, "\\'")}')" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-pen mr-2"></i> Edit</button>
+                           <button onclick="window.app.deleteInlineComment('${comment.id}')" class="w-full text-left px-3 py-2 text-red-400 hover:bg-white/10 hover:text-red-500 transition-colors"><i class="fas fa-trash mr-2"></i> Delete</button>` 
+                        : `<button onclick="window.location.href='profile.html?user=${comment.userId}'" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-user mr-2"></i> View Profile</button>
+                           <button onclick="window.location.href='cht.html?user=${comment.userId}'" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-comment-dots mr-2"></i> Discuss</button>`;
+
+                    const likesCount = Array.isArray(comment.likes) ? comment.likes.length : 0;
+                    const hasLiked = Array.isArray(comment.likes) && comment.likes.includes(myUid);
+                    const likeColor = hasLiked ? 'text-[#F47521]' : 'text-gray-500 hover:text-white';
+
+                    // Threading Styles
+                    const marginStyle = depth > 0 ? `margin-left: ${Math.min(depth * 1.5, 3)}rem;` : '';
+                    const borderStyle = depth > 0 ? `border-l-2 border-[#F47521]/30 pl-3 mt-3` : `bg-white/5 border border-white/5 p-3 rounded-xl mt-4`;
+
+                    const childRepliesHtml = renderCommentTree(commentList, comment.id, depth + 1);
+                    const hasReplies = childRepliesHtml !== '';
+
+                    html += `
+                        <div class="flex flex-col relative animate-fade-in ${borderStyle}" style="${marginStyle}">
+                            <div class="flex gap-3">
+                                ${window.app.getAvatarHtml(displayAvatar)}
                                 
-                                <div class="relative">
-                                    <button onclick="window.app.toggleInlineCommentMenu('${comment.id}')" class="menu-trigger-btn text-gray-500 hover:text-white w-6 h-6 flex items-center justify-center transition-colors">
-                                        <i class="fas fa-ellipsis-v text-[10px]"></i>
-                                    </button>
-                                    <div id="inline-menu-${comment.id}" class="comment-action-menu hidden absolute right-0 top-full mt-1 w-28 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-2xl z-50 overflow-hidden text-[10px] font-bold uppercase tracking-wider">
-                                        ${menuOptions}
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <div class="flex items-center gap-2 min-w-0">
+                                            <span class="bg-[#111] border border-white/10 text-gray-400 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm">EP ${comment.episodeNumber || '1'}</span>
+                                            <h4 class="text-white font-bold text-xs truncate">${comment.userName || 'Anonymous'}</h4>
+                                            ${isMine ? `<span class="bg-[#F47521] text-black text-[8px] font-black uppercase px-1.5 py-[1px] rounded">You</span>` : ''}
+                                            <span class="text-gray-500 text-[9px] whitespace-nowrap hidden sm:inline">${window.app.formatTimeAgo ? window.app.formatTimeAgo(comment.timestamp) : 'Recently'}</span>
+                                        </div>
+                                        
+                                        <div class="relative">
+                                            <button onclick="window.app.toggleInlineCommentMenu('${comment.id}')" class="menu-trigger-btn text-gray-500 hover:text-white w-6 h-6 flex items-center justify-center transition-colors">
+                                                <i class="fas fa-ellipsis-v text-[10px]"></i>
+                                            </button>
+                                            <div id="inline-menu-${comment.id}" class="comment-action-menu hidden absolute right-0 top-full mt-1 w-28 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-2xl z-50 overflow-hidden text-[10px] font-bold uppercase tracking-wider">
+                                                ${menuOptions}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p class="text-gray-300 text-[11px] leading-relaxed mt-1 whitespace-pre-wrap break-words">${comment.text}</p>
+                                    
+                                    <div class="flex items-center gap-4 mt-2">
+                                        <button onclick="window.app.toggleInlineCommentReaction('${comment.id}', this)" class="${likeColor} text-[9px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1">
+                                            <i class="fas fa-thumbs-up"></i> <span>${likesCount}</span>
+                                        </button>
+                                        <button onclick="window.app.prepareInlineReply('${comment.id}', '${comment.userName}')" class="text-gray-500 hover:text-white text-[9px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1">
+                                            <i class="fas fa-reply"></i> Reply
+                                        </button>
                                     </div>
                                 </div>
                             </div>
-                            <p class="text-gray-300 text-[11px] leading-relaxed mt-1 whitespace-pre-wrap break-words">${comment.text}</p>
-                            <div class="flex items-center gap-4 mt-2">
-                                <button onclick="window.app.prepareInlineReply('${comment.userName}')" class="text-gray-500 hover:text-white text-[9px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1">
-                                    <i class="fas fa-reply"></i> Reply
+
+                            ${hasReplies ? `
+                                <div class="replies-wrapper hidden flex flex-col gap-2 w-full">
+                                    ${childRepliesHtml}
+                                </div>
+                                <button onclick="this.previousElementSibling.classList.toggle('hidden'); this.innerHTML = this.previousElementSibling.classList.contains('hidden') ? '<i class=\\'fas fa-chevron-down mr-1\\'></i> Show Replies' : '<i class=\\'fas fa-chevron-up mr-1\\'></i> Hide Replies'" class="text-[9px] font-bold text-[#F47521] mt-2 ml-1 self-start flex items-center hover:text-white transition-colors">
+                                    <i class="fas fa-chevron-down mr-1"></i> Show Replies
                                 </button>
-                            </div>
+                            ` : ''}
                         </div>
-                    </div>
-                `;
-            });
-            listContainer.innerHTML = html;
+                    `;
+                });
+                return html;
+            };
+
+            listContainer.innerHTML = renderCommentTree(comments, null, 0);
             
         }, (error) => {
             console.error("Inline Comments Snapshot Error:", error);
@@ -178,16 +226,28 @@ window.app.toggleInlineCommentMenu = (commentId) => {
     if (isHidden) menu.classList.remove('hidden');
 };
 
-window.app.prepareInlineReply = (username) => {
+window.app.prepareInlineReply = (commentId, username) => {
     const input = document.getElementById('inline-comment-textarea');
-    input.value = `@${username} ` + input.value;
+    const replyIdField = document.getElementById('inline-reply-to-id');
+    const tagIndicator = document.getElementById('inline-reply-tag-indicator');
+    const tagName = document.getElementById('inline-reply-tag-name');
+    
+    replyIdField.value = commentId;
+    tagName.innerText = `@${username}`;
+    tagIndicator.classList.remove('hidden');
+    
     input.focus();
 };
 
 window.app.cancelInlineReply = () => {
     const input = document.getElementById('inline-comment-textarea');
     input.value = input.value.replace(/@\w+\s?/, '');
-    document.getElementById('inline-reply-tag-indicator').classList.add('hidden');
+    
+    const replyIdField = document.getElementById('inline-reply-to-id');
+    if (replyIdField) replyIdField.value = '';
+    
+    const tagIndicator = document.getElementById('inline-reply-tag-indicator');
+    if (tagIndicator) tagIndicator.classList.add('hidden');
 };
 
 window.app.editInlineComment = (commentId, text) => {
@@ -214,17 +274,43 @@ window.app.deleteInlineComment = async (commentId) => {
     }
 };
 
+window.app.toggleInlineCommentReaction = async (commentId, btnElement) => {
+    const profile = window.app.state.activeProfile;
+    if (!profile || !profile.uid || profile.uid.startsWith('anon_')) {
+        if(window.app.components.auth) window.app.components.auth();
+        return;
+    }
+
+    try {
+        const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        const commentRef = firestore.doc(window.app.db, "comments", commentId);
+        const span = btnElement.querySelector('span');
+        let currentLikes = parseInt(span.innerText);
+
+        if (btnElement.classList.contains('text-[#F47521]')) {
+            // Remove Like
+            await firestore.updateDoc(commentRef, { likes: firestore.arrayRemove(profile.uid) });
+        } else {
+            // Add Like
+            await firestore.updateDoc(commentRef, { likes: firestore.arrayUnion(profile.uid) });
+        }
+    } catch (e) {
+        console.error("Like failed", e);
+    }
+};
+
 window.app.submitInlineComment = async (e) => {
     e.preventDefault();
     const input = document.getElementById('inline-comment-textarea');
     const editIdField = document.getElementById('inline-edit-comment-id');
+    const replyIdField = document.getElementById('inline-reply-to-id');
     const btn = document.getElementById('inline-post-comment-btn');
     const text = input.value.trim();
     
     if (!text) return;
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const animeId = urlParams.get('id') || urlParams.get('anime') || window.app.state?.currentAnimePage?.id;
+    const animeId = window.app.state?.currentAnimePage?.id;
+    const epNum = window.app.state?.currentPlayingEpNum || 1;
     const profile = window.app.state.activeProfile;
 
     const paperPlaneSvg = `
@@ -241,23 +327,46 @@ window.app.submitInlineComment = async (e) => {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const commentsRef = firestore.collection(window.app.db, "comments");
         const editId = editIdField.value;
+        const replyToId = replyIdField.value || null;
 
         if (editId) {
-            const docRef = firestore.doc(window.app.db, "comments", editId);
-            await firestore.updateDoc(docRef, { text: text, isEdited: true });
-            
+            // UPDATE
+            await firestore.updateDoc(firestore.doc(window.app.db, "comments", editId), { text: text, isEdited: true });
             editIdField.value = "";
             btn.innerHTML = paperPlaneSvg;
             btn.classList.replace('bg-green-500', 'bg-[#F47521]');
         } else {
+            // CREATE NEW OR REPLY
             await firestore.addDoc(commentsRef, {
                 animeId: animeId,
+                episodeNumber: epNum,
                 userId: profile.uid,
                 userName: profile.displayName || profile.name || "User",
                 userAvatar: profile.photoURL || profile.pfpLink || '',
                 text: text,
-                timestamp: firestore.serverTimestamp()
+                timestamp: firestore.serverTimestamp(),
+                replyTo: replyToId,
+                likes: [],
+                dislikes: []
             });
+
+            // 🚀 NOTIFICATION SYSTEM
+            if (replyToId) {
+                const parentComment = await firestore.getDoc(firestore.doc(window.app.db, "comments", replyToId));
+                const parentUid = parentComment.data().userId;
+                
+                if (parentUid !== profile.uid) {
+                    const notifRef = firestore.collection(window.app.db, `users/${parentUid}/notifications`);
+                    await firestore.addDoc(notifRef, {
+                        type: 'reply',
+                        fromUser: profile.name || "A user",
+                        animeId: animeId,
+                        episodeNumber: epNum,
+                        timestamp: firestore.serverTimestamp(),
+                        read: false
+                    });
+                }
+            }
         }
 
         input.value = '';
@@ -265,7 +374,8 @@ window.app.submitInlineComment = async (e) => {
         input.disabled = false;
         btn.innerHTML = paperPlaneSvg;
         
-        // No need to manually reload, onSnapshot will trigger auto-update!
+        window.app.cancelInlineReply();
+        // UI updates automatically because of onSnapshot!
 
     } catch (err) {
         if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to post comment.", "error");
