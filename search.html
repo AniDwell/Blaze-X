@@ -7,65 +7,117 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* Custom scrollbar and animations */
         ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     </style>
 </head>
-<body class="bg-[#050505] text-white font-sans min-h-screen pb-20">
+<body class="bg-[#050505] text-white font-sans min-h-screen pb-20 overflow-x-hidden">
 
-    <div class="sticky top-0 z-50 bg-[#050505]/90 backdrop-blur-md px-4 py-4 border-b border-white/10">
+    <div class="sticky top-0 z-40 bg-[#050505]/95 backdrop-blur-md px-4 py-4 border-b border-white/5">
         <div class="relative max-w-2xl mx-auto flex items-center">
             <button onclick="history.back()" class="mr-4 text-gray-400 hover:text-white transition">
                 <i class="fas fa-arrow-left text-xl"></i>
             </button>
-            <div class="relative w-full">
-                <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500"></i>
+            <div class="relative w-full flex items-center">
+                <i class="fas fa-search absolute left-4 text-gray-500"></i>
                 <input type="text" id="search-input" autocomplete="off" placeholder="Search anime, genres..." 
-                    class="w-full bg-white/5 border border-white/10 rounded-full py-3 pl-12 pr-10 text-sm text-white focus:outline-none focus:border-[#F47521] focus:ring-1 focus:ring-[#F47521] transition-all">
-                <button id="clear-search-btn" class="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-white hidden">
-                    <i class="fas fa-times"></i>
-                </button>
+                    class="w-full bg-white/5 border border-white/10 rounded-full py-3 pl-11 pr-20 text-sm text-white focus:outline-none focus:border-[#F47521] focus:ring-1 focus:ring-[#F47521] transition-all placeholder-gray-600">
+                
+                <div class="absolute right-2 flex items-center gap-1">
+                    <button id="clear-search-btn" class="text-gray-500 hover:text-white p-2 hidden">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <button id="open-filter-btn" class="bg-white/10 hover:bg-[#F47521] hover:text-black text-white p-2 rounded-full transition-colors flex items-center justify-center w-8 h-8">
+                        <i class="fas fa-sliders-h text-xs"></i>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 
-    <main class="max-w-2xl mx-auto px-4 pt-6">
+    <div id="filter-modal" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm hidden flex-col justify-end md:justify-center items-center transition-opacity">
+        <div class="bg-[#121212] w-full md:max-w-lg md:rounded-2xl rounded-t-2xl border border-white/10 p-6 flex flex-col max-h-[85vh] overflow-y-auto hide-scrollbar animate-slide-up">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-lg font-black uppercase tracking-widest text-white"><i class="fas fa-filter text-[#F47521] mr-2"></i> Advanced Filters</h2>
+                <button id="close-filter-btn" class="text-gray-500 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            
+            <form id="filter-form" class="space-y-4 text-xs font-bold uppercase tracking-wider text-gray-400">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block mb-1">Type</label>
+                        <select name="type" class="w-full bg-black border border-white/10 rounded-lg p-2 text-white focus:border-[#F47521] outline-none">
+                            <option value="">All</option><option value="tv">TV</option><option value="movie">Movie</option><option value="ova">OVA</option><option value="special">Special</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block mb-1">Status</label>
+                        <select name="status" class="w-full bg-black border border-white/10 rounded-lg p-2 text-white focus:border-[#F47521] outline-none">
+                            <option value="">All</option><option value="finished">Finished</option><option value="currently_airing">Airing</option><option value="not_yet_aired">Upcoming</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block mb-1">Sort By</label>
+                        <select name="sort" class="w-full bg-black border border-white/10 rounded-lg p-2 text-white focus:border-[#F47521] outline-none">
+                            <option value="default">Default</option><option value="score">Score</option><option value="recently_updated">Recently Updated</option><option value="title_az">A-Z</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block mb-1">Language</label>
+                        <select name="language" class="w-full bg-black border border-white/10 rounded-lg p-2 text-white focus:border-[#F47521] outline-none">
+                            <option value="">All</option><option value="sub">Sub</option><option value="dub">Dub</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block mb-1">Season</label>
+                        <select name="season" class="w-full bg-black border border-white/10 rounded-lg p-2 text-white focus:border-[#F47521] outline-none">
+                            <option value="">All</option><option value="spring">Spring</option><option value="summer">Summer</option><option value="fall">Fall</option><option value="winter">Winter</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block mb-1">Genres</label>
+                        <input type="text" name="genres" placeholder="e.g. Action, Comedy" class="w-full bg-black border border-white/10 rounded-lg p-2 text-white focus:border-[#F47521] outline-none placeholder-gray-700">
+                    </div>
+                </div>
+                
+                <div class="flex gap-3 pt-6 border-t border-white/5 mt-6">
+                    <button type="button" id="reset-filter-btn" class="flex-1 bg-white/5 border border-white/10 text-white py-3 rounded-xl hover:bg-white/10 transition">Reset</button>
+                    <button type="submit" class="flex-1 bg-[#F47521] text-black font-black py-3 rounded-xl hover:bg-white transition shadow-lg shadow-[#F47521]/20">Apply Filters</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <main class="max-w-2xl mx-auto px-4 pt-4">
         
-        <div id="idle-view" class="block animate-fade-in">
+        <div id="idle-view" class="block">
             <div class="mb-8">
                 <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xs font-black uppercase tracking-widest text-gray-400">Recent Searches</h2>
-                    <button id="clear-all-history" class="text-[10px] text-red-500 uppercase font-bold hidden hover:underline">Clear All</button>
+                    <h2 class="text-[10px] font-black uppercase tracking-widest text-gray-500">Recent Searches</h2>
+                    <button id="clear-all-history" class="text-[9px] text-red-500 uppercase font-bold hidden hover:text-white transition">Clear All</button>
                 </div>
-                <div id="history-container" class="flex flex-wrap gap-2">
-                    </div>
-                <p id="history-hint" class="text-[9px] text-gray-500 mt-2 hidden italic">Long-press to delete a specific search.</p>
+                <div id="history-container" class="flex flex-wrap gap-2"></div>
+                <p id="history-hint" class="text-[8px] text-gray-600 mt-2 hidden uppercase tracking-widest font-bold">Long-press to delete</p>
             </div>
-
             <div>
-                <h2 class="text-xs font-black uppercase tracking-widest text-[#F47521] mb-4">Top Trending Anime</h2>
-                <div id="trending-container" class="flex overflow-x-auto gap-4 pb-4 hide-scrollbar snap-x">
-                    </div>
+                <h2 class="text-[10px] font-black uppercase tracking-widest text-[#F47521] mb-4">Top Trending</h2>
+                <div id="trending-container" class="flex overflow-x-auto gap-4 pb-4 hide-scrollbar snap-x"></div>
             </div>
         </div>
 
-        <div id="typing-view" class="hidden animate-fade-in">
-            <h2 class="text-xs font-black uppercase tracking-widest text-gray-400 mb-4">Suggestions</h2>
-            <div id="suggestions-container" class="space-y-1">
+        <div id="typing-view" class="hidden">
+            <h2 class="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">Suggestions</h2>
+            <div id="suggestions-container" class="bg-[#0a0a0a] border border-white/5 rounded-xl overflow-hidden shadow-2xl">
                 </div>
         </div>
 
-        <div id="results-view" class="hidden animate-fade-in">
-            <h2 class="text-xs font-black uppercase tracking-widest text-white mb-4">Search Results</h2>
-            
-            <div id="top-result-card" class="mb-6">
-                </div>
-
-            <div id="results-list-container" class="space-y-4">
-                </div>
+        <div id="results-view" class="hidden">
+            <h2 class="text-[10px] font-black uppercase tracking-widest text-white mb-4">Search Results</h2>
+            <div id="top-result-card" class="mb-6"></div>
+            <div id="results-list-container" class="space-y-3"></div>
         </div>
 
     </main>
