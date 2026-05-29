@@ -1,5 +1,7 @@
 // search.js
 
+window.app = window.app || {};
+
 document.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('search-input');
     const clearBtn = document.getElementById('clear-search-btn');
@@ -55,9 +57,8 @@ document.addEventListener('DOMContentLoaded', () => {
         await loadTop10Popular();
     };
 
-    // Typewriter Animation logic (Fetches Top 3 globally from AniList)
     const initTypewriterPlaceholder = async () => {
-        let trendingTitles = ["anime, genres..."]; // Fallback
+        let trendingTitles = ["anime, genres..."];
         try {
             const query = `query { Page(page: 1, perPage: 3) { media(type: ANIME, sort: TRENDING_DESC) { title { english romaji } } } }`;
             const res = await fetch(ANILIST_URL, {
@@ -76,7 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let isDeleting = false;
         
         const type = () => {
-            if (document.activeElement === searchInput && searchInput.value.trim() !== '') return; // Pause if user is typing
+            if (document.activeElement === searchInput && searchInput.value.trim() !== '') return; 
             
             const currentTitle = trendingTitles[titleIndex];
             
@@ -91,12 +92,12 @@ document.addEventListener('DOMContentLoaded', () => {
             let typeSpeed = isDeleting ? 50 : 100;
 
             if (!isDeleting && charIndex === currentTitle.length) {
-                typeSpeed = 2000; // Pause at end of word
+                typeSpeed = 2000;
                 isDeleting = true;
             } else if (isDeleting && charIndex === 0) {
                 isDeleting = false;
                 titleIndex = (titleIndex + 1) % trendingTitles.length;
-                typeSpeed = 500; // Pause before next word
+                typeSpeed = 500;
             }
 
             setTimeout(type, typeSpeed);
@@ -104,10 +105,8 @@ document.addEventListener('DOMContentLoaded', () => {
         type();
     };
 
-    // Load Top 10 Popular from your API (List View)
     const loadTop10Popular = async () => {
         try {
-            // Using /api/filter with score sorting to get the best/popular anime
             const res = await fetch(`${API_BASE}/api/filter?sort=score`); 
             const json = await res.json();
             
@@ -117,8 +116,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (dataArray.length > 0) {
                 const top10 = dataArray.slice(0, 10);
-                
-                // Override horizontal classes to make it a vertical list
                 trendingContainer.className = "flex flex-col gap-3 pb-4"; 
                 
                 trendingContainer.innerHTML = top10.map((anime, index) => {
@@ -327,7 +324,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { return null; }
     };
 
-    // --- HELPER: Universal 404 Trigger ---
     const render404State = (message = "Nothing matched your search.") => {
         topResultCard.innerHTML = '';
         resultsListContainer.innerHTML = ''; 
@@ -338,7 +334,65 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // --- 7. FULL SEARCH SUBMISSION ---
+    // --- 7. DYNAMIC LIBRARY TOGGLE LOGIC ---
+    window.app.toggleSearchLibraryClick = async (event, id, title, img) => {
+        event.stopPropagation(); 
+        const profile = window.app.state?.activeProfile || null;
+        
+        // Auth Check
+        if (!profile || !profile.uid || profile.uid.startsWith('anon_')) {
+            if (window.app.components && window.app.components.auth) window.app.components.auth();
+            else if (window.app.showCustomAlert) window.app.showCustomAlert("Please log in to save to your Library!", "error");
+            return;
+        }
+
+        if(!profile.library) profile.library = [];
+        
+        const formattedAnime = { id, title, img };
+        const existingItemIndex = profile.library.findIndex(item => item.id === id);
+        const isCurrentlyAdded = existingItemIndex !== -1;
+        const btn = event.currentTarget || event.target.closest('button');
+
+        try {
+            const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+            const userRef = firestore.doc(window.app.db, "users", profile.uid);
+
+            if (isCurrentlyAdded) {
+                // REMOVE
+                const itemToRemove = profile.library[existingItemIndex];
+                profile.library.splice(existingItemIndex, 1); 
+                localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
+
+                // UI Update
+                if (btn) {
+                    btn.className = "bg-white/10 text-white px-3 py-2 rounded font-black text-[10px] uppercase hover:bg-white/20 transition border border-white/10 flex items-center gap-2";
+                    btn.innerHTML = `<i class="fas fa-plus"></i> Library`;
+                }
+
+                await firestore.updateDoc(userRef, { library: firestore.arrayRemove(itemToRemove) });
+                if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
+
+            } else {
+                // ADD
+                profile.library.unshift(formattedAnime);
+                localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
+
+                // UI Update
+                if (btn) {
+                    btn.className = "bg-white text-black px-3 py-2 rounded font-black text-[10px] uppercase hover:bg-gray-200 transition border border-white flex items-center gap-2";
+                    btn.innerHTML = `<i class="fas fa-check text-green-500"></i> Added`;
+                }
+
+                await firestore.updateDoc(userRef, { library: firestore.arrayUnion(formattedAnime) });
+                if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
+            }
+        } catch (error) { 
+            console.error("Firebase update failed:", error); 
+            if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to sync with cloud.", "error");
+        }
+    };
+
+    // --- 8. FULL SEARCH SUBMISSION ---
     const handleSearchSubmit = async (term) => {
         searchInput.blur();
         saveHistory(term);
@@ -381,17 +435,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const topShowType = topAnime.tvInfo?.showType || topAnime.type || 'TV';
             const topImg = topAnime.image || topAnime.poster;
 
-            window.toggleSaveAnime = (id, event) => {
-                event.stopPropagation();
-                const icon = event.currentTarget.querySelector('i');
-                if (icon.classList.contains('fa-bookmark')) {
-                    icon.classList.replace('far', 'fas');
-                    icon.classList.add('text-[#F47521]');
-                } else {
-                    icon.classList.replace('fas', 'far');
-                    icon.classList.remove('text-[#F47521]');
-                }
-            };
+            // Check if top result is already in library
+            const profile = window.app.state?.activeProfile || null;
+            let isAdded = false;
+            if (profile && profile.library && profile.uid && !profile.uid.startsWith('anon_')) {
+                isAdded = profile.library.some(item => item.id === topAnime.id);
+            }
+
+            const libraryBtnHtml = isAdded 
+                ? `<button onclick="window.app.toggleSearchLibraryClick(event, '${topAnime.id}', '${topAnime.title.replace(/'/g, "\\'")}', '${topImg}')" class="bg-white text-black px-3 py-2 rounded font-black text-[10px] uppercase hover:bg-gray-200 transition border border-white flex items-center gap-2">
+                       <i class="fas fa-check text-green-500"></i> Added
+                   </button>`
+                : `<button onclick="window.app.toggleSearchLibraryClick(event, '${topAnime.id}', '${topAnime.title.replace(/'/g, "\\'")}', '${topImg}')" class="bg-white/10 text-white px-3 py-2 rounded font-black text-[10px] uppercase hover:bg-white/20 transition border border-white/10 flex items-center gap-2">
+                       <i class="fas fa-plus"></i> Library
+                   </button>`;
 
             topResultCard.innerHTML = `
                 <div onclick="window.location.href='info.html?id=${topAnime.id}'" class="relative overflow-hidden rounded-xl border border-white/10 cursor-pointer hover:border-[#F47521]/50 transition group shadow-2xl bg-black">
@@ -408,51 +465,4 @@ document.addEventListener('DOMContentLoaded', () => {
                             <h3 class="text-base md:text-xl font-black leading-tight text-white mb-2">${topAnime.title}</h3>
                             <p class="text-[10px] text-gray-300 line-clamp-4 mb-4 leading-relaxed">${description}</p>
                             
-                            <div class="flex items-center gap-2 mt-auto">
-                                <button onclick="event.stopPropagation(); window.location.href='info.html?id=${topAnime.id}'" class="bg-white text-black px-4 py-2 rounded font-black text-[10px] uppercase tracking-widest hover:bg-[#F47521] hover:text-white transition">
-                                    <i class="fas fa-play mr-1"></i> Play
-                                </button>
-                                <button onclick="toggleSaveAnime('${topAnime.id}', event)" class="bg-white/10 text-white px-3 py-2 rounded font-black text-[10px] uppercase hover:bg-white/20 transition">
-                                    <i class="far fa-bookmark text-sm"></i>
-                                </button>
-                                <div class="flex gap-1 ml-auto text-[9px] font-bold">
-                                    <span class="bg-black/50 text-white px-1.5 py-0.5 rounded border border-white/10">${topShowType}</span>
-                                    <span class="bg-[#F47521]/20 text-[#F47521] px-1.5 py-0.5 rounded"><i class="fas fa-closed-captioning"></i> ${topSubEps}</span>
-                                    ${topDubEps > 0 ? `<span class="bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded"><i class="fas fa-microphone"></i> ${topDubEps}</span>` : ''}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            resultsListContainer.innerHTML = restAnime.map(anime => {
-                const aSub = anime.tvInfo?.sub || anime.sub || '?';
-                const aDub = anime.tvInfo?.dub || anime.dub || 0;
-                const aType = anime.tvInfo?.showType || anime.type || 'TV';
-                const aImg = anime.image || anime.poster;
-
-                return `
-                <div onclick="window.location.href='info.html?id=${anime.id}'" class="flex gap-3 items-center bg-white/5 p-2 rounded-xl cursor-pointer hover:bg-white/10 transition border border-transparent hover:border-white/10">
-                    <img src="${aImg}" class="w-14 h-20 object-cover rounded-lg shadow">
-                    <div class="flex-1 min-w-0 pr-2">
-                        <h4 class="text-sm font-bold text-white truncate">${anime.title}</h4>
-                        <div class="flex gap-2 mt-2 items-center text-[9px] font-black uppercase tracking-wider">
-                            <span class="text-gray-400 border border-gray-600 px-1.5 py-0.5 rounded bg-black/50">${aType}</span>
-                            <div class="flex gap-1 ml-auto">
-                                <span class="bg-gray-800 text-gray-300 px-1.5 py-0.5 rounded flex items-center gap-1 shadow-inner">SUB <span class="text-white">${aSub}</span></span>
-                                ${aDub > 0 ? `<span class="bg-gray-800 text-gray-300 px-1.5 py-0.5 rounded flex items-center gap-1 shadow-inner">DUB <span class="text-white">${aDub}</span></span>` : ''}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                `;
-            }).join('');
-
-        } catch (err) {
-            render404State("Network error occurred while communicating with the database.");
-        }
-    };
-
-    initSearchPage();
-});
+                            <div class="flex items-center gap-2
