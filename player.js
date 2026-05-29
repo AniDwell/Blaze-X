@@ -29,13 +29,11 @@ window.app.components.player = async () => {
     }
 
     try {
-        // 3. FETCH STREAM DATA (Using the Exact Working Endpoint Structure)
+        // 3. FETCH STREAM DATA
         let streamData = null;
         let isFallback = false;
 
         const fetchStream = async (endpoint) => {
-            // Generating the exact URL that you just confirmed is working:
-            // e.g., /api/stream?id=Dorohedoro-season-2-bqfe6&ep=1&server=hd-1&type=sub
             const targetUrl = `${baseUrl}${endpoint}?id=${animeId}&ep=${currentEpNum}&server=${targetServer}&type=${audioType}`;
             console.log(`[Player] Initiating connection to: ${targetUrl}`);
 
@@ -51,7 +49,6 @@ window.app.components.player = async () => {
 
                 const json = await res.json();
                 
-                // Parsing the exact JSON schema provided by the Vercel API
                 if (json.success && json.data && json.data.m3u8) {
                     return json.data;
                 }
@@ -75,6 +72,7 @@ window.app.components.player = async () => {
 
         // 4. MAP EXTRACTED DATA
         const streamUrl = streamData.m3u8; 
+        const refererUrl = streamData.referer || 'https://vidwish.live/'; // Target referer extracted
         const tracks = streamData.subtitles || []; 
         
         const introStart = streamData.intro?.start || 0;
@@ -94,7 +92,7 @@ window.app.components.player = async () => {
                 Skip Outro / Next Ep <i class="fas fa-step-forward ml-1"></i>
             </button>
             
-            ${isFallback ? '<div class="absolute top-4 left-4 bg-red-500/80 text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded shadow-md pointer-events-none">Fallback Node Active</div>' : ''}
+            ${isFallback ? '<div class="absolute top-4 left-4 bg-red-500/80 text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded shadow-md pointer-events-none z-50">Fallback Node Active</div>' : ''}
         `;
 
         const video = document.getElementById('main-video-player');
@@ -106,18 +104,27 @@ window.app.components.player = async () => {
                 trackEl.kind = track.kind;
                 trackEl.label = track.label || 'English';
                 trackEl.srclang = track.label ? track.label.substring(0, 2).toLowerCase() : 'en';
-                trackEl.src = track.file;
+                // Routing subtitle files through proxy as well to avoid VTT block
+                trackEl.src = `https://corsproxy.io/?${encodeURIComponent(track.file)}`;
                 if (track.default) trackEl.default = true;
                 video.appendChild(trackEl);
             }
         });
 
-        // 7. INITIALIZE HLS STREAM ENGINE
+        // 7. INITIALIZE PROXIED HLS STREAM ENGINE
         if (Hls.isSupported()) {
             const hls = new Hls({
                 maxBufferLength: 30,
                 maxMaxBufferLength: 60,
+                // THE FIX: Intercepting all media requests and passing them through CORS proxy
+                xhrSetup: function (xhr, url) {
+                    const proxyUrl = 'https://corsproxy.io/?'; 
+                    xhr.open('GET', proxyUrl + encodeURIComponent(url), true);
+                    // Optional: Try appending the referer header if the proxy allows passing custom headers
+                    xhr.setRequestHeader('x-requested-with', refererUrl.replace(/^https?:\/\//, '').replace(/\/$/, ''));
+                }
             });
+            
             hls.loadSource(streamUrl);
             hls.attachMedia(video);
             
@@ -144,8 +151,8 @@ window.app.components.player = async () => {
             });
 
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            // Safari Native Playback
-            video.src = streamUrl;
+            // Safari Native Playback (Does not natively support deep xhr intercepts without service workers)
+            video.src = `https://corsproxy.io/?${encodeURIComponent(streamUrl)}`;
             video.addEventListener('loadedmetadata', function() {
                 video.play().catch(e => console.log("Autoplay prevented."));
             });
@@ -199,5 +206,3 @@ window.app.components.player = async () => {
         `;
     }
 };
-
-// Global routing for next episode is handled in play.js
