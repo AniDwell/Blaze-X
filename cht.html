@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Blaze-X | Chat</title>
+    <title>Blaze-X | Direct Chat</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -25,7 +25,8 @@
         /* Glassmorphism effects */
         .glass-header { background: rgba(5, 5, 5, 0.85); backdrop-filter: blur(10px); }
     </style>
-</head>
+
+    </head>
 <body class="flex flex-col h-[100dvh] bg-[#050505]">
 
     <header class="glass-header w-full h-16 border-b border-white/10 flex items-center px-4 shrink-0 z-50 fixed top-0">
@@ -46,7 +47,7 @@
             <i class="fas fa-circle-notch fa-spin text-3xl text-[#F47521]"></i>
         </div>
 
-        <div id="chat-intro" class="w-full flex flex-col items-center justify-center py-10 opacity-0 transition-opacity duration-500">
+        <div id="chat-intro" class="w-full flex flex-col items-center justify-center py-10 opacity-0 transition-opacity duration-500 hidden">
             <img id="intro-pfp" src="https://via.placeholder.com/150/222/fff?text=U" class="w-24 h-24 rounded-full object-cover border-2 border-[#F47521] shadow-2xl mb-4">
             <h3 id="intro-name" class="text-lg font-black text-white mb-2 tracking-wide">...</h3>
             <p class="text-xs text-gray-500 font-bold uppercase tracking-widest mb-4">Blaze-X Community Member</p>
@@ -55,9 +56,9 @@
             </button>
         </div>
 
-        <div id="messages-list" class="flex flex-col gap-3 pb-4"></div>
+        <div id="messages-list" class="flex flex-col gap-3 pb-4 mt-auto"></div>
         
-        <div id="typing-indicator" class="hidden flex gap-2 items-center self-start bg-[#111] border border-white/5 rounded-2xl rounded-bl-none px-4 py-3 ml-2">
+        <div id="typing-indicator" class="hidden flex gap-2 items-center self-start bg-[#111] border border-white/5 rounded-2xl rounded-bl-none px-4 py-3 ml-2 mb-2">
             <div class="w-1.5 h-1.5 bg-gray-400 rounded-full typing-dot"></div>
             <div class="w-1.5 h-1.5 bg-gray-400 rounded-full typing-dot"></div>
             <div class="w-1.5 h-1.5 bg-gray-400 rounded-full typing-dot"></div>
@@ -113,68 +114,91 @@
         let typingTimeout = null;
         let isEditingId = null;
         
-        // Touch State logic
         let touchStartX = 0; let touchStartY = 0;
         let currentTouchElem = null;
         let pressTimer = null;
 
         document.addEventListener("DOMContentLoaded", async () => {
-            // Get URL params
             const urlParams = new URLSearchParams(window.location.search);
             const targetUid = urlParams.get('user');
 
-            if (!targetUid) return alert("User not found!");
-
-            // Local Auth Check
-            const localProfile = localStorage.getItem('blazex_user_profile');
-            if (!localProfile) {
-                alert("Please log in to chat.");
+            if (!targetUid) {
+                alert("Target user ID missing in URL.");
                 window.location.href = 'index.html';
                 return;
             }
-            currentUser = JSON.parse(localProfile);
-            
-            if(currentUser.uid === targetUid) {
-                alert("You cannot chat with yourself.");
-                window.history.back();
-                return;
-            }
 
-            // Generate Unique Chat ID (Alphabetical order of UIDs)
-            chatId = currentUser.uid < targetUid ? `${currentUser.uid}_${targetUid}` : `${targetUid}_${currentUser.uid}`;
-
-            // Initialize Firebase
             try {
+                // Initialize Firebase dynamically if not loaded globally
+                const { getAuth, onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
                 const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-                window.db = window.app.db || firestore.getFirestore(window.app.firebaseApp);
-                window.fs = firestore; // attach to window for easy access
-
-                // 1. Fetch Target User Data
-                const targetSnap = await fs.getDoc(fs.doc(db, "users", targetUid));
-                if (!targetSnap.exists()) {
-                    alert("User does not exist."); return window.history.back();
+                
+                // Fallback check: Ensures window.app is configured properly
+                if (!window.app || !window.app.firebaseApp) {
+                    console.error("Firebase is not initialized. Please ensure your config script is linked in cht.html.");
+                    document.getElementById('chat-loader').innerHTML = '<p class="text-red-500 text-xs font-bold text-center">Database Connection Error.<br>Please include firebase config.</p>';
+                    return;
                 }
-                targetUser = targetSnap.data();
 
-                // 2. Setup Header & Intro
-                const pfp = targetUser.pfpLink || targetUser.photoURL || 'https://via.placeholder.com/150/222/fff?text=U';
-                document.getElementById('header-pfp').src = pfp;
-                document.getElementById('intro-pfp').src = pfp;
-                document.getElementById('header-name').innerText = targetUser.name || 'Anonymous';
-                document.getElementById('intro-name').innerText = targetUser.name || 'Anonymous';
-                
-                document.getElementById('chat-loader').classList.add('hidden');
-                document.getElementById('chat-intro').classList.remove('opacity-0');
+                const auth = getAuth(window.app.firebaseApp);
+                window.db = window.app.db || firestore.getFirestore(window.app.firebaseApp);
+                window.fs = firestore;
 
-                // 3. Setup Messages Listener
-                setupMessagesListener();
-                
-                // 4. Setup Typing Listener
-                setupTypingListener();
+                // 2. LIVE AUTH CHECK
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        // Real Auth User
+                        const userDoc = await fs.getDoc(fs.doc(db, "users", user.uid));
+                        currentUser = userDoc.exists() ? userDoc.data() : { uid: user.uid, name: user.displayName || "User" };
+                    } else {
+                        // Check local storage for guests
+                        const localGuest = localStorage.getItem('blazex_user_profile');
+                        if (localGuest) {
+                            currentUser = JSON.parse(localGuest);
+                        } else {
+                            alert("Please log in to chat.");
+                            window.location.href = 'index.html';
+                            return;
+                        }
+                    }
+
+                    if(currentUser.uid === targetUid) {
+                        alert("You cannot chat with yourself.");
+                        window.history.back();
+                        return;
+                    }
+
+                    // Generate Universal Chat ID
+                    chatId = currentUser.uid < targetUid ? `${currentUser.uid}_${targetUid}` : `${targetUid}_${currentUser.uid}`;
+
+                    // 3. Fetch Target User Data
+                    const targetSnap = await fs.getDoc(fs.doc(db, "users", targetUid));
+                    if (!targetSnap.exists()) {
+                        alert("User does not exist."); 
+                        window.history.back();
+                        return;
+                    }
+                    targetUser = targetSnap.data();
+
+                    // 4. Setup Header & Intro
+                    const pfp = targetUser.pfpLink || targetUser.photoURL || 'https://via.placeholder.com/150/222/fff?text=U';
+                    document.getElementById('header-pfp').src = pfp;
+                    document.getElementById('intro-pfp').src = pfp;
+                    document.getElementById('header-name').innerText = targetUser.name || 'Anonymous';
+                    document.getElementById('intro-name').innerText = targetUser.name || 'Anonymous';
+                    
+                    document.getElementById('chat-loader').classList.add('hidden');
+                    document.getElementById('chat-intro').classList.remove('hidden');
+                    setTimeout(() => document.getElementById('chat-intro').classList.remove('opacity-0'), 100);
+
+                    // 5. Start Sync
+                    setupMessagesListener();
+                    setupTypingListener();
+                });
 
             } catch (err) {
-                console.error(err);
-                alert("Error initializing chat.");
+                console.error("Initialization Error:", err);
+                document.getElementById('chat-loader').innerHTML = '<p class="text-red-500 text-xs font-bold text-center">Initialization Failed.</p>';
             }
         });
 
@@ -200,8 +224,7 @@
                     }
                 });
                 
-                // Scroll to bottom
-                scrollToBottom();
+                setTimeout(scrollToBottom, 100);
             });
         }
 
@@ -235,38 +258,34 @@
         // --- RENDER LOGIC ---
         function renderMessage(msg, container) {
             const isMe = msg.senderId === currentUser.uid;
-            
             const alignClass = isMe ? 'self-end bg-[#F47521] text-black rounded-2xl rounded-br-sm' : 'self-start bg-[#111] border border-white/5 text-white rounded-2xl rounded-bl-sm';
             
-            // Format Timestamp
             let timeStr = "Sending...";
             if (msg.timestamp) {
-                const d = msg.timestamp.toDate();
+                const d = msg.timestamp.toDate ? msg.timestamp.toDate() : new Date(msg.timestamp);
                 timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             }
 
             let replyHtml = '';
             if (msg.replyTo) {
-                // We create a skeleton for reply, ideally we should fetch the original msg text, but for speed we keep it simple or store replyText in DB.
-                // Assuming we stored replyText during sending for optimization:
                 if (msg.replyText) {
-                    replyHtml = `<div class="bg-black/20 border-l-2 border-black pl-2 py-1 mb-1 rounded text-[10px] opacity-80 line-clamp-1">${msg.replyText}</div>`;
+                    replyHtml = `<div class="bg-black/20 border-l-2 border-black/50 pl-2 py-1 mb-1 rounded text-[10px] opacity-80 line-clamp-1">${msg.replyText}</div>`;
                 } else {
-                    replyHtml = `<div class="bg-black/20 border-l-2 border-black pl-2 py-1 mb-1 rounded text-[10px] opacity-80"><i class="fas fa-reply"></i> Replied</div>`;
+                    replyHtml = `<div class="bg-black/20 border-l-2 border-black/50 pl-2 py-1 mb-1 rounded text-[10px] opacity-80"><i class="fas fa-reply"></i> Replied</div>`;
                 }
             }
 
             let imgHtml = '';
             if (msg.imageUrl) {
-                imgHtml = `<img src="${msg.imageUrl}" class="w-full max-w-[200px] md:max-w-[250px] rounded-lg mb-1 cursor-pointer">`;
+                imgHtml = `<img src="${msg.imageUrl}" class="w-full max-w-[200px] md:max-w-[250px] rounded-lg mb-1 cursor-pointer mt-1">`;
             }
 
             const html = `
-                <div id="msg-${msg.id}" class="message-bubble relative max-w-[75%] px-4 py-2 ${alignClass} shadow-md group" 
-                     data-id="${msg.id}" data-text="${msg.text}" data-isme="${isMe}">
+                <div id="msg-${msg.id}" class="message-bubble relative max-w-[80%] px-3 py-2 ${alignClass} shadow-md group" 
+                     data-id="${msg.id}" data-text="${msg.text || ''}" data-isme="${isMe}">
                     ${replyHtml}
                     ${imgHtml}
-                    <p class="text-sm break-words">${msg.text ? msg.text.replace(/</g, "&lt;").replace(/>/g, "&gt;") : ''}</p>
+                    ${msg.text ? `<p class="text-sm break-words">${msg.text.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>` : ''}
                     <div class="flex items-center justify-end gap-1 mt-1 opacity-70">
                         <span class="text-[8px] font-bold tracking-wider">${timeStr}</span>
                         ${msg.isEdited ? `<span class="text-[8px] italic ml-1">(edited)</span>` : ''}
@@ -275,7 +294,6 @@
             `;
             container.insertAdjacentHTML('beforeend', html);
             
-            // Attach Touch Listeners for Swipe & Long Press
             const newElem = document.getElementById(`msg-${msg.id}`);
             attachTouchEvents(newElem);
         }
@@ -294,7 +312,7 @@
             c.scrollTop = c.scrollHeight;
         }
 
-        // --- MESSAGE ACTIONS (SEND/IMAGE/EDIT) ---
+        // --- MESSAGE ACTIONS ---
         async function sendMessage() {
             const input = document.getElementById('chat-input');
             const text = input.value.trim();
@@ -322,7 +340,7 @@
 
                 input.value = ''; input.style.height = '40px';
                 cancelReply();
-            } catch(e) { alert("Failed to send."); }
+            } catch(e) { alert("Failed to send message. Please try again."); }
 
             input.disabled = false;
             btn.innerHTML = `<i class="fas fa-paper-plane text-sm relative right-[1px] bottom-[1px]"></i>`;
@@ -348,13 +366,13 @@
                         text: "Photo", imageUrl: data.data.url, senderId: currentUser.uid, timestamp: fs.serverTimestamp()
                     });
                 }
-            } catch(e) { alert("Image upload failed."); }
+            } catch(e) { alert("Image upload failed. Try again."); }
             
             btn.innerHTML = `<i class="fas fa-paper-plane text-sm relative right-[1px] bottom-[1px]"></i>`;
-            e.target.value = ''; // clear input
+            e.target.value = ''; 
         }
 
-        // --- REPLY & UI HELPERS ---
+        // --- UI HELPERS ---
         function setReplyState(id, text, username) {
             document.getElementById('reply-target-id').value = id;
             document.getElementById('reply-target-name').innerText = username;
@@ -381,7 +399,6 @@
                 startX = e.touches[0].clientX; startY = e.touches[0].clientY;
                 currentX = 0; el.style.transition = 'none';
                 
-                // Long Press Timer
                 pressTimer = setTimeout(() => { triggerLongPress(el); }, 500);
             }, {passive: true});
 
@@ -389,17 +406,13 @@
                 const dx = e.touches[0].clientX - startX;
                 const dy = Math.abs(e.touches[0].clientY - startY);
                 
-                // If moving scroll vertically, cancel long press and swipe
                 if (dy > 10) { clearTimeout(pressTimer); el.style.transform = `translateX(0px)`; return; }
-                
-                // Cancel long press if moved
                 if (Math.abs(dx) > 10) clearTimeout(pressTimer);
                 
                 currentX = dx;
                 
-                // Resistance to swipe
-                if(dx > 0 && dx < 80) el.style.transform = `translateX(${dx}px)`; // Swipe Right
-                if(dx < 0 && dx > -80) el.style.transform = `translateX(${dx}px)`; // Swipe Left
+                if(dx > 0 && dx < 80) el.style.transform = `translateX(${dx}px)`; 
+                if(dx < 0 && dx > -80) el.style.transform = `translateX(${dx}px)`; 
             }, {passive: true});
 
             el.addEventListener('touchend', (e) => {
@@ -408,16 +421,15 @@
                 el.style.transform = `translateX(0px)`;
 
                 if (currentX > 50) {
-                    // Swipe Right -> Reply
                     navigator.vibrate?.(50);
                     const isMe = el.getAttribute('data-isme') === "true";
-                    setReplyState(el.getAttribute('data-id'), el.getAttribute('data-text'), isMe ? "Yourself" : targetUser.name);
+                    setReplyState(el.getAttribute('data-id'), el.getAttribute('data-text') || "Photo", isMe ? "Yourself" : targetUser.name);
                 } else if (currentX < -50) {
-                    // Swipe Left -> Share
                     navigator.vibrate?.(50);
-                    if (window.app.components.share) {
-                        window.app.components.share(el.getAttribute('data-text')); // Trigger share.js
-                    } else { alert("Share module not loaded."); }
+                    const msgText = el.getAttribute('data-text');
+                    if (window.app.components && window.app.components.share && msgText) {
+                        window.app.components.share(msgText); 
+                    }
                 }
             });
         }
@@ -432,8 +444,7 @@
             document.getElementById('opt-msg-id').value = id;
             document.getElementById('opt-msg-text').value = text;
 
-            // Show/Hide Edit/Delete based on ownership
-            document.getElementById('opt-edit').classList.toggle('hidden', !isMe);
+            document.getElementById('opt-edit').classList.toggle('hidden', !isMe || !text);
             document.getElementById('opt-delete').classList.toggle('hidden', !isMe);
 
             const modal = document.getElementById('msg-options-modal');
@@ -459,7 +470,7 @@
 
         function optionReply() {
             const id = document.getElementById('opt-msg-id').value;
-            const text = document.getElementById('opt-msg-text').value;
+            const text = document.getElementById('opt-msg-text').value || "Photo";
             setReplyState(id, text, "Message");
             closeMsgOptions();
         }
@@ -485,9 +496,9 @@
         function optionShare() {
             const text = document.getElementById('opt-msg-text').value;
             closeMsgOptions();
-            if (window.app.components && window.app.components.share) {
+            if (window.app.components && window.app.components.share && text) {
                 window.app.components.share(text);
-            } else { alert("Share module not loaded."); }
+            }
         }
     </script>
 </body>
