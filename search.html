@@ -11,26 +11,29 @@
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .line-clamp-4 { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+        /* Modal Animation */
+        .modal-enter { animation: slideUp 0.3s ease-out forwards; }
+        @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     </style>
 </head>
 <body class="bg-[#050505] text-white font-sans min-h-screen pb-20 overflow-x-hidden">
 
-    <div class="sticky top-0 z-40 bg-[#050505]/95 backdrop-blur-md px-4 py-4 border-b border-white/5">
-        <div class="relative max-w-2xl mx-auto flex items-center">
-            <button onclick="history.back()" class="mr-4 text-gray-400 hover:text-white transition">
+    <div class="sticky top-0 z-40 bg-[#050505]/95 backdrop-blur-md px-4 py-4 border-b border-white/10">
+        <div class="relative max-w-2xl mx-auto flex items-center gap-3">
+            <button onclick="history.back()" class="text-gray-400 hover:text-white transition">
                 <i class="fas fa-arrow-left text-xl"></i>
             </button>
             <div class="relative w-full flex items-center">
-                <i class="fas fa-search absolute left-4 text-gray-500"></i>
+                <i class="fas fa-search absolute left-4 text-gray-500 pointer-events-none"></i>
                 <input type="text" id="search-input" autocomplete="off" placeholder="Search anime, genres..." 
-                    class="w-full bg-white/5 border border-white/10 rounded-full py-3 pl-11 pr-20 text-sm text-white focus:outline-none focus:border-[#F47521] focus:ring-1 focus:ring-[#F47521] transition-all placeholder-gray-600">
+                    class="w-full bg-white/5 border border-white/10 rounded-full py-3 pl-11 pr-20 text-sm text-white focus:outline-none focus:border-[#F47521] focus:ring-1 focus:ring-[#F47521] transition-all">
                 
                 <div class="absolute right-2 flex items-center gap-1">
                     <button id="clear-search-btn" class="text-gray-500 hover:text-white p-2 hidden">
                         <i class="fas fa-times"></i>
                     </button>
-                    <button id="open-filter-btn" class="bg-white/10 hover:bg-[#F47521] hover:text-black text-white p-2 rounded-full transition-colors flex items-center justify-center w-8 h-8">
+                    <button id="filter-btn" class="bg-white/10 hover:bg-white/20 text-white p-2 rounded-full transition">
                         <i class="fas fa-sliders-h text-xs"></i>
                     </button>
                 </div>
@@ -38,89 +41,83 @@
         </div>
     </div>
 
-    <div id="filter-modal" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm hidden flex-col justify-end md:justify-center items-center transition-opacity">
-        <div class="bg-[#121212] w-full md:max-w-lg md:rounded-2xl rounded-t-2xl border border-white/10 p-6 flex flex-col max-h-[85vh] overflow-y-auto hide-scrollbar animate-slide-up">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-lg font-black uppercase tracking-widest text-white"><i class="fas fa-filter text-[#F47521] mr-2"></i> Advanced Filters</h2>
-                <button id="close-filter-btn" class="text-gray-500 hover:text-white"><i class="fas fa-times text-xl"></i></button>
-            </div>
-            
-            <form id="filter-form" class="space-y-4 text-xs font-bold uppercase tracking-wider text-gray-400">
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block mb-1">Type</label>
-                        <select name="type" class="w-full bg-black border border-white/10 rounded-lg p-2 text-white focus:border-[#F47521] outline-none">
-                            <option value="">All</option><option value="tv">TV</option><option value="movie">Movie</option><option value="ova">OVA</option><option value="special">Special</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block mb-1">Status</label>
-                        <select name="status" class="w-full bg-black border border-white/10 rounded-lg p-2 text-white focus:border-[#F47521] outline-none">
-                            <option value="">All</option><option value="finished">Finished</option><option value="currently_airing">Airing</option><option value="not_yet_aired">Upcoming</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block mb-1">Sort By</label>
-                        <select name="sort" class="w-full bg-black border border-white/10 rounded-lg p-2 text-white focus:border-[#F47521] outline-none">
-                            <option value="default">Default</option><option value="score">Score</option><option value="recently_updated">Recently Updated</option><option value="title_az">A-Z</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block mb-1">Language</label>
-                        <select name="language" class="w-full bg-black border border-white/10 rounded-lg p-2 text-white focus:border-[#F47521] outline-none">
-                            <option value="">All</option><option value="sub">Sub</option><option value="dub">Dub</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block mb-1">Season</label>
-                        <select name="season" class="w-full bg-black border border-white/10 rounded-lg p-2 text-white focus:border-[#F47521] outline-none">
-                            <option value="">All</option><option value="spring">Spring</option><option value="summer">Summer</option><option value="fall">Fall</option><option value="winter">Winter</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block mb-1">Genres</label>
-                        <input type="text" name="genres" placeholder="e.g. Action, Comedy" class="w-full bg-black border border-white/10 rounded-lg p-2 text-white focus:border-[#F47521] outline-none placeholder-gray-700">
-                    </div>
-                </div>
-                
-                <div class="flex gap-3 pt-6 border-t border-white/5 mt-6">
-                    <button type="button" id="reset-filter-btn" class="flex-1 bg-white/5 border border-white/10 text-white py-3 rounded-xl hover:bg-white/10 transition">Reset</button>
-                    <button type="submit" class="flex-1 bg-[#F47521] text-black font-black py-3 rounded-xl hover:bg-white transition shadow-lg shadow-[#F47521]/20">Apply Filters</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <main class="max-w-2xl mx-auto px-4 pt-4">
+    <main class="max-w-2xl mx-auto px-4 pt-6">
         
-        <div id="idle-view" class="block">
+        <div id="idle-view" class="block animate-fade-in">
             <div class="mb-8">
                 <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-[10px] font-black uppercase tracking-widest text-gray-500">Recent Searches</h2>
-                    <button id="clear-all-history" class="text-[9px] text-red-500 uppercase font-bold hidden hover:text-white transition">Clear All</button>
+                    <h2 class="text-xs font-black uppercase tracking-widest text-gray-400">Recent</h2>
+                    <button id="clear-all-history" class="text-[10px] text-red-500 uppercase font-bold hidden hover:underline">Clear</button>
                 </div>
                 <div id="history-container" class="flex flex-wrap gap-2"></div>
-                <p id="history-hint" class="text-[8px] text-gray-600 mt-2 hidden uppercase tracking-widest font-bold">Long-press to delete</p>
+                <p id="history-hint" class="text-[9px] text-gray-500 mt-2 hidden italic">Long-press to remove.</p>
             </div>
+
             <div>
-                <h2 class="text-[10px] font-black uppercase tracking-widest text-[#F47521] mb-4">Top Trending</h2>
+                <h2 class="text-xs font-black uppercase tracking-widest text-[#F47521] mb-4">Trending</h2>
                 <div id="trending-container" class="flex overflow-x-auto gap-4 pb-4 hide-scrollbar snap-x"></div>
             </div>
         </div>
 
-        <div id="typing-view" class="hidden">
-            <h2 class="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">Suggestions</h2>
-            <div id="suggestions-container" class="bg-[#0a0a0a] border border-white/5 rounded-xl overflow-hidden shadow-2xl">
-                </div>
+        <div id="typing-view" class="hidden animate-fade-in">
+            <div id="suggestions-container" class="space-y-1"></div>
         </div>
 
-        <div id="results-view" class="hidden">
-            <h2 class="text-[10px] font-black uppercase tracking-widest text-white mb-4">Search Results</h2>
+        <div id="results-view" class="hidden animate-fade-in">
             <div id="top-result-card" class="mb-6"></div>
             <div id="results-list-container" class="space-y-3"></div>
         </div>
 
     </main>
+
+    <div id="filter-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex-col justify-end">
+        <div class="bg-[#0f0f0f] w-full max-h-[85vh] rounded-t-2xl border-t border-white/10 flex flex-col modal-enter">
+            <div class="flex justify-between items-center p-4 border-b border-white/5">
+                <h3 class="font-black uppercase tracking-widest text-sm">Filters</h3>
+                <button id="close-filter-btn" class="text-gray-400 hover:text-white p-2"><i class="fas fa-times text-lg"></i></button>
+            </div>
+            
+            <div class="p-4 overflow-y-auto space-y-4 text-xs font-bold text-gray-300">
+                <div class="grid grid-cols-2 gap-4">
+                    <label class="flex flex-col gap-1">Type
+                        <select id="f-type" class="bg-white/5 border border-white/10 rounded p-2 text-white"><option value="">ALL</option><option value="1">TV</option><option value="2">Movie</option><option value="3">OVA</option><option value="4">ONA</option><option value="5">Special</option></select>
+                    </label>
+                    <label class="flex flex-col gap-1">Status
+                        <select id="f-status" class="bg-white/5 border border-white/10 rounded p-2 text-white"><option value="">ALL</option><option value="1">Finished Airing</option><option value="2">Currently Airing</option><option value="3">Not Yet Aired</option></select>
+                    </label>
+                    <label class="flex flex-col gap-1">Language
+                        <select id="f-lang" class="bg-white/5 border border-white/10 rounded p-2 text-white"><option value="">ALL</option><option value="sub">SUB</option><option value="dub">DUB</option></select>
+                    </label>
+                    <label class="flex flex-col gap-1">Sort By
+                        <select id="f-sort" class="bg-white/5 border border-white/10 rounded p-2 text-white"><option value="default">Default</option><option value="score">Score</option><option value="latest">Latest</option></select>
+                    </label>
+                </div>
+
+                <label class="flex flex-col gap-1">Genres (Comma separated)
+                    <input type="text" id="f-genres" placeholder="e.g. Action, Comedy" class="bg-white/5 border border-white/10 rounded p-2 text-white placeholder-gray-600">
+                </label>
+
+                <div class="border-t border-white/5 pt-4">
+                    <p class="mb-2">Air Date Range</p>
+                    <div class="grid grid-cols-3 gap-2">
+                        <input type="number" id="f-sy" placeholder="Start YYYY" class="bg-white/5 border border-white/10 rounded p-2 text-white">
+                        <input type="number" id="f-sm" placeholder="MM" class="bg-white/5 border border-white/10 rounded p-2 text-white">
+                        <input type="number" id="f-sd" placeholder="DD" class="bg-white/5 border border-white/10 rounded p-2 text-white">
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 mt-2">
+                        <input type="number" id="f-ey" placeholder="End YYYY" class="bg-white/5 border border-white/10 rounded p-2 text-white">
+                        <input type="number" id="f-em" placeholder="MM" class="bg-white/5 border border-white/10 rounded p-2 text-white">
+                        <input type="number" id="f-ed" placeholder="DD" class="bg-white/5 border border-white/10 rounded p-2 text-white">
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 border-t border-white/5 flex gap-3">
+                <button id="reset-filter-btn" class="w-1/3 py-3 rounded-lg border border-white/20 text-white font-black uppercase text-[10px] tracking-widest hover:bg-white/5">Reset</button>
+                <button id="apply-filter-btn" class="w-2/3 py-3 rounded-lg bg-[#F47521] text-black font-black uppercase text-[10px] tracking-widest shadow-lg hover:bg-white transition-colors">Apply Filters</button>
+            </div>
+        </div>
+    </div>
 
     <script src="search.js"></script>
 </body>
