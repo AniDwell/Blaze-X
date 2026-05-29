@@ -1,4 +1,4 @@
-// comment.js - Threaded, Episodic, and Notified Bottom-Sheet System
+// comment.js - Real-Time Threaded, Episodic, and Notified Bottom-Sheet System
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
@@ -16,21 +16,23 @@ window.app.components.comment = async () => {
     const isGuest = !profile || !profile.uid || profile.uid.startsWith('anon_');
 
     // Default SVG Avatar Helper
-    window.app.getDefaultAvatarSVG = () => `
-        <div class="w-10 h-10 rounded-full border border-white/10 shrink-0 flex items-center justify-center bg-[#111] overflow-hidden shadow-md">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-gray-400 mt-2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                <circle cx="12" cy="7" r="4"></circle>
-            </svg>
-        </div>
-    `;
+    if (!window.app.getDefaultAvatarSVG) {
+        window.app.getDefaultAvatarSVG = () => `
+            <div class="w-10 h-10 rounded-full border border-white/10 shrink-0 flex items-center justify-center bg-[#111] overflow-hidden shadow-md">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-gray-400 mt-2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+            </div>
+        `;
 
-    window.app.getAvatarHtml = (url) => {
-        if (!url || url.includes('placeholder.com') || url.includes('pfp') || url.trim() === '') {
-            return window.app.getDefaultAvatarSVG();
-        }
-        return `<img src="${url}" class="w-10 h-10 rounded-full object-cover border border-white/10 shadow-md shrink-0">`;
-    };
+        window.app.getAvatarHtml = (url) => {
+            if (!url || url.includes('placeholder.com') || url.includes('pfp') || url.trim() === '') {
+                return window.app.getDefaultAvatarSVG();
+            }
+            return `<img src="${url}" class="w-10 h-10 rounded-full object-cover border border-white/10 shadow-md shrink-0">`;
+        };
+    }
 
     // 1. INJECT THE BOTTOM SHEET HTML
     let sheet = document.getElementById('blazex-comments-sheet');
@@ -72,7 +74,7 @@ window.app.components.comment = async () => {
 
                 <div class="p-4 border-t border-white/5 bg-[#111] shrink-0 pb-6 md:pb-4">
                     ${isGuest 
-                        ? `<div class="w-full text-center py-2"><p class="text-xs text-gray-400 font-bold uppercase tracking-widest mb-2">You must be logged in to join the discussion.</p><button onclick="window.app.closeComments(); if(window.app.components.auth) window.app.components.auth()" class="bg-[#F47521] text-black px-6 py-2 rounded font-black text-[10px] uppercase shadow-lg">Log In / Register</button></div>`
+                        ? `<div class="w-full text-center py-2"><p class="text-xs text-gray-400 font-bold uppercase tracking-widest mb-2">You must be logged in to join the discussion.</p><button onclick="window.app.closeComments(); if(window.app.components.auth) window.app.components.auth()" class="bg-[#F47521] text-black px-6 py-2 rounded font-black text-[10px] uppercase shadow-lg hover:bg-white transition-colors">Log In / Register</button></div>`
                         : `<form id="comment-input-form" onsubmit="window.app.submitComment(event)" class="flex gap-3 items-end relative">
                             <input type="hidden" id="reply-to-id" value="">
                             <input type="hidden" id="edit-comment-id" value="">
@@ -100,7 +102,6 @@ window.app.components.comment = async () => {
         window.app.initDraggableSheet();
     }
 
-    // Reset Form State
     if (!isGuest) window.app.cancelReply();
 
     // 2. OPEN ANIMATION TO HALF SCREEN
@@ -114,7 +115,7 @@ window.app.components.comment = async () => {
         window.app.state.commentHeight = 50; 
     }, 10);
 
-    // 3. FETCH & RENDER THREADED COMMENTS
+    // 3. FETCH & ATTACH REAL-TIME LISTENER
     window.app.loadComments(animeId, profile);
 };
 
@@ -164,7 +165,17 @@ window.app.closeComments = () => {
     document.getElementById('comments-backdrop').classList.add('opacity-0');
     panel.style.transition = 'height 0.3s ease-out';
     panel.style.height = '0vh'; 
-    setTimeout(() => { sheet.classList.add('hidden'); sheet.classList.remove('flex'); window.app.state.commentHeight = 0; }, 300);
+    setTimeout(() => { 
+        sheet.classList.add('hidden'); 
+        sheet.classList.remove('flex'); 
+        window.app.state.commentHeight = 0; 
+        
+        // KILL REAL-TIME LISTENER TO SAVE FIREBASE READS!
+        if (window.app.commentsUnsub) {
+            window.app.commentsUnsub();
+            window.app.commentsUnsub = null;
+        }
+    }, 300);
 };
 
 window.app.formatTimeAgo = (timestamp) => {
@@ -194,7 +205,7 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// --- RENDER THREADED COMMENTS ---
+// --- REAL-TIME LISTENER FOR COMMENTS ---
 window.app.loadComments = async (animeId, profile) => {
     const container = document.getElementById('comments-list-container');
     if (!window.app.db) {
@@ -206,120 +217,126 @@ window.app.loadComments = async (animeId, profile) => {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const commentsRef = firestore.collection(window.app.db, "comments");
         
-        // Fetch ALL comments for this anime to build the tree
         const q = firestore.query(commentsRef, firestore.where("animeId", "==", animeId));
-        const snapshot = await firestore.getDocs(q);
         
-        let comments = [];
-        snapshot.forEach(doc => comments.push({ id: doc.id, ...doc.data() }));
+        // Clean up previous listener just in case
+        if (window.app.commentsUnsub) window.app.commentsUnsub();
 
-        // Sort globally by time (newest root comments first)
-        comments.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+        // Attach Live Snapshot Listener
+        window.app.commentsUnsub = firestore.onSnapshot(q, (snapshot) => {
+            let comments = [];
+            snapshot.forEach(doc => comments.push({ id: doc.id, ...doc.data() }));
 
-        if (comments.length === 0) {
-            container.innerHTML = `
-                <div class="flex flex-col items-center justify-center py-10 opacity-90 h-full animate-fade-in">
-                    <img src="https://media.tenor.com/VOoSARm1t7wAAAAm/anime-girl.webp" alt="No Comments" class="w-32 h-32 object-contain mb-4 drop-shadow-xl rounded-xl">
-                    <p class="text-xs font-black uppercase tracking-widest text-white mb-1">No comments here</p>
-                    <p class="text-[10px] text-gray-500 font-medium">Be the first one to comment!</p>
-                </div>
-            `;
-            return;
-        }
+            // Sort globally by time (newest root comments first)
+            comments.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
 
-        const myUid = profile?.uid || 'guest';
-        
-        // Recursive function to render comments and their nested replies
-        const renderCommentTree = (commentList, parentId = null, depth = 0) => {
-            const currentLevelComments = commentList.filter(c => (c.replyTo || null) === parentId);
-            
-            // Prioritize "my" comments at the top level
-            if (depth === 0) {
-                const mine = currentLevelComments.filter(c => c.userId === myUid);
-                const others = currentLevelComments.filter(c => c.userId !== myUid);
-                currentLevelComments.length = 0;
-                currentLevelComments.push(...mine, ...others);
-            }
-
-            if (currentLevelComments.length === 0) return '';
-
-            let html = '';
-            currentLevelComments.forEach(comment => {
-                const isMine = comment.userId === myUid;
-                const displayAvatar = isMine ? (profile?.photoURL || profile?.pfpLink || comment.userAvatar) : comment.userAvatar;
-                
-                const menuOptions = isMine 
-                    ? `<button onclick="window.app.editComment('${comment.id}', '${comment.text.replace(/'/g, "\\'")}')" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-pen mr-2"></i> Edit</button>
-                       <button onclick="window.app.deleteComment('${comment.id}')" class="w-full text-left px-3 py-2 text-red-400 hover:bg-white/10 hover:text-red-500 transition-colors"><i class="fas fa-trash mr-2"></i> Delete</button>` 
-                    : `<button onclick="window.location.href='profile.html?user=${comment.userId}'" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-user mr-2"></i> View Profile</button>
-                       <button onclick="window.location.href='cht.html?user=${comment.userId}'" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-comment-dots mr-2"></i> Discuss</button>`;
-
-                const likesCount = Array.isArray(comment.likes) ? comment.likes.length : 0;
-                const hasLiked = Array.isArray(comment.likes) && comment.likes.includes(myUid);
-                const likeColor = hasLiked ? 'text-[#F47521]' : 'text-gray-500 hover:text-white';
-
-                // Fixed depth margin (Prevents Tailwind ml- issue)
-                const marginStyle = depth > 0 ? `margin-left: ${Math.min(depth * 1.5, 3)}rem;` : '';
-                const borderStyle = depth > 0 ? `border-l-2 border-[#F47521]/30 pl-3 mt-3` : `bg-white/5 border border-white/5 p-3 rounded-xl mt-4`;
-
-                const childRepliesHtml = renderCommentTree(commentList, comment.id, depth + 1);
-                const hasReplies = childRepliesHtml !== '';
-
-                html += `
-                    <div class="flex flex-col relative animate-fade-in ${borderStyle}" style="${marginStyle}">
-                        <div class="flex gap-3">
-                            ${window.app.getAvatarHtml(displayAvatar)}
-                            
-                            <div class="flex-1 min-w-0">
-                                <div class="flex items-center justify-between gap-2">
-                                    <div class="flex items-center gap-2 min-w-0">
-                                        <span class="bg-[#111] border border-white/10 text-gray-400 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm">EP ${comment.episodeNumber || '1'}</span>
-                                        <h4 class="text-white font-bold text-xs truncate">${comment.userName || 'Anonymous'}</h4>
-                                        ${isMine ? `<span class="bg-[#F47521] text-black text-[8px] font-black uppercase px-1.5 py-[1px] rounded">You</span>` : ''}
-                                        <span class="text-gray-500 text-[9px] whitespace-nowrap hidden sm:inline">${window.app.formatTimeAgo(comment.timestamp)}</span>
-                                    </div>
-                                    
-                                    <div class="relative">
-                                        <button onclick="window.app.toggleCommentMenu('${comment.id}')" class="menu-trigger-btn text-gray-500 hover:text-white w-6 h-6 flex items-center justify-center transition-colors">
-                                            <i class="fas fa-ellipsis-v"></i>
-                                        </button>
-                                        <div id="menu-${comment.id}" class="comment-action-menu hidden absolute right-0 top-full mt-1 w-32 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-2xl z-50 overflow-hidden text-[10px] font-bold uppercase tracking-wider">
-                                            ${menuOptions}
-                                        </div>
-                                    </div>
-                                </div>
-                                <p class="text-gray-300 text-xs leading-relaxed mt-1 whitespace-pre-wrap break-words">${comment.text}</p>
-                                
-                                <div class="flex items-center gap-4 mt-2">
-                                    <button onclick="window.app.toggleCommentReaction('${comment.id}', this)" class="${likeColor} text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1">
-                                        <i class="fas fa-thumbs-up"></i> <span>${likesCount}</span>
-                                    </button>
-                                    <button onclick="window.app.prepareReply('${comment.id}', '${comment.userName}')" class="text-gray-500 hover:text-white text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1">
-                                        <i class="fas fa-reply"></i> Reply
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        ${hasReplies ? `
-                            <div class="replies-wrapper hidden flex flex-col gap-2 mt-2 w-full">
-                                ${childRepliesHtml}
-                            </div>
-                            <button onclick="this.previousElementSibling.classList.toggle('hidden'); this.innerHTML = this.previousElementSibling.classList.contains('hidden') ? '<i class=\\'fas fa-chevron-down mr-1\\'></i> Show Replies' : '<i class=\\'fas fa-chevron-up mr-1\\'></i> Hide Replies'" class="text-[9px] font-bold text-[#F47521] mt-2 self-start flex items-center hover:text-white transition-colors">
-                                <i class="fas fa-chevron-down mr-1"></i> Show Replies
-                            </button>
-                        ` : ''}
+            if (comments.length === 0) {
+                container.innerHTML = `
+                    <div class="flex flex-col items-center justify-center py-10 opacity-90 h-full animate-fade-in">
+                        <img src="https://media.tenor.com/VOoSARm1t7wAAAAm/anime-girl.webp" alt="No Comments" class="w-32 h-32 object-contain mb-4 drop-shadow-xl rounded-xl">
+                        <p class="text-xs font-black uppercase tracking-widest text-white mb-1">No comments here</p>
+                        <p class="text-[10px] text-gray-500 font-medium">Be the first one to comment!</p>
                     </div>
                 `;
-            });
-            return html;
-        };
+                return;
+            }
 
-        container.innerHTML = renderCommentTree(comments, null, 0);
+            const myUid = profile?.uid || 'guest';
+            
+            // Recursive tree rendering
+            const renderCommentTree = (commentList, parentId = null, depth = 0) => {
+                const currentLevelComments = commentList.filter(c => (c.replyTo || null) === parentId);
+                
+                // Prioritize "my" comments at the top level
+                if (depth === 0) {
+                    const mine = currentLevelComments.filter(c => c.userId === myUid);
+                    const others = currentLevelComments.filter(c => c.userId !== myUid);
+                    currentLevelComments.length = 0;
+                    currentLevelComments.push(...mine, ...others);
+                }
+
+                if (currentLevelComments.length === 0) return '';
+
+                let html = '';
+                currentLevelComments.forEach(comment => {
+                    const isMine = comment.userId === myUid;
+                    const displayAvatar = isMine ? (profile?.photoURL || profile?.pfpLink || comment.userAvatar) : comment.userAvatar;
+                    
+                    const menuOptions = isMine 
+                        ? `<button onclick="window.app.editComment('${comment.id}', '${comment.text.replace(/'/g, "\\'")}')" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-pen mr-2"></i> Edit</button>
+                           <button onclick="window.app.deleteComment('${comment.id}')" class="w-full text-left px-3 py-2 text-red-400 hover:bg-white/10 hover:text-red-500 transition-colors"><i class="fas fa-trash mr-2"></i> Delete</button>` 
+                        : `<button onclick="window.location.href='profile.html?user=${comment.userId}'" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-user mr-2"></i> View Profile</button>
+                           <button onclick="window.location.href='cht.html?user=${comment.userId}'" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-comment-dots mr-2"></i> Discuss</button>`;
+
+                    const likesCount = Array.isArray(comment.likes) ? comment.likes.length : 0;
+                    const hasLiked = Array.isArray(comment.likes) && comment.likes.includes(myUid);
+                    const likeColor = hasLiked ? 'text-[#F47521]' : 'text-gray-500 hover:text-white';
+
+                    const marginStyle = depth > 0 ? `margin-left: ${Math.min(depth * 1.5, 3)}rem;` : '';
+                    const borderStyle = depth > 0 ? `border-l-2 border-[#F47521]/30 pl-3 mt-3` : `bg-white/5 border border-white/5 p-3 rounded-xl mt-4`;
+
+                    const childRepliesHtml = renderCommentTree(commentList, comment.id, depth + 1);
+                    const hasReplies = childRepliesHtml !== '';
+
+                    html += `
+                        <div class="flex flex-col relative animate-fade-in ${borderStyle}" style="${marginStyle}">
+                            <div class="flex gap-3">
+                                ${window.app.getAvatarHtml(displayAvatar)}
+                                
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <div class="flex items-center gap-2 min-w-0">
+                                            <span class="bg-[#111] border border-white/10 text-gray-400 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm">EP ${comment.episodeNumber || '1'}</span>
+                                            <h4 class="text-white font-bold text-xs truncate">${comment.userName || 'Anonymous'}</h4>
+                                            ${isMine ? `<span class="bg-[#F47521] text-black text-[8px] font-black uppercase px-1.5 py-[1px] rounded">You</span>` : ''}
+                                            <span class="text-gray-500 text-[9px] whitespace-nowrap hidden sm:inline">${window.app.formatTimeAgo(comment.timestamp)}</span>
+                                        </div>
+                                        
+                                        <div class="relative">
+                                            <button onclick="window.app.toggleCommentMenu('${comment.id}')" class="menu-trigger-btn text-gray-500 hover:text-white w-6 h-6 flex items-center justify-center transition-colors">
+                                                <i class="fas fa-ellipsis-v"></i>
+                                            </button>
+                                            <div id="menu-${comment.id}" class="comment-action-menu hidden absolute right-0 top-full mt-1 w-32 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-2xl z-50 overflow-hidden text-[10px] font-bold uppercase tracking-wider">
+                                                ${menuOptions}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p class="text-gray-300 text-xs leading-relaxed mt-1 whitespace-pre-wrap break-words">${comment.text}</p>
+                                    
+                                    <div class="flex items-center gap-4 mt-2">
+                                        <button onclick="window.app.toggleCommentReaction('${comment.id}', this)" class="${likeColor} text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1">
+                                            <i class="fas fa-thumbs-up"></i> <span>${likesCount}</span>
+                                        </button>
+                                        <button onclick="window.app.prepareReply('${comment.id}', '${comment.userName}')" class="text-gray-500 hover:text-white text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1">
+                                            <i class="fas fa-reply"></i> Reply
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            ${hasReplies ? `
+                                <div class="replies-wrapper hidden flex flex-col gap-2 mt-2 w-full">
+                                    ${childRepliesHtml}
+                                </div>
+                                <button onclick="this.previousElementSibling.classList.toggle('hidden'); this.innerHTML = this.previousElementSibling.classList.contains('hidden') ? '<i class=\\'fas fa-chevron-down mr-1\\'></i> Show Replies' : '<i class=\\'fas fa-chevron-up mr-1\\'></i> Hide Replies'" class="text-[9px] font-bold text-[#F47521] mt-2 self-start flex items-center hover:text-white transition-colors">
+                                    <i class="fas fa-chevron-down mr-1"></i> Show Replies
+                                </button>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+                return html;
+            };
+
+            container.innerHTML = renderCommentTree(comments, null, 0);
+
+        }, (error) => {
+            console.error("Comments Snapshot Error:", error);
+            container.innerHTML = `<div class="text-center text-red-500 text-xs py-10">Live sync failed. Check rules.</div>`;
+        });
 
     } catch (e) {
-        console.error("Comment Load Error:", e);
-        container.innerHTML = `<div class="text-center text-red-500 text-xs py-10">Failed to load comments.</div>`;
+        console.error("Comment Initialization Error:", e);
     }
 };
 
@@ -341,6 +358,8 @@ window.app.prepareReply = (commentId, username) => {
 window.app.cancelReply = () => {
     document.getElementById('reply-to-id').value = '';
     document.getElementById('reply-tag-indicator').classList.add('hidden');
+    const input = document.getElementById('comment-textarea');
+    input.value = input.value.replace(/@\w+\s?/, '');
 };
 
 window.app.editComment = (commentId, text) => {
@@ -363,10 +382,10 @@ window.app.deleteComment = async (commentId) => {
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         await firestore.deleteDoc(firestore.doc(window.app.db, "comments", commentId));
-        
-        const animeId = window.app.state?.currentAnimePage?.id;
-        window.app.loadComments(animeId, window.app.state.activeProfile);
-    } catch(e) { if(window.app.showCustomAlert) window.app.showCustomAlert("Failed to delete.", "error"); }
+        // No manual reload needed, onSnapshot will handle it.
+    } catch(e) { 
+        if(window.app.showCustomAlert) window.app.showCustomAlert("Failed to delete.", "error"); 
+    }
 };
 
 window.app.toggleCommentReaction = async (commentId, btnElement) => {
@@ -379,16 +398,16 @@ window.app.toggleCommentReaction = async (commentId, btnElement) => {
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const commentRef = firestore.doc(window.app.db, "comments", commentId);
+        
+        // Optimistic UI update
         const span = btnElement.querySelector('span');
         let currentLikes = parseInt(span.innerText);
 
         if (btnElement.classList.contains('text-[#F47521]')) {
-            // Remove Like
             btnElement.classList.replace('text-[#F47521]', 'text-gray-500');
             span.innerText = Math.max(0, currentLikes - 1);
             await firestore.updateDoc(commentRef, { likes: firestore.arrayRemove(profile.uid) });
         } else {
-            // Add Like
             btnElement.classList.replace('text-gray-500', 'text-[#F47521]');
             span.innerText = currentLikes + 1;
             await firestore.updateDoc(commentRef, { likes: firestore.arrayUnion(profile.uid) });
@@ -429,11 +448,11 @@ window.app.submitComment = async (e) => {
         const replyToId = replyIdField.value || null;
 
         if (editId) {
-            // UPDATE
             await firestore.updateDoc(firestore.doc(window.app.db, "comments", editId), { text: text, isEdited: true });
             editIdField.value = "";
+            btn.innerHTML = paperPlaneSvg;
+            btn.classList.replace('bg-green-500', 'bg-[#F47521]');
         } else {
-            // CREATE NEW OR REPLY
             await firestore.addDoc(commentsRef, {
                 animeId: animeId,
                 episodeNumber: epNum,
@@ -447,7 +466,6 @@ window.app.submitComment = async (e) => {
                 dislikes: []
             });
 
-            // 🚀 NOTIFICATION SYSTEM
             if (replyToId) {
                 const parentComment = await firestore.getDoc(firestore.doc(window.app.db, "comments", replyToId));
                 const parentUid = parentComment.data().userId;
@@ -474,7 +492,7 @@ window.app.submitComment = async (e) => {
         btn.classList.add('bg-[#F47521]');
         
         window.app.cancelReply();
-        window.app.loadComments(animeId, profile);
+        // No manual loadComments call needed, onSnapshot will handle UI update
 
     } catch (err) {
         if(window.app.showCustomAlert) window.app.showCustomAlert("Failed to post comment.", "error");
