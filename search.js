@@ -20,31 +20,139 @@ document.addEventListener('DOMContentLoaded', () => {
     let typingTimer;
     let activeFilters = {};
 
-    // --- 1. INITIALIZATION & TRENDING ---
+    // --- CUSTOM CSS DROPDOWN LOGIC ---
+    document.querySelectorAll('.custom-select-wrapper').forEach(wrapper => {
+        const selectBtn = wrapper.querySelector('.custom-select');
+        const optionsDiv = wrapper.querySelector('.custom-options');
+        const textSpan = wrapper.querySelector('.selected-text');
+        const options = wrapper.querySelectorAll('.custom-options div');
+
+        selectBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); 
+            document.querySelectorAll('.custom-select-wrapper').forEach(w => {
+                if (w !== wrapper) w.classList.remove('dropdown-open');
+            });
+            wrapper.classList.toggle('dropdown-open');
+        });
+
+        options.forEach(opt => {
+            opt.addEventListener('click', () => {
+                selectBtn.setAttribute('data-value', opt.getAttribute('data-value'));
+                textSpan.innerText = opt.innerText;
+                wrapper.classList.remove('dropdown-open');
+            });
+        });
+    });
+
+    document.addEventListener('click', () => {
+        document.querySelectorAll('.custom-select-wrapper').forEach(w => w.classList.remove('dropdown-open'));
+    });
+
+    // --- 1. INITIALIZATION, TYPEWRITER & TOP 10 ---
     const initSearchPage = async () => {
         renderHistory();
-        await loadTrending();
+        initTypewriterPlaceholder();
+        await loadTop10Popular();
     };
 
-    const loadTrending = async () => {
+    // Typewriter Animation logic (Fetches Top 3 globally from AniList)
+    const initTypewriterPlaceholder = async () => {
+        let trendingTitles = ["anime, genres..."]; // Fallback
         try {
-            const res = await fetch(`${API_BASE}/api/search?keyword=action`); 
+            const query = `query { Page(page: 1, perPage: 3) { media(type: ANIME, sort: TRENDING_DESC) { title { english romaji } } } }`;
+            const res = await fetch(ANILIST_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query })
+            });
+            const json = await res.json();
+            if (json.data && json.data.Page.media) {
+                trendingTitles = json.data.Page.media.map(a => a.title.english || a.title.romaji);
+            }
+        } catch (e) { console.warn("Could not fetch typing suggestions."); }
+
+        let titleIndex = 0;
+        let charIndex = 0;
+        let isDeleting = false;
+        
+        const type = () => {
+            if (document.activeElement === searchInput && searchInput.value.trim() !== '') return; // Pause if user is typing
+            
+            const currentTitle = trendingTitles[titleIndex];
+            
+            if (isDeleting) {
+                searchInput.setAttribute('placeholder', `Search "${currentTitle.substring(0, charIndex - 1)}"`);
+                charIndex--;
+            } else {
+                searchInput.setAttribute('placeholder', `Search "${currentTitle.substring(0, charIndex + 1)}"`);
+                charIndex++;
+            }
+
+            let typeSpeed = isDeleting ? 50 : 100;
+
+            if (!isDeleting && charIndex === currentTitle.length) {
+                typeSpeed = 2000; // Pause at end of word
+                isDeleting = true;
+            } else if (isDeleting && charIndex === 0) {
+                isDeleting = false;
+                titleIndex = (titleIndex + 1) % trendingTitles.length;
+                typeSpeed = 500; // Pause before next word
+            }
+
+            setTimeout(type, typeSpeed);
+        };
+        type();
+    };
+
+    // Load Top 10 Popular from your API (List View)
+    const loadTop10Popular = async () => {
+        try {
+            // Using /api/filter with score sorting to get the best/popular anime
+            const res = await fetch(`${API_BASE}/api/filter?sort=score`); 
             const json = await res.json();
             
-            if (json.success && json.data) {
-                trendingContainer.innerHTML = json.data.slice(0, 10).map(anime => `
-                    <div onclick="window.location.href='info.html?id=${anime.id}'" class="min-w-[120px] max-w-[120px] cursor-pointer snap-start group">
-                        <div class="relative w-full h-[180px] rounded-lg overflow-hidden mb-2 shadow-lg">
-                            <img src="${anime.image}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
-                            <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
-                            ${anime.type ? `<span class="absolute bottom-2 left-2 text-[8px] font-black uppercase bg-[#F47521] text-white px-1.5 py-0.5 rounded">${anime.type}</span>` : ''}
+            let dataArray = [];
+            if (json.success && json.results?.data) dataArray = json.results.data;
+            else if (json.success && json.data) dataArray = json.data;
+
+            if (dataArray.length > 0) {
+                const top10 = dataArray.slice(0, 10);
+                
+                // Override horizontal classes to make it a vertical list
+                trendingContainer.className = "flex flex-col gap-3 pb-4"; 
+                
+                trendingContainer.innerHTML = top10.map((anime, index) => {
+                    const aSub = anime.tvInfo?.sub || anime.sub || '?';
+                    const aDub = anime.tvInfo?.dub || anime.dub || 0;
+                    const aType = anime.tvInfo?.showType || anime.type || 'TV';
+                    const imgUrl = anime.poster || anime.image;
+
+                    return `
+                    <div onclick="window.location.href='info.html?id=${anime.id}'" class="flex gap-4 items-center bg-white/5 p-2 rounded-xl cursor-pointer hover:bg-white/10 transition relative overflow-hidden border border-transparent hover:border-white/10 group">
+                        <div class="absolute top-0 left-0 bg-[#F47521] text-black font-black text-[10px] px-2.5 py-1 rounded-br-xl z-10 shadow-lg group-hover:bg-white transition-colors">
+                            TOP ${index + 1}
                         </div>
-                        <h3 class="text-xs font-bold text-white truncate group-hover:text-[#F47521] transition-colors">${anime.title}</h3>
+                        
+                        <img src="${imgUrl}" class="w-16 h-24 object-cover rounded-lg shadow-lg">
+                        
+                        <div class="flex flex-col flex-1 min-w-0 py-1 pr-2">
+                            <h4 class="text-sm font-bold text-white truncate">${anime.title}</h4>
+                            <p class="text-[10px] text-gray-500 mt-0.5 truncate italic">${anime.japanese_title || ''}</p>
+                            
+                            <div class="flex gap-2 mt-auto items-center text-[9px] font-black uppercase tracking-wider">
+                                <span class="text-gray-400 border border-gray-600 px-1 py-0.5 rounded bg-black/50">${aType}</span>
+                                <div class="flex gap-1 ml-auto">
+                                    <span class="bg-gray-800 text-gray-300 px-1.5 py-0.5 rounded flex items-center gap-1 shadow-inner">SUB <span class="text-white">${aSub}</span></span>
+                                    ${aDub > 0 ? `<span class="bg-gray-800 text-gray-300 px-1.5 py-0.5 rounded flex items-center gap-1 shadow-inner">DUB <span class="text-white">${aDub}</span></span>` : ''}
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                `).join('');
+                    `;
+                }).join('');
             }
         } catch (error) {
-            trendingContainer.innerHTML = `<p class="text-xs text-gray-500">Could not load trending.</p>`;
+            trendingContainer.innerHTML = `<p class="text-xs text-gray-500">Could not load popular titles.</p>`;
         }
     };
 
@@ -99,17 +207,27 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('close-filter-btn').addEventListener('click', () => { filterModal.classList.add('hidden'); filterModal.classList.remove('flex'); });
     
     document.getElementById('reset-filter-btn').addEventListener('click', () => {
-        ['type', 'status', 'lang', 'genres', 'sy', 'sm', 'sd', 'ey', 'em', 'ed'].forEach(id => document.getElementById(`f-${id}`).value = '');
-        document.getElementById('f-sort').value = 'default';
+        ['genres', 'sy', 'sm', 'sd', 'ey', 'em', 'ed'].forEach(id => document.getElementById(`f-${id}`).value = '');
+        
+        const setSelect = (id, val, text) => {
+            const select = document.querySelector(`#wrap-${id} .custom-select`);
+            const span = document.querySelector(`#wrap-${id} .selected-text`);
+            if(select && span) { select.setAttribute('data-value', val); span.innerText = text; }
+        };
+        
+        setSelect('type', '', 'ALL');
+        setSelect('status', '', 'ALL');
+        setSelect('lang', '', 'ALL');
+        setSelect('sort', 'default', 'Default');
         activeFilters = {};
     });
 
     document.getElementById('apply-filter-btn').addEventListener('click', () => {
         activeFilters = {
-            type: document.getElementById('f-type').value,
-            status: document.getElementById('f-status').value,
-            language: document.getElementById('f-lang').value,
-            sort: document.getElementById('f-sort').value,
+            type: document.querySelector('#wrap-type .custom-select').getAttribute('data-value'),
+            status: document.querySelector('#wrap-status .custom-select').getAttribute('data-value'),
+            language: document.querySelector('#wrap-lang .custom-select').getAttribute('data-value'),
+            sort: document.querySelector('#wrap-sort .custom-select').getAttribute('data-value'),
             genres: document.getElementById('f-genres').value,
             sy: document.getElementById('f-sy').value,
             sm: document.getElementById('f-sm').value,
@@ -122,7 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (searchInput.value.trim()) handleSearchSubmit(searchInput.value.trim());
     });
 
-    // --- 4. INPUT HANDLING ---
+    // --- 4. INPUT HANDLING & VIEW SWITCHING ---
     const switchView = (view) => {
         idleView.classList.add('hidden');
         typingView.classList.add('hidden');
@@ -161,7 +279,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Enter' && searchInput.value.trim()) handleSearchSubmit(searchInput.value.trim());
     });
 
-    // --- 5. SUGGESTIONS (Text Only) ---
+    // --- 5. SUGGESTIONS (AniList) ---
     const fetchSuggestions = async (term) => {
         const query = `query ($search: String) { Page(page: 1, perPage: 8) { media(type: ANIME, search: $search, sort: SEARCH_MATCH) { title { romaji english } } } }`;
         try {
@@ -178,7 +296,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Global click handler for suggestions
             window.handleSuggestionClick = (title) => {
                 searchInput.value = title;
                 handleSearchSubmit(title);
@@ -200,7 +317,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // --- 6. ANILIST METADATA FETCHER FOR TOP CARD ---
+    // --- 6. ANILIST METADATA FETCHER ---
     const getAniListMetadata = async (title) => {
         const query = `query ($search: String) { Media(type: ANIME, search: $search) { bannerImage description(asHtml: false) } }`;
         try {
@@ -210,7 +327,18 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { return null; }
     };
 
-    // --- 7. FULL SEARCH & RESULTS RENDERING ---
+    // --- HELPER: Universal 404 Trigger ---
+    const render404State = (message = "Nothing matched your search.") => {
+        topResultCard.innerHTML = '';
+        resultsListContainer.innerHTML = ''; 
+        if(window.BlazeX && window.BlazeX.show404) {
+            window.BlazeX.show404('results-list-container', message);
+        } else {
+            resultsListContainer.innerHTML = `<div class="text-center p-10"><p class="text-gray-500 text-sm">${message}</p></div>`;
+        }
+    };
+
+    // --- 7. FULL SEARCH SUBMISSION ---
     const handleSearchSubmit = async (term) => {
         searchInput.blur();
         saveHistory(term);
@@ -220,7 +348,6 @@ document.addEventListener('DOMContentLoaded', () => {
         resultsListContainer.innerHTML = `<div class="p-4 text-center text-xs text-gray-400">Loading...</div>`;
 
         try {
-            // Build Filter Parameters
             let queryParams = new URLSearchParams();
             queryParams.append('keyword', term);
             Object.keys(activeFilters).forEach(key => {
@@ -229,38 +356,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            // If filters are active, use /api/filter, else use /api/search
             const endpoint = Array.from(queryParams.keys()).length > 1 ? '/api/filter' : '/api/search';
             const res = await fetch(`${API_BASE}${endpoint}?${queryParams.toString()}`);
             const json = await res.json();
             
-            // Extract data array depending on the endpoint structure
             let results = [];
             if (endpoint === '/api/filter' && json.success && json.results?.data) results = json.results.data;
             else if (endpoint === '/api/search' && json.success && json.data) results = json.data;
 
             if (results.length === 0) {
-                topResultCard.innerHTML = '';
-                resultsListContainer.innerHTML = `<div class="text-center p-10"><i class="fas fa-ghost text-4xl text-gray-600 mb-3"></i><p class="text-sm text-gray-500">No matching anime found.</p></div>`;
+                render404State("We couldn't find any anime matching your query or filters.");
                 return;
             }
 
             const topAnime = results[0];
             const restAnime = results.slice(1);
 
-            // Fetch extra metadata for the Top Card (Banner & Desc)
             const meta = await getAniListMetadata(topAnime.title);
-            const backdrop = meta?.bannerImage || topAnime.image;
+            const backdrop = meta?.bannerImage || topAnime.image || topAnime.poster;
             const description = meta?.description || topAnime.description || 'No description available for this title.';
 
             const topSubEps = topAnime.tvInfo?.sub || topAnime.sub || '?';
             const topDubEps = topAnime.tvInfo?.dub || topAnime.dub || 0;
             const topShowType = topAnime.tvInfo?.showType || topAnime.type || 'TV';
+            const topImg = topAnime.image || topAnime.poster;
 
-            // Top Result Render with Backdrop, Play, and Save
             window.toggleSaveAnime = (id, event) => {
                 event.stopPropagation();
-                // Visual toggle logic (Add your actual DB save logic here)
                 const icon = event.currentTarget.querySelector('i');
                 if (icon.classList.contains('fa-bookmark')) {
                     icon.classList.replace('far', 'fas');
@@ -279,7 +401,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     
                     <div class="relative flex flex-col md:flex-row gap-4 p-4 z-10">
-                        <img src="${topAnime.image}" class="w-28 md:w-36 h-40 md:h-52 object-cover rounded-lg shadow-2xl">
+                        <img src="${topImg}" class="w-28 md:w-36 h-40 md:h-52 object-cover rounded-lg shadow-2xl border border-white/5">
                         
                         <div class="flex flex-col flex-1">
                             <span class="text-[9px] font-black uppercase tracking-widest text-[#F47521] mb-1"><i class="fas fa-star mr-1"></i> Top Result</span>
@@ -294,7 +416,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     <i class="far fa-bookmark text-sm"></i>
                                 </button>
                                 <div class="flex gap-1 ml-auto text-[9px] font-bold">
-                                    <span class="bg-white/10 text-white px-1.5 py-0.5 rounded border border-white/10">${topShowType}</span>
+                                    <span class="bg-black/50 text-white px-1.5 py-0.5 rounded border border-white/10">${topShowType}</span>
                                     <span class="bg-[#F47521]/20 text-[#F47521] px-1.5 py-0.5 rounded"><i class="fas fa-closed-captioning"></i> ${topSubEps}</span>
                                     ${topDubEps > 0 ? `<span class="bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded"><i class="fas fa-microphone"></i> ${topDubEps}</span>` : ''}
                                 </div>
@@ -304,22 +426,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
 
-            // Standard List View Render
             resultsListContainer.innerHTML = restAnime.map(anime => {
                 const aSub = anime.tvInfo?.sub || anime.sub || '?';
                 const aDub = anime.tvInfo?.dub || anime.dub || 0;
                 const aType = anime.tvInfo?.showType || anime.type || 'TV';
+                const aImg = anime.image || anime.poster;
 
                 return `
-                <div onclick="window.location.href='info.html?id=${anime.id}'" class="flex gap-3 items-center bg-white/5 p-2 rounded-lg cursor-pointer hover:bg-white/10 transition border border-transparent hover:border-white/10">
-                    <img src="${anime.image}" class="w-14 h-20 object-cover rounded shadow">
-                    <div class="flex-1 min-w-0">
+                <div onclick="window.location.href='info.html?id=${anime.id}'" class="flex gap-3 items-center bg-white/5 p-2 rounded-xl cursor-pointer hover:bg-white/10 transition border border-transparent hover:border-white/10">
+                    <img src="${aImg}" class="w-14 h-20 object-cover rounded-lg shadow">
+                    <div class="flex-1 min-w-0 pr-2">
                         <h4 class="text-sm font-bold text-white truncate">${anime.title}</h4>
                         <div class="flex gap-2 mt-2 items-center text-[9px] font-black uppercase tracking-wider">
-                            <span class="text-gray-400 border border-gray-600 px-1 py-0.5 rounded">${aType}</span>
+                            <span class="text-gray-400 border border-gray-600 px-1.5 py-0.5 rounded bg-black/50">${aType}</span>
                             <div class="flex gap-1 ml-auto">
-                                <span class="bg-gray-800 text-gray-300 px-1 rounded flex items-center gap-1">SUB <span class="text-white">${aSub}</span></span>
-                                ${aDub > 0 ? `<span class="bg-gray-800 text-gray-300 px-1 rounded flex items-center gap-1">DUB <span class="text-white">${aDub}</span></span>` : ''}
+                                <span class="bg-gray-800 text-gray-300 px-1.5 py-0.5 rounded flex items-center gap-1 shadow-inner">SUB <span class="text-white">${aSub}</span></span>
+                                ${aDub > 0 ? `<span class="bg-gray-800 text-gray-300 px-1.5 py-0.5 rounded flex items-center gap-1 shadow-inner">DUB <span class="text-white">${aDub}</span></span>` : ''}
                             </div>
                         </div>
                     </div>
@@ -328,8 +450,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }).join('');
 
         } catch (err) {
-            topResultCard.innerHTML = '';
-            resultsListContainer.innerHTML = `<div class="text-center p-4 text-xs text-gray-500">Something went wrong.</div>`;
+            render404State("Network error occurred while communicating with the database.");
         }
     };
 
