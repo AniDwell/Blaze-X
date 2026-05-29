@@ -38,7 +38,6 @@ window.app.components.play = async () => {
         if (!currentAudioType && profile.preferences.audioType) currentAudioType = profile.preferences.audioType;
     }
     
-    // Default fallback
     if (!currentAudioType) currentAudioType = 'sub';
 
     // 3. Initialize Core State
@@ -75,7 +74,6 @@ window.app.components.play = async () => {
     workspace.innerHTML = `
         <div class="w-full max-w-5xl mx-auto flex flex-col gap-6 animate-fade-in opacity-0 transition-opacity duration-500" id="play-content-wrapper">
             
-            <!-- VIDEO PLAYER MOUNT POINT (Loads player.js) -->
             <div id="blazex-player-root" class="w-full aspect-video md:aspect-[21/9] bg-black rounded-xl shadow-lg border border-white/5 overflow-hidden flex flex-col items-center justify-center relative group">
                 <div class="tk-loader scale-125 z-0">
                     <div class="tk-dot tk-dot-1"></div>
@@ -84,11 +82,8 @@ window.app.components.play = async () => {
                 <p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mt-6">Loading Player Engine...</p>
             </div>
 
-            <!-- PLAYER UTILITY BAR (Skip Toggles & Server/Lang Selectors) -->
             <div class="w-full flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-[#0a0a0a] p-3 rounded-lg border border-white/5 shadow-md">
-                
                 <div class="flex flex-wrap items-center gap-3">
-                    <!-- Audio Selector -->
                     <div class="flex items-center gap-2">
                         <span class="text-gray-500 text-[9px] font-black uppercase tracking-widest bg-black px-2 py-1 rounded border border-white/5">Audio</span>
                         <div class="flex bg-[#111] p-1 border border-white/10 rounded-md text-[10px] font-black select-none tracking-wider uppercase">
@@ -96,8 +91,6 @@ window.app.components.play = async () => {
                             <button onclick="window.app.changePlayerConfig('type', 'dub')" class="px-3 py-1 rounded transition-all ${currentAudioType === 'dub' ? 'bg-[#F47521] text-black shadow-sm' : 'text-gray-400 hover:text-white'}">Dub</button>
                         </div>
                     </div>
-                    
-                    <!-- Server Selector -->
                     <div class="flex items-center gap-2">
                         <span class="text-gray-500 text-[9px] font-black uppercase tracking-widest bg-black px-2 py-1 rounded border border-white/5">Server</span>
                         <div class="flex bg-[#111] p-1 border border-white/10 rounded-md text-[10px] font-black select-none tracking-wider uppercase">
@@ -107,7 +100,6 @@ window.app.components.play = async () => {
                     </div>
                 </div>
 
-                <!-- Auto Skip Toggles -->
                 <div class="flex items-center gap-4 text-[10px] font-bold uppercase tracking-wider text-gray-400">
                     <label class="flex items-center gap-2 cursor-pointer hover:text-white transition-colors">
                         <input type="checkbox" id="toggle-skip-intro" class="hidden" onchange="window.app.toggleAutoSkip('intro')" ${autoSkipIntro ? 'checked' : ''}>
@@ -126,10 +118,8 @@ window.app.components.play = async () => {
                 </div>
             </div>
 
-            <!-- EPISODE METADATA & ACTIONS BAR -->
             <div class="flex flex-col md:flex-row items-start md:items-start justify-between gap-6 py-2 pb-6 relative">
                 
-                <!-- Anime & Episode Info Block -->
                 <div class="flex-1 flex gap-4 w-full">
                     <div class="w-20 md:w-28 flex-shrink-0 rounded-lg overflow-hidden shadow-md border border-white/10 hidden sm:block bg-[#111]">
                         <img id="play-anime-poster" src="https://via.placeholder.com/200x300/111/fff?text=..." class="w-full h-full object-cover aspect-[2/3] animate-pulse">
@@ -145,7 +135,6 @@ window.app.components.play = async () => {
                     </div>
                 </div>
                 
-                <!-- Interaction Community Buttons -->
                 <div class="flex flex-row md:flex-col lg:flex-row items-center justify-start md:justify-end gap-2 shrink-0 w-full md:w-auto mt-4 md:mt-0">
                     <div class="flex items-center gap-2">
                         <button onclick="window.app.handleReaction('like')" id="btn-like" class="flex items-center gap-2 bg-[#111] border border-white/5 hover:border-[#F47521] px-4 py-2 rounded-lg transition-colors text-xs font-bold text-gray-400 group relative">
@@ -164,45 +153,33 @@ window.app.components.play = async () => {
                 </div>
             </div>
 
-            <!-- LIVE COUNTDOWN SCHEDULE TRACKER (Hidden by default) -->
-            <div id="play-schedule-container" class="hidden w-full bg-[#111]/80 backdrop-blur-md border border-[#F47521]/30 p-4 md:p-5 rounded-xl shadow-[0_0_20px_rgba(244,117,33,0.05)] flex-col sm:flex-row items-center justify-between gap-4 mt-2">
-                <div class="flex items-center gap-4 w-full sm:w-auto">
-                    <div class="w-10 h-10 rounded-full bg-[#F47521]/20 flex items-center justify-center text-[#F47521] shadow-inner shrink-0">
-                        <i class="fas fa-clock animate-spin-slow"></i>
+            <div id="play-schedule-container" class="hidden w-full bg-[#111] border border-white/10 p-3 md:p-4 rounded-xl flex-col sm:flex-row items-center justify-between gap-3 mt-2 shadow-inner transition-all">
+                <div class="flex items-center gap-3 w-full sm:w-auto">
+                    <div class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400 shrink-0">
+                        <i class="fas fa-calendar-alt text-xs"></i>
                     </div>
                     <div class="min-w-0">
-                        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-0.5">Next Episode Airing</p>
-                        <p id="countdown-ep-label" class="text-sm md:text-base font-black text-white truncate">Episode Scheduling...</p>
+                        <p class="text-[9px] text-gray-500 font-bold uppercase tracking-widest mb-0.5">Upcoming Release</p>
+                        <p id="countdown-ep-label" class="text-xs md:text-sm font-bold text-gray-300 truncate">Episode Scheduling...</p>
                     </div>
                 </div>
-                <div class="w-full sm:w-auto bg-black border border-white/5 px-4 py-2.5 rounded-lg text-center shrink-0">
-                    <p id="countdown-timer-display" class="text-base md:text-xl font-mono font-black text-[#F47521] tracking-widest drop-shadow-md">00:00:00:00</p>
+                <div class="w-full sm:w-auto px-4 py-2 rounded-lg text-center shrink-0 bg-black/60 border border-white/5">
+                    <p id="countdown-timer-display" class="text-sm md:text-base font-mono font-bold text-gray-400 tracking-widest">00d : 00h : 00m : 00s</p>
                 </div>
             </div>
 
-            <!-- DYNAMIC EPISODES MATRIX GRID (Clean Style) -->
             <div class="w-full flex flex-col gap-4 mt-2 bg-[#0a0a0a] p-4 md:p-5 rounded-xl border border-white/5 shadow-md">
                 <h3 class="text-white text-sm font-black uppercase tracking-widest flex items-center gap-2 mb-2"><i class="fas fa-list text-[#F47521]"></i> Episodes Vault</h3>
                 <div id="episodes-grid-mount-point"></div>
             </div>
 
-            <!-- COMMENTS SECTION MOUNT POINT -->
-            <div class="w-full mt-4">
-                <h3 class="text-white text-sm font-black uppercase tracking-widest mb-4 flex items-center gap-2"><i class="fas fa-comments text-[#F47521]"></i> Community Discussion</h3>
-                <div id="comments-section-root" class="min-h-[200px] flex items-center justify-center bg-[#0a0a0a] rounded-xl border border-white/5 shadow-md">
-                    <div class="tk-loader scale-75"><div class="tk-dot tk-dot-1"></div><div class="tk-dot tk-dot-2"></div></div>
-                </div>
-            </div>
-
         </div>
     `;
 
-    // Apply custom styling dynamically for toggles & smooth spin
     const style = document.createElement('style');
     style.innerHTML = `
         input:checked + .toggle-bg { background-color: #F47521; border-color: #F47521; }
         input:checked + .toggle-bg .toggle-dot { transform: translateX(14px); background-color: black; }
-        .animate-spin-slow { animation: spin 4s linear infinite; }
     `;
     document.head.appendChild(style);
 
@@ -218,14 +195,12 @@ window.app.components.play = async () => {
         let baseAnime = {};
         let aniData = {};
 
-        // A. Fetch Info (API)
         try {
             const infoResponse = await fetch(`${baseUrl}/api/info?id=${animeId}`);
             const infoJson = await infoResponse.json();
             if (infoJson && infoJson.success && infoJson.data) baseAnime = infoJson.data;
-        } catch(e) { console.error("Info fetch failed."); }
+        } catch(e) {}
 
-        // B. Fetch AniList Metadata for Schedule & High-Res Poster
         try {
             const hasValidAniId = baseAnime.anilistId && !isNaN(baseAnime.anilistId);
             const query = `query ($id: Int, $search: String) { 
@@ -242,9 +217,8 @@ window.app.components.play = async () => {
             });
             const json = await aniRes.json();
             aniData = json?.data?.Media || {};
-        } catch (e) { console.log("AniList sync bypassed."); }
+        } catch (e) {}
 
-        // C. Fetch Episode List
         try {
             const epsResponse = await fetch(`${baseUrl}/api/episodes/${animeId}`);
             const epsJson = await epsResponse.json();
@@ -253,9 +227,8 @@ window.app.components.play = async () => {
             } else if (epsJson && epsJson.success && epsJson.results && Array.isArray(epsJson.results.episodes)) {
                 episodesList = epsJson.results.episodes;
             }
-        } catch(e) { console.error("Episode list fetch failed."); }
+        } catch(e) {}
 
-        // Update Header UI Meta Data
         const finalTitle = baseAnime.title || aniData.title?.english || aniData.title?.romaji || animeId.replace(/-/g, ' ').toUpperCase();
         const finalDesc = (baseAnime.description || aniData.description || 'No description available.').replace(/<[^>]*>?/gm, '');
         const finalPoster = aniData.coverImage?.extraLarge || baseAnime.poster || 'https://via.placeholder.com/800x1200/111/fff?text=Poster';
@@ -263,7 +236,6 @@ window.app.components.play = async () => {
         document.getElementById('current-anime-title').innerText = finalTitle;
         document.getElementById('current-anime-desc').innerText = finalDesc;
         
-        // Show "See More" if description is long
         if (finalDesc.length > 150) {
             document.getElementById('desc-load-more-btn').classList.remove('hidden');
         }
@@ -274,7 +246,6 @@ window.app.components.play = async () => {
             posterImg.classList.remove('animate-pulse');
         }
 
-        // Live Countdown Logic setup
         if (aniData.nextAiringEpisode) {
             const targetTime = aniData.nextAiringEpisode.airingAt * 1000;
             document.getElementById('countdown-ep-label').innerText = `Episode ${aniData.nextAiringEpisode.episode}`;
@@ -305,7 +276,6 @@ window.app.components.play = async () => {
             }, 1000);
         }
 
-        // Set Episode Specific Title
         if (episodesList && episodesList.length > 0) {
             const currentEpObj = episodesList.find(e => (e.num || e.episode_no) == currentEpNum);
             const epTitleEl = document.getElementById('current-ep-title');
@@ -315,26 +285,21 @@ window.app.components.play = async () => {
             }
         }
 
-        // Initialize User's Reaction UI state locally
         if (profile && profile.likedAnime && profile.likedAnime.includes(animeId)) {
             window.app.handleReactionUI('like');
         } else if (profile && profile.dislikedAnime && profile.dislikedAnime.includes(animeId)) {
             window.app.handleReactionUI('dislike');
         }
 
-        // Fetch Global Community Numbers from Firestore
+        // Fetch Stats & Attach Live Listener
         window.app.fetchCommunityStats(animeId);
 
-        // Setup global episodes data state
         window.app.state.currentEpisodesListProcessed = episodesList;
         window.app.state.currentAnimePage = { id: animeId };
 
-        // Render the Episodes Grid Engine
         window.app.renderPlayEpisodesUI();
 
-        // 6. INITIALIZE EXTERNAL COMPONENTS
         if (window.app.components.player) window.app.components.player(); 
-        if (window.app.components.commentsss) window.app.components.commentsss();
 
     } catch (err) {
         console.error("Failed to compile player environment:", err);
@@ -358,7 +323,6 @@ window.app.togglePlayDesc = () => {
 };
 
 window.app.changePlayerConfig = (param, value) => {
-    // Save to local & cloud if audio type changes
     if (param === 'type') {
         localStorage.setItem('blazex_audio', value);
         window.app.syncPreferencesToDB({ audioType: value });
@@ -382,7 +346,7 @@ window.app.syncPreferencesToDB = async (updatesObject) => {
         localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
 
         await firestore.setDoc(userRef, { preferences: updatesObject }, { merge: true });
-    } catch (error) { console.log("Silent cloud pref sync dropped."); }
+    } catch (error) {}
 };
 
 window.app.toggleAutoSkip = (type) => {
@@ -394,32 +358,44 @@ window.app.toggleAutoSkip = (type) => {
 };
 
 // ==========================================
-// --- COMMUNITY LIKES/DISLIKES SYNC ---
+// --- COMMUNITY LIVE LIKES/COMMENTS SYNC ---
 // ==========================================
 
 window.app.fetchCommunityStats = async (animeId) => {
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-        const { getCountFromServer, collection, query, where } = firestore;
-        const usersRef = collection(window.app.db, "users");
+        const { getCountFromServer, collection, query, where, onSnapshot } = firestore;
         
+        // 1. Initial Static Fetch for Likes/Dislikes (Better for Firebase Billing)
+        const usersRef = collection(window.app.db, "users");
         const likesSnap = await getCountFromServer(query(usersRef, where("likedAnime", "array-contains", animeId)));
         const dislikesSnap = await getCountFromServer(query(usersRef, where("dislikedAnime", "array-contains", animeId)));
         
-        let commentsCount = "Discuss";
-        try {
-            const commentsRef = collection(window.app.db, "comments");
-            const commentsSnap = await getCountFromServer(query(commentsRef, where("animeId", "==", animeId)));
-            if(commentsSnap.data().count > 0) commentsCount = `${commentsSnap.data().count} Comments`;
-        } catch(e) {}
-
         const likeEl = document.getElementById('like-count-display');
         const dislikeEl = document.getElementById('dislike-count-display');
-        const commentEl = document.getElementById('comment-count-display');
-
+        
         if(likeEl) likeEl.innerText = likesSnap.data().count || 0;
         if(dislikeEl) dislikeEl.innerText = dislikesSnap.data().count || 0;
-        if(commentEl) commentEl.innerText = commentsCount;
+
+        // 2. LIVE REAL-TIME LISTENER FOR COMMENTS
+        const commentsRef = collection(window.app.db, "comments");
+        const commentsQuery = query(commentsRef, where("animeId", "==", animeId));
+        
+        // Unsubscribe from previous listener if navigating
+        if (window.app.unsubCommentsListener) window.app.unsubCommentsListener();
+        
+        window.app.unsubCommentsListener = onSnapshot(commentsQuery, (snapshot) => {
+            const commentEl = document.getElementById('comment-count-display');
+            if (commentEl) {
+                if (snapshot.empty) {
+                    commentEl.innerText = "Discuss";
+                } else {
+                    commentEl.innerText = `${snapshot.size} Comments`;
+                }
+            }
+        }, (error) => {
+            console.warn("Live comment sync denied. Check rules.");
+        });
 
     } catch(e) {
         console.log("Stats fetch skipped: Uninitialized Rules or Index empty.");
@@ -458,7 +434,6 @@ window.app.handleReaction = async (type) => {
     let currLikes = parseInt(likeNumEl.innerText) || 0;
     let currDislikes = parseInt(dislikeNumEl.innerText) || 0;
 
-    // Toggle Logic with instant UI Number Update
     if (type === 'like') {
         if (profile.likedAnime.includes(animeId)) {
             profile.likedAnime = profile.likedAnime.filter(id => id !== animeId);
@@ -491,7 +466,6 @@ window.app.handleReaction = async (type) => {
 
     localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
 
-    // Cloud Sync array mapping
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const userRef = firestore.doc(window.app.db, "users", profile.uid);
@@ -535,7 +509,6 @@ window.app.renderPlayEpisodesUI = () => {
 
     mountPoint.innerHTML = `
         <div class="flex flex-col gap-4">
-            <!-- Grid Filters -->
             <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between bg-[#111] p-2.5 rounded-xl border border-white/5">
                 
                 <div class="flex bg-black p-1 border border-white/10 rounded-lg max-w-xs md:w-44 text-[11px] font-black select-none tracking-wider uppercase h-10 shrink-0">
@@ -559,7 +532,6 @@ window.app.renderPlayEpisodesUI = () => {
                 </div>
             </div>
 
-            <!-- Grid Numbers -->
             <div id="play-numeric-episodes-grid" class="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-12 lg:grid-cols-16 gap-2 w-full max-h-[350px] overflow-y-auto hide-scrollbar pr-1 pb-2"></div>
         </div>
     `;
@@ -652,64 +624,4 @@ window.app.renderPlayGridItems = () => {
         const isSupportedByLang = (currentLangMode === 'sub' && ep.isSub !== false) || 
                                   (currentLangMode === 'dub' && ep.isDub === true);
 
-        let isAlreadyWatched = false;
-        if (localHistoryMap && localHistoryMap.watchedHistoryList) {
-            isAlreadyWatched = localHistoryMap.watchedHistoryList.includes(parseInt(epNumber));
-        } else if (localHistoryMap && localHistoryMap.lastWatchedEp) {
-            isAlreadyWatched = parseInt(epNumber) < parseInt(localHistoryMap.lastWatchedEp);
-        }
-
-        const isCurrentlyPlaying = (parseInt(epNumber) === currentlyPlayingEp);
-
-        let buttonStyleClass = '';
-        let conditionalLabelBadge = '';
-        let interactiveActionAttr = '';
-
-        if (isSupportedByLang) {
-            interactiveActionAttr = `onclick="window.location.href='play.html?id=${encodeURIComponent(targetEpisodeSlugId)}&anime=${animeId}&ep=${epNumber}&type=${currentLangMode}&server=${currentServer}'"`;
-            
-            if (isCurrentlyPlaying) {
-                // Flat solid orange for active play state - NO GLOW
-                buttonStyleClass = 'border-[#F47521] text-black bg-[#F47521] font-black text-base z-10';
-            } else if (isAlreadyWatched) {
-                buttonStyleClass = 'border-[#F47521]/30 text-[#F47521] bg-[#F47521]/5 hover:bg-[#F47521] hover:text-black font-black text-base transition-colors';
-            } else {
-                buttonStyleClass = isFillerEpisode 
-                    ? 'border-red-500/30 text-gray-300 hover:bg-red-500 hover:text-white hover:border-red-500 font-black text-base transition-colors bg-red-500/5' 
-                    : 'border-white/10 bg-[#111] text-gray-300 hover:bg-[#F47521] hover:text-black hover:border-[#F47521] font-black text-base transition-colors shadow-sm';
-            }
-        } else {
-            interactiveActionAttr = 'disabled';
-            buttonStyleClass = 'opacity-20 border-dashed border-white/5 text-gray-600 bg-black/40 font-black text-base cursor-not-allowed';
-            conditionalLabelBadge = `<span class="absolute bottom-0.5 text-[7px] font-black text-gray-600 tracking-tighter uppercase">Sub Only</span>`;
-        }
-
-        gridHtml += `
-            <button ${interactiveActionAttr} class="relative w-full aspect-square flex flex-col items-center justify-center rounded border p-1 group ${buttonStyleClass}">
-                <span class="${!isSupportedByLang ? '-translate-y-1' : ''}">${epNumber}</span>
-                ${fillerIconDot}
-                ${conditionalLabelBadge}
-            </button>
-        `;
-    });
-    gridDiv.innerHTML = gridHtml;
-
-    setTimeout(() => {
-        const activeTile = gridDiv.querySelector('.bg-\\[\\#F47521\\]');
-        if (activeTile) activeTile.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, 100);
-};
-
-document.addEventListener('click', (e) => {
-    const menu = document.getElementById('play-dropdown-menu');
-    const btn = document.getElementById('play-dropdown-btn');
-    if (menu && !menu.classList.contains('hidden')) {
-        if (btn && !btn.contains(e.target) && !menu.contains(e.target)) {
-            menu.classList.add('hidden');
-            document.getElementById('play-dropdown-icon').style.transform = 'rotate(0deg)';
-        }
-    }
-});
-
-// Immediately invoke play engine initialization
-window.app.components.play();
+        let
