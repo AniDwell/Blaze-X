@@ -1,287 +1,539 @@
-// carousel.js
+// auth.js - REBUILT WITH STRICT FIRESTORE SYNC & NO LOCALSTORAGE FOR AUTH USERS
 
-window.app.components.carousel = async () => {
-    const container = document.getElementById('carousel-container');
-    if (!container) return;
+// Dynamically load Cropper.js CSS and JS if not already loaded
+if (!document.getElementById('cropperjs-css')) {
+    const css = document.createElement('link');
+    css.id = 'cropperjs-css';
+    css.rel = 'stylesheet';
+    css.href = 'https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css';
+    document.head.appendChild(css);
 
-    // 1. SHOW LOADING SCREEN IMMEDIATELY
-    container.innerHTML = `
-        <div class="w-full aspect-[4/5] md:aspect-[21/9] bg-black flex items-center justify-center border-b border-white/5">
-            <div class="tk-loader scale-50">
-                <div class="tk-dot tk-dot-1"></div>
-                <div class="tk-dot tk-dot-2"></div>
+    const script = document.createElement('script');
+    script.id = 'cropperjs-script';
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js';
+    document.head.appendChild(script);
+}
+
+// --- CUSTOM CSS ALERT SYSTEM ---
+window.app.showCustomAlert = (message, type = 'error', actionText = null, actionCallback = null) => {
+    const existing = document.getElementById('custom-toast-alert');
+    if (existing) existing.remove();
+
+    const bgColor = type === 'error' ? 'bg-red-500/10 border-red-500/30 text-red-500' : 'bg-green-500/10 border-green-500/30 text-green-400';
+    const icon = type === 'error' ? '<i class="fas fa-exclamation-circle text-lg"></i>' : '<i class="fas fa-check-circle text-lg"></i>';
+    
+    let actionBtn = '';
+    if (actionText && actionCallback) {
+        window._tempAlertCallback = () => {
+            actionCallback();
+            document.getElementById('custom-toast-alert')?.remove();
+        };
+        actionBtn = `<button onclick="window._tempAlertCallback()" class="mt-2 w-full bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold uppercase tracking-widest py-1.5 rounded transition-colors">${actionText}</button>`;
+    }
+
+    const alertHtml = `
+        <div id="custom-toast-alert" class="fixed top-4 left-1/2 -translate-x-1/2 z-[200] w-[90%] max-w-sm ${bgColor} border backdrop-blur-md rounded-lg p-4 shadow-2xl flex flex-col transform translate-y-[-20px] opacity-0 transition-all duration-300">
+            <div class="flex items-center gap-3">
+                ${icon}
+                <p class="text-xs md:text-sm font-bold leading-tight flex-1">${message}</p>
+                <button onclick="this.parentElement.parentElement.remove()" class="text-gray-400 hover:text-white transition-colors ml-2"><i class="fas fa-times"></i></button>
+            </div>
+            ${actionBtn}
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', alertHtml);
+    
+    setTimeout(() => {
+        const toast = document.getElementById('custom-toast-alert');
+        if(toast) {
+            toast.classList.remove('translate-y-[-20px]', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+        }
+    }, 10);
+
+    if (!actionText) {
+        setTimeout(() => {
+            const toast = document.getElementById('custom-toast-alert');
+            if(toast) {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-[-20px]', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }
+        }, 5000);
+    }
+};
+
+// --- MODAL INITIALIZATION ---
+window.app.components.auth = () => {
+    if (window.app.state && window.app.state.activeProfile && window.app.state.activeProfile.uid && !window.app.state.activeProfile.uid.startsWith('anon_')) {
+        window.location.href = 'profile.html';
+        return;
+    }
+
+    const existingModal = document.getElementById('auth-modal');
+    if (existingModal) existingModal.remove();
+
+    window.app.state.authSelectedPfp = `pfp${Math.floor(Math.random() * 10) + 1}.jpeg`;
+
+    const modal = document.createElement('div');
+    modal.id = 'auth-modal';
+    modal.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md px-4 opacity-0 transition-opacity duration-300';
+    
+    modal.innerHTML = `
+        <style>
+            .thought-bubble::after {
+                content: ''; position: absolute; bottom: -5px; left: 20px;
+                border-width: 6px 6px 0; border-style: solid; border-color: #ffffff transparent transparent transparent;
+            }
+            .cropper-view-box, .cropper-face { border-radius: 50%; } 
+        </style>
+        
+        <div id="crop-modal" class="fixed inset-0 z-[300] bg-black/95 flex flex-col items-center justify-center hidden">
+            <div class="w-full max-w-md bg-[#111] p-5 rounded-2xl flex flex-col gap-4 border border-white/10 shadow-2xl">
+                <h3 class="text-white font-black uppercase tracking-widest text-center border-b border-white/5 pb-2">Crop Profile Picture</h3>
+                <div class="w-full h-64 bg-black relative rounded overflow-hidden">
+                    <img id="cropper-img-target" src="" class="max-w-full max-h-full block">
+                </div>
+                <div class="flex gap-3 justify-between mt-2">
+                    <button onclick="window.app.closeCropModal()" class="w-1/3 bg-white/10 text-white font-bold text-xs uppercase px-4 py-3 rounded-lg hover:bg-white/20 transition-colors">Cancel</button>
+                    <button id="btn-crop-upload" onclick="window.app.executeCropAndUpload()" class="w-2/3 bg-[#F47521] text-black font-black text-xs uppercase px-4 py-3 rounded-lg shadow-lg hover:bg-white transition-colors flex justify-center items-center">Crop & Upload</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="relative w-full max-w-md bg-[#0a0a0a] rounded-2xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.9)] mt-20 md:mt-28 transform scale-95 transition-transform duration-300" id="auth-modal-box">
+            
+            <div class="absolute -top-24 left-0 md:-top-32 md:-left-4 z-50 flex items-end pointer-events-none">
+                <img src="https://media.tenor.com/fYOO8YHxJsUAAAAi/genshin-impact-furina.gif" class="w-28 h-28 md:w-36 md:h-36 object-contain">
+                <div class="thought-bubble relative bg-white text-black font-black text-[9px] md:text-[10px] px-3 py-1.5 rounded-xl mb-12 -ml-3 shadow-[0_4px_10px_rgba(0,0,0,0.5)] uppercase tracking-wider">
+                    Welcome!
+                </div>
+            </div>
+
+            <button onclick="window.app.closeAuthModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors z-20">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+
+            <div class="text-center pt-10 pb-6 flex flex-col items-center justify-center">
+                <div class="flex items-center justify-center gap-3 text-2xl font-black text-white tracking-tight">
+                    Welcome to <img src="logo.png" class="h-8 md:h-10 object-contain pointer-events-none">
+                </div>
+            </div>
+
+            <div id="auth-tabs" class="flex border-b border-white/10 text-xs font-bold uppercase tracking-widest px-6">
+                <button onclick="window.app.switchAuthView('login')" id="tab-login" class="flex-1 pb-3 text-white border-b-2 border-[#F47521] transition-colors">Sign In</button>
+                <button onclick="window.app.switchAuthView('register')" id="tab-register" class="flex-1 pb-3 text-gray-500 hover:text-white border-b-2 border-transparent transition-colors">Sign Up</button>
+            </div>
+
+            <div class="p-6 md:p-8">
+                <form id="view-login" class="flex flex-col gap-4" onsubmit="window.app.handleLogin(event)">
+                    <div class="relative">
+                        <i class="fas fa-envelope absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm"></i>
+                        <input type="email" id="login-email" placeholder="Email Address" required class="w-full bg-[#111] border border-white/10 text-white text-sm py-3 pl-10 pr-4 rounded-lg outline-none focus:border-[#F47521] transition-colors">
+                    </div>
+                    <div class="relative">
+                        <i class="fas fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm"></i>
+                        <input type="password" id="login-password" placeholder="Password" required class="w-full bg-[#111] border border-white/10 text-white text-sm py-3 pl-10 pr-4 rounded-lg outline-none focus:border-[#F47521] transition-colors">
+                    </div>
+                    <div class="flex justify-end">
+                        <button type="button" onclick="window.app.switchAuthView('forgot')" class="text-[10px] text-gray-400 hover:text-[#F47521] font-bold uppercase tracking-wider transition-colors">Forgot Password?</button>
+                    </div>
+                    <button type="submit" id="btn-login" class="w-full bg-[#F47521] text-white font-black text-sm uppercase tracking-wider py-3.5 rounded-lg hover:bg-white hover:text-black transition-colors shadow-lg mt-2">Sign In</button>
+                </form>
+
+                <form id="view-register" class="flex flex-col gap-4 hidden" onsubmit="window.app.handleRegister(event)">
+                    <div class="flex justify-center mb-1">
+                        <div class="relative cursor-pointer group" onclick="document.getElementById('pfp-upload-input').click()">
+                            <img id="register-pfp-preview" src="${window.app.state.authSelectedPfp}" class="w-16 h-16 rounded-full object-cover border-2 border-white/10 group-hover:border-[#F47521] transition-colors shadow-lg">
+                            <div class="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <i class="fas fa-crop-alt text-white text-sm"></i>
+                            </div>
+                        </div>
+                        <input type="file" id="pfp-upload-input" accept="image/*" class="hidden" onchange="window.app.triggerPfpCropFlow(event)">
+                    </div>
+
+                    <div class="relative">
+                        <i class="fas fa-user absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm"></i>
+                        <input type="text" id="register-name" placeholder="Username" required class="w-full bg-[#111] border border-white/10 text-white text-sm py-3 pl-10 pr-4 rounded-lg outline-none focus:border-[#F47521] transition-colors">
+                    </div>
+                    <div class="relative">
+                        <i class="fas fa-envelope absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm"></i>
+                        <input type="email" id="register-email" placeholder="Email Address" required class="w-full bg-[#111] border border-white/10 text-white text-sm py-3 pl-10 pr-4 rounded-lg outline-none focus:border-[#F47521] transition-colors">
+                    </div>
+                    <div class="relative">
+                        <i class="fas fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm"></i>
+                        <input type="password" id="register-password" placeholder="Password (Min 6 chars)" required minlength="6" class="w-full bg-[#111] border border-white/10 text-white text-sm py-3 pl-10 pr-4 rounded-lg outline-none focus:border-[#F47521] transition-colors">
+                    </div>
+                    <button type="submit" id="btn-register" class="w-full bg-[#F47521] text-white font-black text-sm uppercase tracking-wider py-3.5 rounded-lg hover:bg-white hover:text-black transition-colors shadow-lg mt-2">Create Account</button>
+                </form>
+
+                <form id="view-forgot" class="flex flex-col gap-4 hidden" onsubmit="window.app.handlePasswordReset(event)">
+                    <div class="text-center mb-2">
+                        <i class="fas fa-key text-3xl text-[#F47521] mb-3"></i>
+                        <p class="text-xs text-gray-400">Enter your email to receive a password reset link.</p>
+                    </div>
+                    <div class="relative">
+                        <i class="fas fa-envelope absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm"></i>
+                        <input type="email" id="forgot-email" placeholder="Email Address" required class="w-full bg-[#111] border border-white/10 text-white text-sm py-3 pl-10 pr-4 rounded-lg outline-none focus:border-[#F47521] transition-colors">
+                    </div>
+                    <button type="submit" id="btn-forgot" class="w-full bg-[#F47521] text-white font-black text-sm uppercase tracking-wider py-3.5 rounded-lg hover:bg-white hover:text-black transition-colors shadow-lg mt-2">Send Reset Link</button>
+                    <button type="button" onclick="window.app.switchAuthView('login')" class="text-xs text-gray-400 hover:text-white font-bold uppercase tracking-wider mt-2">Back to Sign In</button>
+                </form>
+
+                <div id="social-container" class="mt-6 pt-6 border-t border-white/10 flex flex-col gap-3">
+                    <button onclick="window.app.handleGoogleLogin()" class="w-full bg-white text-black font-black uppercase tracking-wider text-xs py-3.5 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-3">
+                        <img src="https://www.svgrepo.com/show/475656/google-color.svg" class="w-4 h-4">
+                        Continue with Google
+                    </button>
+                    
+                    <button onclick="window.app.handleGuestCreation(event)" class="w-full bg-transparent border border-white/20 text-gray-300 font-bold uppercase tracking-wider text-[11px] py-3 rounded-lg hover:border-white hover:text-white transition-colors flex items-center justify-center gap-2">
+                        <i class="fas fa-user-secret"></i> Continue as Guest
+                    </button>
+                </div>
             </div>
         </div>
     `;
 
-    try {
-        const baseUrl = 'https://anikoto-api-xi.vercel.app';
-        
-        // Fetching from the official latest episodes route
-        const rawResponse = await fetch(`${baseUrl}/api/latest-episodes`);
-        const response = await rawResponse.json();
-        
-        // Extract the data array based on the API docs {"success": true, "data": [...]}
-        const rawSlides = response.data || [];
-
-        if (rawSlides.length === 0) {
-            container.innerHTML = `
-                <div class="p-6 text-center text-gray-500 text-xs border border-white/5 mx-4 rounded-xl bg-black tracking-widest uppercase">
-                    <i class="fas fa-exclamation-circle mr-1 text-[#F47521]"></i> Stream Offline
-                </div>
-            `;
-            return;
-        }
-
-        // 2. WAIT FOR ALL ANILIST MATCHES (Loader stays on screen during this)
-        const enrichedSlides = await Promise.all(rawSlides.map(async (slide) => {
-            const cleanTitle = (slide.title || '').replace(/\(Dub\)|\(Sub\)|Episode \d+/gi, '').trim();
-            
-            // STRICTLY USE EXACT ID FROM API JSON
-            const exactId = slide.id; 
-            
-            let finalImage = slide.image || 'https://via.placeholder.com/1280x720/111/fff?text=No+Image';
-            let finalRating = null;
-            let trendingScore = 0;
-            let finalDescription = 'No synopsis available.';
-
-            try {
-                const query = `query ($search: String) { 
-                    Media (search: $search, type: ANIME, sort: SEARCH_MATCH) { 
-                        trending 
-                        averageScore 
-                        description
-                        coverImage { extraLarge } 
-                    } 
-                }`;
-                const aniRes = await fetch('https://graphql.anilist.co', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                    body: JSON.stringify({ query, variables: { search: cleanTitle } })
-                });
-                
-                const aniData = await aniRes.json();
-                const media = aniData?.data?.Media;
-                if (media) {
-                    if (media.coverImage?.extraLarge) finalImage = media.coverImage.extraLarge;
-                    if (media.averageScore) finalRating = media.averageScore;
-                    if (media.trending) trendingScore = media.trending;
-                    
-                    // Sanitize raw HTML elements and tags from AniList markdown responses smoothly
-                    if (media.description) {
-                        finalDescription = media.description.replace(/<[^>]*>?/gm, '').trim();
-                    }
-                }
-            } catch (e) {
-                console.log("AniList sync failed for:", cleanTitle);
-            }
-
-            return { ...slide, exactId, finalImage, finalRating, trendingScore, finalDescription };
-        }));
-
-        // Sort by trending score (highest first) and take top 5
-        enrichedSlides.sort((a, b) => b.trendingScore - a.trendingScore);
-        const topSlides = enrichedSlides.slice(0, 5);
-
-        window.app.state.carouselItems = topSlides; 
-        window.app.state.carouselCurrentIndex = 0;
-
-        let imageSlidesHtml = '';
-        let dotsHtml = '';
-
-        // Build Background Image Slides
-        topSlides.forEach((s, i) => {
-            imageSlidesHtml += `
-                <div class="absolute inset-0 cursor-pointer z-0 group overflow-hidden bg-black" id="slide-bg-${i}" style="opacity: ${i === 0 ? '1' : '0'}; z-index: ${i === 0 ? '20' : '10'}; transition: opacity 0.8s ease-in-out;" onclick="window.app.handleCarouselImageClick()">
-                    <img src="${s.finalImage}" class="absolute inset-0 w-full h-full object-cover object-[center_top] transition-transform duration-[10s] group-hover:scale-105">
-                </div>
-            `;
-
-            const dotClass = i === 0 
-                ? 'carousel-dot w-2 h-8 bg-[#F47521] transition-all duration-300 cursor-pointer pointer-events-auto shadow-md shrink-0 rounded-sm'
-                : 'carousel-dot w-2 h-2 bg-white/30 hover:bg-white/60 transition-all duration-300 cursor-pointer pointer-events-auto shadow-md shrink-0 rounded-sm';
-
-            dotsHtml += `
-                <div onclick="window.app.goToCarouselSlide(${i})" class="${dotClass}" id="dot-${i}"></div>
-            `;
-        });
-
-        // 3. RENDER FINAL UI (Removes loader)
-        container.innerHTML = `
-            <div class="relative w-full aspect-[4/5] md:aspect-[21/9] max-h-[75vh] overflow-hidden bg-black border-b border-white/5">
-                
-                <div id="hero-slides" class="absolute inset-0 z-0">
-                    ${imageSlidesHtml}
-                    <div class="absolute bottom-0 left-0 right-0 h-[65%] bg-gradient-to-t from-black via-black/90 to-transparent md:hidden z-30 pointer-events-none"></div>
-                    <div class="absolute inset-0 bg-gradient-to-r from-black via-black/90 to-transparent hidden md:block w-[80%] z-30 pointer-events-none"></div>
-                </div>
-
-                <div id="carousel-ui-layer" class="absolute bottom-8 left-4 right-8 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:left-12 md:w-[40%] z-40 pr-4 transition-opacity duration-300 opacity-100">
-                </div>
-                
-                <div class="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 flex flex-col justify-center gap-2.5 z-[70]" id="carousel-indicators">
-                    ${dotsHtml}
-                </div>
-            </div>
-        `;
-
-        window.app.updateCarouselUI(0);
-        startAutoRotate();
-        
-    } catch (err) {
-        console.error("Carousel Script Error:", err);
-    }
-};
-
-// --- DYNAMIC UI UPDATER ---
-window.app.updateCarouselUI = (index) => {
-    const uiLayer = document.getElementById('carousel-ui-layer');
-    if (!uiLayer) return;
-
-    const data = window.app.state.carouselItems[index];
-    if (!data) return;
-
-    const ratingHtml = data.finalRating ? `<span class="flex items-center gap-1"><i class="fas fa-star"></i> ${data.finalRating}% SCORE</span>` : '';
-
-    uiLayer.style.opacity = '0';
-
+    document.body.appendChild(modal);
     setTimeout(() => {
-        uiLayer.innerHTML = `
-            <div class="flex items-center gap-3 text-[#F47521] text-[10px] md:text-xs font-black tracking-widest drop-shadow-md mb-2 md:mb-3 uppercase pointer-events-none">
-                <span class="bg-[#F47521]/10 border border-[#F47521]/30 px-2 py-0.5 rounded backdrop-blur-sm">#${index + 1} Trending</span>
-                ${ratingHtml}
-            </div>
-
-            <h2 class="text-3xl md:text-5xl lg:text-6xl font-black text-white mb-2 md:mb-3 drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] line-clamp-2 tracking-tight cursor-pointer leading-tight hover:text-[#F47521] transition-colors" onclick="window.app.handleCarouselImageClick()">${data.title || 'Unknown'}</h2>
-            
-            <p class="text-[11px] md:text-xs text-gray-300 line-clamp-3 md:line-clamp-4 mb-5 md:mb-6 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-relaxed font-medium pointer-events-none">${data.finalDescription}</p>
-            
-            <div class="flex gap-2.5 relative z-40">
-                <button onclick="window.app.handleCarouselImageClick()" class="bg-[#F47521] text-white px-6 py-2 md:px-8 md:py-3 rounded shadow-[0_0_15px_rgba(244,117,33,0.3)] font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-white hover:text-black transition-colors flex items-center gap-2">
-                    <i class="fas fa-play"></i> Watch Now
-                </button>
-                
-                <button onclick="window.app.handleCarouselLibraryClick(event, ${index})" class="bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2">
-                    <i class="fas fa-plus"></i> Library
-                </button>
-            </div>
-        `;
-        uiLayer.style.opacity = '1';
-    }, 300);
+        modal.classList.remove('opacity-0');
+        document.getElementById('auth-modal-box').classList.remove('scale-95');
+    }, 10);
 };
 
-// --- SAFE ROUTING LOGIC FOR IMAGES & BUTTONS ---
-window.app.handleCarouselImageClick = () => {
-    const currentIndex = window.app.state.carouselCurrentIndex;
-    const currentSlideData = window.app.state.carouselItems[currentIndex];
-    
-    if (currentSlideData && currentSlideData.exactId) {
-        window.location.href = `info.html?id=${currentSlideData.exactId}`;
-    } else {
-        if (window.app.showCustomAlert) window.app.showCustomAlert("Unable to load details for this series.", "error");
-    }
-};
+// --- CROPPER ENGINE ---
+let globalCropperInstance = null;
 
-// --- ROTATION & SLIDE CONTROLS ---
-window.app.goToCarouselSlide = (targetIndex) => {
-    const currentIndex = window.app.state.carouselCurrentIndex;
-    if (targetIndex === currentIndex) return;
-    if (window.app.state.carouselInterval) clearInterval(window.app.state.carouselInterval);
-    transitionSlide(currentIndex, targetIndex);
-    window.app.state.carouselCurrentIndex = targetIndex;
-    startAutoRotate();
-};
+window.app.triggerPfpCropFlow = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
 
-function transitionSlide(oldIndex, newIndex) {
-    const oldSlide = document.getElementById(`slide-bg-${oldIndex}`);
-    const oldDot = document.getElementById(`dot-${oldIndex}`);
-    const newSlide = document.getElementById(`slide-bg-${newIndex}`);
-    const newDot = document.getElementById(`dot-${newIndex}`);
-
-    if (oldSlide) {
-        oldSlide.style.opacity = '0';
-        oldSlide.classList.replace('z-20', 'z-10');
-    }
-    if (newSlide) {
-        newSlide.style.opacity = '1';
-        newSlide.classList.replace('z-10', 'z-20');
-    }
-
-    if (oldDot) oldDot.className = "carousel-dot w-2 h-2 bg-white/30 hover:bg-white/60 transition-all duration-300 cursor-pointer pointer-events-auto shadow-md shrink-0 rounded-sm";
-    if (newDot) newDot.className = "carousel-dot w-2 h-8 bg-[#F47521] transition-all duration-300 cursor-pointer pointer-events-auto shadow-md shrink-0 rounded-sm";
-    
-    window.app.updateCarouselUI(newIndex);
-}
-
-function startAutoRotate() {
-    if (window.app.state.carouselInterval) clearInterval(window.app.state.carouselInterval);
-    window.app.state.carouselInterval = setInterval(() => {
-        if (window.app.state.currentView !== 'home' || !document.getElementById('hero-slides')) {
-            clearInterval(window.app.state.carouselInterval);
-            return;
-        }
-        const count = window.app.state.carouselItems.length;
-        const currentIndex = window.app.state.carouselCurrentIndex;
-        const nextIndex = (currentIndex + 1) % count;
-        transitionSlide(currentIndex, nextIndex);
-        window.app.state.carouselCurrentIndex = nextIndex;
-    }, 6000); 
-}
-
-// --- UPDATED LIBRARY LOGIC ---
-window.app.handleCarouselLibraryClick = async (event, index) => {
-    event.stopPropagation(); // Prevent the image background click from routing to info.html
-    const profile = window.app.state.activeProfile;
-    
-    // Check if user is logged in (reject anonymous/guests too)
-    if (!profile || !profile.uid || profile.uid.startsWith('anon_')) {
-        if (window.app.components.auth) window.app.components.auth();
-        else if (window.app.showCustomAlert) window.app.showCustomAlert("Please log in or create an account to save to your Library!", "error");
-        return;
-    }
-
-    const rawData = window.app.state.carouselItems[index];
-    if (!rawData) return;
-    
-    const formattedAnime = { 
-        id: rawData.exactId, 
-        title: rawData.title, 
-        img: rawData.finalImage 
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const imageTarget = document.getElementById('cropper-img-target');
+        imageTarget.src = e.target.result;
+        
+        document.getElementById('crop-modal').classList.remove('hidden');
+        
+        if (globalCropperInstance) globalCropperInstance.destroy();
+        globalCropperInstance = new Cropper(imageTarget, {
+            aspectRatio: 1,
+            viewMode: 1,
+            background: false,
+            dragMode: 'move'
+        });
     };
-    
-    // Ensure array exists
-    if(!profile.library) profile.library = [];
-    
-    // Check if already in library
-    if (profile.library.some(item => item.id === formattedAnime.id)) {
-        if (window.app.showCustomAlert) window.app.showCustomAlert("This series is already in your Library!", "error");
-        return;
+    reader.readAsDataURL(file);
+    event.target.value = '';
+};
+
+window.app.closeCropModal = () => {
+    document.getElementById('crop-modal').classList.add('hidden');
+    if (globalCropperInstance) {
+        globalCropperInstance.destroy();
+        globalCropperInstance = null;
     }
+};
+
+window.app.executeCropAndUpload = () => {
+    if (!globalCropperInstance) return;
+
+    const btn = document.getElementById('btn-crop-upload');
+    const originalBtnText = btn.innerText;
+    btn.innerHTML = `<i class="fas fa-circle-notch fa-spin text-sm"></i>`;
+    btn.disabled = true;
+
+    globalCropperInstance.getCroppedCanvas({
+        width: 300,
+        height: 300,
+        imageSmoothingEnabled: true,
+        imageSmoothingQuality: 'high',
+    }).toBlob(async (blob) => {
+        const formData = new FormData();
+        formData.append("image", blob, "pfp.jpg");
+        
+        try {
+            const res = await fetch(`https://api.imgbb.com/1/upload?key=4a683051e76ed12880a42aefa6ed427b`, {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            
+            if(data.success && data.data?.url) {
+                window.app.state.authSelectedPfp = data.data.url;
+                document.getElementById('register-pfp-preview').src = data.data.url;
+                window.app.showCustomAlert('Profile picture cropped & uploaded!', 'success');
+                window.app.closeCropModal();
+            } else {
+                throw new Error("ImgBB API rejected upload.");
+            }
+        } catch(e) {
+            window.app.showCustomAlert("Upload failed. Try again.", 'error');
+        } finally {
+            btn.innerHTML = originalBtnText;
+            btn.disabled = false;
+        }
+    }, 'image/jpeg', 0.9);
+};
+
+
+// --- UI CONTROLS ---
+window.app.closeAuthModal = () => {
+    const modal = document.getElementById('auth-modal');
+    const box = document.getElementById('auth-modal-box');
+    if (modal && box) {
+        modal.classList.add('opacity-0');
+        box.classList.add('scale-95');
+        setTimeout(() => modal.remove(), 300);
+    }
+};
+
+window.app.switchAuthView = (view) => {
+    ['view-login', 'view-register', 'view-forgot'].forEach(v => {
+        const el = document.getElementById(v);
+        if (el) el.classList.add('hidden');
+    });
+
+    const tabs = document.getElementById('auth-tabs');
+    const social = document.getElementById('social-container');
     
-    // Add locally to state
-    profile.library.unshift(formattedAnime);
-    localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
-    
-    // Visual button update
-    const btn = event.currentTarget || event.target.closest('button');
-    if (btn) {
-        const originalHtml = btn.innerHTML;
-        btn.innerHTML = `<i class="fas fa-check text-green-400"></i> Added`;
-        btn.classList.add('border-green-400', 'text-green-400');
-        setTimeout(() => {
-            btn.innerHTML = originalHtml;
-            btn.classList.remove('border-green-400', 'text-green-400');
-        }, 2000);
+    if (view === 'login' || view === 'register') {
+        if (tabs) tabs.classList.remove('hidden');
+        if (social) social.classList.remove('hidden');
+        document.getElementById('tab-login').className = `flex-1 pb-3 transition-colors ${view === 'login' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white border-b-2 border-transparent'}`;
+        document.getElementById('tab-register').className = `flex-1 pb-3 transition-colors ${view === 'register' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white border-b-2 border-transparent'}`;
+    } else {
+        if (tabs) tabs.classList.add('hidden');
+        if (social) social.classList.add('hidden');
     }
 
-    // Sync with Firestore using the NEW schema key: 'library'
+    const targetView = document.getElementById(`view-${view}`);
+    if (targetView) targetView.classList.remove('hidden');
+};
+
+// ==========================================
+// --- STRICT FIREBASE SYNC CONTROLLERS ---
+// ==========================================
+
+window.app.handleLogin = async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('btn-login');
+    const originalText = btn.innerText;
+    btn.innerText = "Signing in...";
+    btn.disabled = true;
+
+    try {
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+
+        const { getAuth, signInWithEmailAndPassword } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+        const auth = getAuth(window.app.firebaseApp);
+        
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        
+        // This will STRICTLY fetch or create the DB document
+        await window.app.syncProfileAfterAuth(userCredential.user);
+        
+        window.app.closeAuthModal();
+        window.location.href = 'profile.html';
+        
+    } catch (error) {
+        if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+            window.app.showCustomAlert("Account not found. Please Sign Up.", 'error');
+        } else {
+            window.app.showCustomAlert(error.message.replace('Firebase:', '').trim(), 'error');
+        }
+        btn.innerText = originalText;
+        btn.disabled = false;
+    }
+};
+
+window.app.handleRegister = async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('btn-register');
+    const originalText = btn.innerText;
+    btn.innerText = "Creating Account...";
+    btn.disabled = true;
+
+    try {
+        const name = document.getElementById('register-name').value.trim();
+        const email = document.getElementById('register-email').value.trim();
+        const password = document.getElementById('register-password').value;
+        const pfp = window.app.state.authSelectedPfp; 
+
+        // 1. Create Auth Account
+        const { getAuth, createUserWithEmailAndPassword } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+        const auth = getAuth(window.app.firebaseApp);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+
+        // 2. Prepare Data
+        const newProfile = {
+            uid: user.uid,
+            name: name,
+            email: email,
+            pfpLink: pfp, 
+            library: [], 
+            watchProgress: {}, 
+            history: [], 
+            createdAt: new Date().toISOString()
+        };
+
+        // 3. STRICT DB CREATION (No silent fails)
+        try {
+            const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+            const userDocRef = firestore.doc(window.app.db, "users", user.uid);
+            await firestore.setDoc(userDocRef, newProfile);
+        } catch (dbError) {
+            console.error("Critical DB Write Failure:", dbError);
+            window.app.showCustomAlert("Account created, but database sync failed. Check Firebase Rules.", "error");
+        }
+
+        // NO LOCAL STORAGE FOR AUTHENTICATED USERS
+        window.app.state.activeProfile = newProfile;
+        
+        window.app.closeAuthModal();
+        window.location.href = 'profile.html';
+
+    } catch (error) {
+        if (error.code === 'auth/email-already-in-use') {
+            window.app.showCustomAlert("This email is already registered. Try signing in.", 'error');
+        } else {
+            window.app.showCustomAlert(error.message.replace('Firebase:', '').trim(), 'error');
+        }
+        btn.innerText = originalText;
+        btn.disabled = false;
+    }
+};
+
+window.app.handleGoogleLogin = async () => {
+    try {
+        const { getAuth, signInWithPopup, GoogleAuthProvider } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+        const auth = getAuth(window.app.firebaseApp);
+        const provider = new GoogleAuthProvider();
+        
+        const result = await signInWithPopup(auth, provider);
+        const user = result.user;
+
+        let profileData = {
+            uid: user.uid,
+            name: user.displayName || 'Google User',
+            email: user.email,
+            pfpLink: user.photoURL || `pfp${Math.floor(Math.random() * 10) + 1}.jpeg`,
+            library: [],
+            watchProgress: {},
+            history: [],
+            createdAt: new Date().toISOString()
+        };
+
+        // STRICT DB SYNC
+        try {
+            const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+            const userDocRef = firestore.doc(window.app.db, "users", user.uid);
+            const docSnap = await firestore.getDoc(userDocRef);
+            
+            if (docSnap.exists()) {
+                profileData = docSnap.data();
+            } else {
+                await firestore.setDoc(userDocRef, profileData);
+            }
+        } catch(dbErr) {
+            console.error("Firestore sync failed.", dbErr);
+            window.app.showCustomAlert("Login successful, but database sync failed. Check Firebase Rules.", "error");
+        }
+
+        // NO LOCAL STORAGE FOR AUTHENTICATED USERS
+        window.app.state.activeProfile = profileData;
+        
+        window.app.closeAuthModal();
+        window.location.href = 'profile.html';
+
+    } catch (error) {
+        if (error.code === 'auth/popup-blocked') {
+            window.app.showCustomAlert("Sign-in popup blocked by browser. Please allow popups.", 'error');
+        } else {
+            window.app.showCustomAlert("Google Sign-In failed or was closed.", 'error');
+        }
+    }
+};
+
+window.app.syncProfileAfterAuth = async (firebaseUser) => {
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-        const userRef = firestore.doc(window.app.db, "users", profile.uid);
-        await firestore.updateDoc(userRef, { library: firestore.arrayUnion(formattedAnime) });
-        if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
-    } catch (error) { 
-        console.error("Firebase update failed:", error); 
-        if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to save to cloud.", "error");
+        const userDocRef = firestore.doc(window.app.db, "users", firebaseUser.uid);
+        const docSnap = await firestore.getDoc(userDocRef);
+        
+        if (docSnap.exists()) {
+            window.app.state.activeProfile = docSnap.data();
+        } else {
+            // IF LOGGING IN BUT DOCUMENT IS MISSING, CREATE IT NOW
+            const fallbackProfile = {
+                uid: firebaseUser.uid,
+                name: firebaseUser.displayName || "User",
+                email: firebaseUser.email,
+                pfpLink: firebaseUser.photoURL || `pfp${Math.floor(Math.random() * 10) + 1}.jpeg`,
+                library: [],
+                watchProgress: {},
+                history: [],
+                createdAt: new Date().toISOString()
+            };
+            await firestore.setDoc(userDocRef, fallbackProfile);
+            window.app.state.activeProfile = fallbackProfile;
+        }
+    } catch(syncErr) {
+        console.error("Database initialization failed during sync.", syncErr);
+    }
+};
+
+// ==========================================
+// --- GUEST LOGIC (ONLY ONE USING LOCALSTORAGE) ---
+// ==========================================
+
+window.app.handleGuestCreation = (e) => {
+    if (e) e.preventDefault();
+    const guestUid = 'anon_' + Date.now().toString(36) + Math.random().toString(36).substr(2);
+    
+    const guestProfile = {
+        uid: guestUid,
+        name: "Guest User",
+        email: "Guest Mode",
+        pfpLink: `pfp${Math.floor(Math.random() * 10) + 1}.jpeg`,
+        library: [],
+        watchProgress: {},
+        history: [],
+        createdAt: new Date().toISOString()
+    };
+
+    window.app.state.activeProfile = guestProfile;
+    
+    // STRICTLY THE ONLY PLACE WHERE LOCALSTORAGE IS USED
+    localStorage.setItem('blazex_user_profile', JSON.stringify(guestProfile));
+
+    window.app.closeAuthModal();
+    window.location.href = 'profile.html';
+};
+
+window.app.handlePasswordReset = async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('forgot-email').value.trim();
+    const btn = document.getElementById('btn-forgot');
+    const originalText = btn.innerText;
+    
+    btn.innerText = "Sending...";
+    btn.disabled = true;
+
+    try {
+        const { getAuth, sendPasswordResetEmail } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+        const auth = getAuth(window.app.firebaseApp);
+        await sendPasswordResetEmail(auth, email);
+        
+        window.app.showCustomAlert(`Reset link sent to ${email}`, 'success');
+        setTimeout(() => window.app.switchAuthView('login'), 2000);
+        
+    } catch (error) {
+        window.app.showCustomAlert(error.message.replace('Firebase:', '').trim(), 'error');
+        btn.innerText = originalText;
+        btn.disabled = false;
     }
 };
