@@ -4,6 +4,7 @@ window.app.components.player = async () => {
     const playerRoot = document.getElementById('blazex-player-root');
     if (!playerRoot) return;
 
+    // 1. Read URL Parameters
     const urlParams = new URLSearchParams(window.location.search);
     const animeId = urlParams.get('anime'); 
     const currentEpNum = urlParams.get('ep') || '1'; 
@@ -16,7 +17,10 @@ window.app.components.player = async () => {
     }
 
     const baseUrl = 'https://anikoto-api-xi.vercel.app';
+    // TUMHARA CUSTOM CLOUDFLARE PROXY URL
+    const customProxyUrl = 'https://icy-wave-30d8.prashant-yash69.workers.dev/?url='; 
 
+    // 2. Dynamically Load HLS.js
     if (typeof window.Hls === 'undefined') {
         await new Promise((resolve) => {
             const script = document.createElement('script');
@@ -27,6 +31,7 @@ window.app.components.player = async () => {
     }
 
     try {
+        // 3. FETCH STREAM DATA
         let streamData = null;
         let isFallback = false;
 
@@ -60,6 +65,7 @@ window.app.components.player = async () => {
         const outroStart = streamData.outro?.start || 0;
         const outroEnd = streamData.outro?.end || 0;
 
+        // 4. BUILD VIDEO PLAYER UI
         playerRoot.innerHTML = `
             <video id="main-video-player" controls crossorigin="anonymous" playsinline class="w-full h-full object-contain bg-black outline-none shadow-2xl"></video>
             
@@ -84,29 +90,34 @@ window.app.components.player = async () => {
         const errorOverlay = document.getElementById('player-error-overlay');
         const errorText = document.getElementById('player-error-text');
 
-        // Show Error Function
         const triggerFatalError = (msg) => {
             errorText.innerText = msg;
             errorOverlay.classList.remove('hidden');
         };
 
+        // 5. PROXIED SUBTITLES
         tracks.forEach(track => {
             if (track.kind === 'captions' || track.kind === 'subtitles') {
                 const trackEl = document.createElement('track');
                 trackEl.kind = track.kind;
                 trackEl.label = track.label || 'English';
                 trackEl.srclang = track.label ? track.label.substring(0, 2).toLowerCase() : 'en';
-                trackEl.src = track.file; // Direct file URL
+                // Routing VTT subtitle files securely via custom proxy
+                trackEl.src = customProxyUrl + encodeURIComponent(track.file); 
                 if (track.default) trackEl.default = true;
                 video.appendChild(trackEl);
             }
         });
 
+        // 6. INITIALIZE PROXIED HLS ENGINE
         if (Hls.isSupported()) {
             const hls = new Hls({
                 maxBufferLength: 30,
                 maxMaxBufferLength: 60,
-                // PROXY REMOVED: Relying on <meta name="referrer" content="no-referrer"> to bypass Cloudflare natively
+                // THE MASTER KEY: Intercepts all M3U8 and TS files and passes them to Cloudflare Worker
+                xhrSetup: function (xhr, url) {
+                    xhr.open('GET', customProxyUrl + encodeURIComponent(url), true);
+                }
             });
             
             hls.loadSource(streamUrl);
@@ -116,14 +127,14 @@ window.app.components.player = async () => {
                 video.play().catch(e => console.log("Autoplay prevented by browser interactions logic."));
             });
 
-            // HLS Error Handling (Logs directly to video screen now)
+            // Advanced Error Handling mapped to UI
             hls.on(Hls.Events.ERROR, function (event, data) {
                 if (data.fatal) {
                     switch (data.type) {
                         case Hls.ErrorTypes.NETWORK_ERROR:
                             console.error("HLS Network Error:", data.details);
                             if(data.details === "manifestLoadError") {
-                                triggerFatalError(`NETWORK BLOCKED: The streaming server refused connection. (CORS/Cloudflare block on manifest).`);
+                                triggerFatalError(`NETWORK BLOCKED: The streaming server refused connection. (Proxy failed on manifest).`);
                             } else if (data.details === "fragLoadError") {
                                 triggerFatalError(`FRAG BLOCKED: Manifest loaded, but video chunks (.ts files) are blocked by the host.`);
                             } else {
@@ -143,7 +154,8 @@ window.app.components.player = async () => {
             });
 
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            video.src = streamUrl;
+            // Safari Native Playback (Routing via proxy)
+            video.src = customProxyUrl + encodeURIComponent(streamUrl);
             video.addEventListener('loadedmetadata', function() {
                 video.play().catch(e => console.log("Autoplay prevented."));
             });
@@ -152,7 +164,7 @@ window.app.components.player = async () => {
             });
         }
 
-        // Auto-Skip Logic
+        // 7. AUTO-SKIP LOGIC OVERLAYS
         const skipIntroBtn = document.getElementById('skip-intro-btn');
         const skipOutroBtn = document.getElementById('skip-outro-btn');
 
@@ -161,11 +173,13 @@ window.app.components.player = async () => {
             const autoSkipIntro = localStorage.getItem('blazex_autoskip_intro') === 'true';
             const autoSkipOutro = localStorage.getItem('blazex_autoskip_outro') === 'true';
 
+            // Intro Skip 
             if (introEnd > 0 && t >= introStart && t < introEnd) {
                 if (autoSkipIntro) { video.currentTime = introEnd; } 
                 else { skipIntroBtn.classList.remove('translate-x-[150%]', 'opacity-0'); }
             } else { skipIntroBtn.classList.add('translate-x-[150%]', 'opacity-0'); }
 
+            // Outro Skip 
             if (outroEnd > 0 && t >= outroStart && t < outroEnd) {
                 if (autoSkipOutro) { window.app.triggerNextEpisode(); } 
                 else { skipOutroBtn.classList.remove('translate-x-[150%]', 'opacity-0'); }
