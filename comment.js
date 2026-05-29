@@ -15,12 +15,29 @@ window.app.components.comment = async () => {
     const profile = window.app.state?.activeProfile || null;
     const isGuest = !profile || !profile.uid || profile.uid.startsWith('anon_');
 
+    // Default SVG Profile Avatar Function
+    window.app.getDefaultAvatarSVG = () => `
+        <div class="w-10 h-10 rounded-full border border-white/10 shrink-0 flex items-center justify-center bg-[#111] overflow-hidden shadow-md">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-gray-400 mt-2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+        </div>
+    `;
+
+    window.app.getAvatarHtml = (url) => {
+        if (!url || url.includes('placeholder.com') || url.includes('pfp') || url.trim() === '') {
+            return window.app.getDefaultAvatarSVG();
+        }
+        return `<img src="${url}" class="w-10 h-10 rounded-full object-cover border border-white/10 shadow-md shrink-0">`;
+    };
+
     // 1. INJECT THE BOTTOM SHEET HTML
     let sheet = document.getElementById('blazex-comments-sheet');
     if (!sheet) {
         sheet = document.createElement('div');
         sheet.id = 'blazex-comments-sheet';
-        sheet.className = 'fixed inset-0 z-[100] hidden flex-col justify-end overflow-hidden';
+        sheet.className = 'fixed inset-x-0 bottom-0 z-[100] hidden flex-col justify-end overflow-hidden';
         
         // Clean Straight Paper Plane SVG
         const paperPlaneSvg = `
@@ -33,7 +50,7 @@ window.app.components.comment = async () => {
         sheet.innerHTML = `
             <div id="comments-backdrop" class="absolute inset-0 bg-black/70 backdrop-blur-sm opacity-0 transition-opacity duration-300" onclick="window.app.closeComments()"></div>
             
-            <div id="comments-panel" class="relative bg-[#0a0a0a] w-full md:max-w-2xl md:mx-auto h-[90vh] rounded-t-3xl border-t border-white/10 flex flex-col shadow-[0_-10px_40px_rgba(244,117,33,0.1)] md:mb-0 transition-transform duration-300 transform translate-y-full will-change-transform">
+            <div id="comments-panel" class="relative bg-[#0a0a0a] w-full md:max-w-2xl md:mx-auto rounded-t-3xl border-t border-white/10 flex flex-col shadow-[0_-10px_40px_rgba(244,117,33,0.1)] transition-all duration-300 ease-out will-change-[height]" style="height: 0vh;">
                 
                 <div id="drag-handle-area" class="w-full flex justify-center py-4 cursor-grab active:cursor-grabbing shrink-0 relative z-20">
                     <div class="w-12 h-1.5 bg-white/20 rounded-full pointer-events-none"></div>
@@ -54,12 +71,12 @@ window.app.components.comment = async () => {
                     </div>
                 </div>
 
-                <div class="p-4 border-t border-white/5 bg-[#111] shrink-0">
+                <div class="p-4 border-t border-white/5 bg-[#111] shrink-0 pb-6 md:pb-4">
                     ${isGuest 
                         ? `<div class="w-full text-center py-2"><p class="text-xs text-gray-400 font-bold uppercase tracking-widest mb-2">You must be logged in to join the discussion.</p><button onclick="window.app.closeComments(); if(window.app.components.auth) window.app.components.auth()" class="bg-[#F47521] text-black px-6 py-2 rounded font-black text-[10px] uppercase shadow-lg">Log In / Register</button></div>`
                         : `<form id="comment-input-form" onsubmit="window.app.submitComment(event)" class="flex gap-3 items-end relative">
                             <input type="hidden" id="edit-comment-id" value="">
-                            <img src="${profile?.photoURL || 'https://via.placeholder.com/100/222/fff?text=U'}" class="w-10 h-10 rounded-full object-cover border border-white/10 shadow-md shrink-0">
+                            ${window.app.getAvatarHtml(profile?.photoURL || profile?.pfpLink)}
                             <div class="flex-1 bg-black border border-white/10 rounded-xl flex flex-col focus-within:border-[#F47521] transition-colors relative">
                                 <textarea id="comment-textarea" rows="1" placeholder="Add a comment..." class="w-full bg-transparent text-white text-xs p-3 outline-none resize-none hide-scrollbar min-h-[44px] max-h-32" oninput="this.style.height = ''; this.style.height = this.scrollHeight + 'px'"></textarea>
                                 <div id="reply-tag-indicator" class="hidden absolute -top-8 left-0 bg-[#F47521] text-black px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest shadow-md flex items-center gap-2">
@@ -77,19 +94,19 @@ window.app.components.comment = async () => {
         `;
         document.body.appendChild(sheet);
         
-        // Initialize Drag Logic after element is mounted
+        // Initialize Drag Logic
         window.app.initDraggableSheet();
     }
 
-    // 2. OPEN ANIMATION TO HALF SCREEN (50%)
+    // 2. OPEN ANIMATION TO HALF SCREEN (50vh HEIGHT)
     sheet.classList.remove('hidden');
     sheet.classList.add('flex');
     setTimeout(() => {
         document.getElementById('comments-backdrop').classList.remove('opacity-0');
         const panel = document.getElementById('comments-panel');
-        panel.style.transition = 'transform 0.3s ease-out';
-        panel.style.transform = 'translateY(50%)'; // Opens exactly half way
-        window.app.state.commentTranslateY = 50; 
+        panel.style.transition = 'height 0.3s ease-out';
+        panel.style.height = '50vh';
+        window.app.state.commentHeight = 50; 
     }, 10);
 
     // 3. FETCH & RENDER COMMENTS
@@ -103,53 +120,50 @@ window.app.initDraggableSheet = () => {
     
     let startY = 0;
     let isDragging = false;
-    let currentTranslateY = 50; // starts at half screen
+    let currentHeightVh = 50; 
 
     const dragStart = (e) => {
         startY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
         isDragging = true;
-        panel.style.transition = 'none'; // remove transition for instant drag following
-        currentTranslateY = window.app.state.commentTranslateY || 50;
+        panel.style.transition = 'none'; // Instant drag
+        currentHeightVh = window.app.state.commentHeight || 50;
     };
 
     const dragMove = (e) => {
         if (!isDragging) return;
-        e.preventDefault(); // prevent scrolling
+        e.preventDefault(); 
         const y = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
-        const deltaY = y - startY;
-        const panelHeight = panel.offsetHeight;
+        const deltaY = startY - y; // Positive when swiping up
         
-        // Convert movement pixels to percentage based on panel height
-        let newTranslateY = currentTranslateY + (deltaY / panelHeight) * 100;
+        const windowHeight = window.innerHeight;
+        const deltaVh = (deltaY / windowHeight) * 100;
         
-        if (newTranslateY < 0) newTranslateY = 0; // Prevent going above 100% full screen
+        let newHeightVh = currentHeightVh + deltaVh;
         
-        panel.style.transform = `translateY(${newTranslateY}%)`;
+        if (newHeightVh > 90) newHeightVh = 90; // Max Full Screen limit
+        if (newHeightVh < 0) newHeightVh = 0;   
+        
+        panel.style.height = `${newHeightVh}vh`;
     };
 
     const dragEnd = () => {
         if (!isDragging) return;
         isDragging = false;
-        panel.style.transition = 'transform 0.3s ease-out';
+        panel.style.transition = 'height 0.3s ease-out';
         
-        // Extract current translation percentage to decide where to snap
-        const transformStr = panel.style.transform;
-        const match = transformStr.match(/translateY\(([\d.]+)%\)/);
+        const currentVh = parseFloat(panel.style.height);
         
-        if (match) {
-            const current = parseFloat(match[1]);
-            if (current > 75) {
-                // If dragged mostly down -> Close
-                window.app.closeComments();
-            } else if (current > 25) {
-                // If in middle -> Snap to half screen
-                window.app.state.commentTranslateY = 50;
-                panel.style.transform = `translateY(50%)`;
-            } else {
-                // If dragged mostly up -> Snap to full screen
-                window.app.state.commentTranslateY = 0;
-                panel.style.transform = `translateY(0%)`;
-            }
+        if (currentVh > 70) {
+            // Dragged high up -> Expand to 90vh
+            window.app.state.commentHeight = 90;
+            panel.style.height = `90vh`;
+        } else if (currentVh > 25) {
+            // Dragged to middle -> Snap to 50vh
+            window.app.state.commentHeight = 50;
+            panel.style.height = `50vh`;
+        } else {
+            // Dragged too low -> Close
+            window.app.closeComments();
         }
     };
 
@@ -171,13 +185,13 @@ window.app.closeComments = () => {
     if (!sheet) return;
     
     document.getElementById('comments-backdrop').classList.add('opacity-0');
-    panel.style.transition = 'transform 0.3s ease-out';
-    panel.style.transform = 'translateY(100%)';
+    panel.style.transition = 'height 0.3s ease-out';
+    panel.style.height = '0vh'; // Collapse height to 0
     
     setTimeout(() => {
         sheet.classList.add('hidden');
         sheet.classList.remove('flex');
-        window.app.state.commentTranslateY = 100;
+        window.app.state.commentHeight = 0;
     }, 300);
 };
 
@@ -246,8 +260,7 @@ window.app.loadComments = async (animeId, profile) => {
         let html = '';
         sortedComments.forEach(comment => {
             const isMine = comment.userId === myUid;
-            // Force active user avatar if it's their own comment to reflect recent PFP changes locally
-            const displayAvatar = isMine ? (profile?.photoURL || comment.userAvatar) : comment.userAvatar;
+            const displayAvatar = isMine ? (profile?.photoURL || profile?.pfpLink || comment.userAvatar) : comment.userAvatar;
             
             const menuOptions = isMine 
                 ? `<button onclick="window.app.editComment('${comment.id}', '${comment.text.replace(/'/g, "\\'")}')" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-pen mr-2"></i> Edit</button>
@@ -257,7 +270,7 @@ window.app.loadComments = async (animeId, profile) => {
 
             html += `
                 <div class="flex gap-3 bg-white/5 border border-white/5 p-3 rounded-xl animate-fade-in relative group">
-                    <img src="${displayAvatar || 'https://via.placeholder.com/100/222/fff?text=U'}" class="w-10 h-10 rounded-full object-cover border border-white/10 shrink-0">
+                    ${window.app.getAvatarHtml(displayAvatar)}
                     
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center justify-between gap-2">
@@ -371,7 +384,7 @@ window.app.submitComment = async (e) => {
                 animeId: animeId,
                 userId: profile.uid,
                 userName: profile.displayName || profile.name || "User",
-                userAvatar: profile.photoURL || 'https://via.placeholder.com/100/222/fff?text=U',
+                userAvatar: profile.photoURL || profile.pfpLink || '',
                 text: text,
                 timestamp: firestore.serverTimestamp()
             });
