@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Blaze-X | Chat</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body { background-color: #050505; color: white; margin: 0; padding: 0; font-family: sans-serif; overflow: hidden; touch-action: pan-y; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Bouncing Dots Animation for Typing */
+        .typing-dot { animation: typing-bounce 1.4s infinite ease-in-out both; }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes typing-bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+
+        /* Swipe Transition */
+        .message-bubble { transition: transform 0.2s ease-out; will-change: transform; }
+        
+        /* Glassmorphism effects */
+        .glass-header { background: rgba(5, 5, 5, 0.85); backdrop-filter: blur(10px); }
+    </style>
+</head>
+<body class="flex flex-col h-[100dvh] bg-[#050505]">
+
+    <header class="glass-header w-full h-16 border-b border-white/10 flex items-center px-4 shrink-0 z-50 fixed top-0">
+        <button onclick="window.history.back()" class="text-white p-2 hover:bg-white/10 rounded-full transition-colors mr-2">
+            <i class="fas fa-arrow-left text-lg"></i>
+        </button>
+        <div class="flex items-center gap-3 cursor-pointer" onclick="openProfile()">
+            <img id="header-pfp" src="https://via.placeholder.com/100/222/fff?text=U" class="w-10 h-10 rounded-full object-cover border border-white/20">
+            <div class="flex flex-col">
+                <h2 id="header-name" class="text-white font-bold text-sm tracking-wide leading-tight">Loading...</h2>
+                <span id="header-status" class="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Offline</span>
+            </div>
+        </div>
+    </header>
+
+    <main id="chat-container" class="flex-1 overflow-y-auto hide-scrollbar pt-20 pb-20 px-4 flex flex-col gap-3 scroll-smooth">
+        <div id="chat-loader" class="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <i class="fas fa-circle-notch fa-spin text-3xl text-[#F47521]"></i>
+        </div>
+
+        <div id="chat-intro" class="w-full flex flex-col items-center justify-center py-10 opacity-0 transition-opacity duration-500">
+            <img id="intro-pfp" src="https://via.placeholder.com/150/222/fff?text=U" class="w-24 h-24 rounded-full object-cover border-2 border-[#F47521] shadow-2xl mb-4">
+            <h3 id="intro-name" class="text-lg font-black text-white mb-2 tracking-wide">...</h3>
+            <p class="text-xs text-gray-500 font-bold uppercase tracking-widest mb-4">Blaze-X Community Member</p>
+            <button onclick="openProfile()" class="bg-white/10 hover:bg-white/20 text-white border border-white/20 px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all">
+                View Profile
+            </button>
+        </div>
+
+        <div id="messages-list" class="flex flex-col gap-3 pb-4"></div>
+        
+        <div id="typing-indicator" class="hidden flex gap-2 items-center self-start bg-[#111] border border-white/5 rounded-2xl rounded-bl-none px-4 py-3 ml-2">
+            <div class="w-1.5 h-1.5 bg-gray-400 rounded-full typing-dot"></div>
+            <div class="w-1.5 h-1.5 bg-gray-400 rounded-full typing-dot"></div>
+            <div class="w-1.5 h-1.5 bg-gray-400 rounded-full typing-dot"></div>
+        </div>
+    </main>
+
+    <div id="reply-banner" class="hidden fixed bottom-16 left-0 right-0 bg-[#111] border-t border-b border-white/5 px-4 py-2 flex items-center justify-between z-40 animate-fade-in">
+        <div class="flex flex-col border-l-2 border-[#F47521] pl-2 min-w-0">
+            <span class="text-[9px] font-black text-[#F47521] uppercase tracking-widest">Replying to <span id="reply-target-name">...</span></span>
+            <span id="reply-target-text" class="text-xs text-gray-300 truncate">...</span>
+            <input type="hidden" id="reply-target-id">
+        </div>
+        <button onclick="cancelReply()" class="text-gray-500 hover:text-white p-2">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
+    <footer class="glass-header w-full border-t border-white/10 p-3 shrink-0 fixed bottom-0 z-50 flex gap-2 items-end">
+        <button onclick="document.getElementById('image-upload').click()" class="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white bg-[#111] rounded-full shrink-0 transition-colors">
+            <i class="fas fa-image"></i>
+        </button>
+        <input type="file" id="image-upload" accept="image/*" class="hidden" onchange="sendImage(event)">
+        
+        <div class="flex-1 bg-[#111] border border-white/10 rounded-2xl flex items-center focus-within:border-[#F47521] transition-colors relative min-h-[40px]">
+            <textarea id="chat-input" rows="1" placeholder="Message..." class="w-full bg-transparent text-white text-sm p-3 outline-none resize-none hide-scrollbar max-h-24" oninput="this.style.height = ''; this.style.height = this.scrollHeight + 'px'; triggerTyping();"></textarea>
+        </div>
+        
+        <button id="send-btn" onclick="sendMessage()" class="w-10 h-10 flex items-center justify-center bg-[#F47521] text-black rounded-full shrink-0 transition-transform active:scale-95 shadow-lg">
+            <i class="fas fa-paper-plane text-sm relative right-[1px] bottom-[1px]"></i>
+        </button>
+    </footer>
+
+    <div id="msg-options-modal" class="fixed inset-0 bg-black/80 z-[200] hidden items-end justify-center transition-opacity opacity-0" onclick="closeMsgOptions(event)">
+        <div class="bg-[#111] w-full max-w-md rounded-t-3xl p-5 flex flex-col gap-2 transform translate-y-full transition-transform duration-300 border-t border-white/10" id="msg-options-panel">
+            <div class="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-4"></div>
+            <input type="hidden" id="opt-msg-id">
+            <input type="hidden" id="opt-msg-text">
+            
+            <button id="opt-reply" onclick="optionReply()" class="w-full text-left px-4 py-3.5 text-white font-bold text-sm bg-white/5 rounded-xl hover:bg-[#F47521] hover:text-black transition-colors"><i class="fas fa-reply w-6"></i> Reply</button>
+            <button id="opt-share" onclick="optionShare()" class="w-full text-left px-4 py-3.5 text-white font-bold text-sm bg-white/5 rounded-xl hover:bg-[#F47521] hover:text-black transition-colors"><i class="fas fa-share w-6"></i> Forward (Share)</button>
+            <button id="opt-edit" onclick="optionEdit()" class="hidden w-full text-left px-4 py-3.5 text-white font-bold text-sm bg-white/5 rounded-xl hover:bg-[#F47521] hover:text-black transition-colors"><i class="fas fa-pen w-6"></i> Edit Message</button>
+            <button id="opt-delete" onclick="optionDelete()" class="hidden w-full text-left px-4 py-3.5 text-red-400 font-bold text-sm bg-red-500/10 border border-red-500/20 rounded-xl hover:bg-red-500 hover:text-white transition-colors mt-2"><i class="fas fa-trash w-6"></i> Delete Message</button>
+        </div>
+    </div>
+
+    <script>
+        window.app = window.app || {};
+        
+        let currentUser = null;
+        let targetUser = null;
+        let chatId = null;
+        let messagesUnsub = null;
+        let typingTimeout = null;
+        let isEditingId = null;
+        
+        // Touch State logic
+        let touchStartX = 0; let touchStartY = 0;
+        let currentTouchElem = null;
+        let pressTimer = null;
+
+        document.addEventListener("DOMContentLoaded", async () => {
+            // Get URL params
+            const urlParams = new URLSearchParams(window.location.search);
+            const targetUid = urlParams.get('user');
+
+            if (!targetUid) return alert("User not found!");
+
+            // Local Auth Check
+            const localProfile = localStorage.getItem('blazex_user_profile');
+            if (!localProfile) {
+                alert("Please log in to chat.");
+                window.location.href = 'index.html';
+                return;
+            }
+            currentUser = JSON.parse(localProfile);
+            
+            if(currentUser.uid === targetUid) {
+                alert("You cannot chat with yourself.");
+                window.history.back();
+                return;
+            }
+
+            // Generate Unique Chat ID (Alphabetical order of UIDs)
+            chatId = currentUser.uid < targetUid ? `${currentUser.uid}_${targetUid}` : `${targetUid}_${currentUser.uid}`;
+
+            // Initialize Firebase
+            try {
+                const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+                window.db = window.app.db || firestore.getFirestore(window.app.firebaseApp);
+                window.fs = firestore; // attach to window for easy access
+
+                // 1. Fetch Target User Data
+                const targetSnap = await fs.getDoc(fs.doc(db, "users", targetUid));
+                if (!targetSnap.exists()) {
+                    alert("User does not exist."); return window.history.back();
+                }
+                targetUser = targetSnap.data();
+
+                // 2. Setup Header & Intro
+                const pfp = targetUser.pfpLink || targetUser.photoURL || 'https://via.placeholder.com/150/222/fff?text=U';
+                document.getElementById('header-pfp').src = pfp;
+                document.getElementById('intro-pfp').src = pfp;
+                document.getElementById('header-name').innerText = targetUser.name || 'Anonymous';
+                document.getElementById('intro-name').innerText = targetUser.name || 'Anonymous';
+                
+                document.getElementById('chat-loader').classList.add('hidden');
+                document.getElementById('chat-intro').classList.remove('opacity-0');
+
+                // 3. Setup Messages Listener
+                setupMessagesListener();
+                
+                // 4. Setup Typing Listener
+                setupTypingListener();
+
+            } catch (err) {
+                console.error(err);
+                alert("Error initializing chat.");
+            }
+        });
+
+        // --- FIRESTORE LISTENERS ---
+        function setupMessagesListener() {
+            const q = fs.query(fs.collection(db, `chats/${chatId}/messages`), fs.orderBy("timestamp", "asc"));
+            
+            messagesUnsub = fs.onSnapshot(q, (snapshot) => {
+                const list = document.getElementById('messages-list');
+                
+                snapshot.docChanges().forEach(change => {
+                    if (change.type === "added") {
+                        const data = { id: change.doc.id, ...change.doc.data() };
+                        renderMessage(data, list);
+                    }
+                    if (change.type === "modified") {
+                        const el = document.getElementById(`msg-${change.doc.id}`);
+                        if(el) updateMessageDOM(el, change.doc.data());
+                    }
+                    if (change.type === "removed") {
+                        const el = document.getElementById(`msg-${change.doc.id}`);
+                        if(el) el.remove();
+                    }
+                });
+                
+                // Scroll to bottom
+                scrollToBottom();
+            });
+        }
+
+        function setupTypingListener() {
+            fs.onSnapshot(fs.doc(db, "chats", chatId), (doc) => {
+                if (doc.exists() && doc.data().typing) {
+                    const typingMap = doc.data().typing;
+                    if (typingMap[targetUser.uid]) {
+                        document.getElementById('header-status').innerText = "Typing...";
+                        document.getElementById('header-status').classList.replace('text-gray-400', 'text-[#F47521]');
+                        document.getElementById('typing-indicator').classList.remove('hidden');
+                        scrollToBottom();
+                    } else {
+                        document.getElementById('header-status').innerText = "Online";
+                        document.getElementById('header-status').classList.replace('text-[#F47521]', 'text-gray-400');
+                        document.getElementById('typing-indicator').classList.add('hidden');
+                    }
+                }
+            });
+        }
+
+        function triggerTyping() {
+            if (typingTimeout) clearTimeout(typingTimeout);
+            fs.setDoc(fs.doc(db, "chats", chatId), { typing: { [currentUser.uid]: true } }, { merge: true });
+            
+            typingTimeout = setTimeout(() => {
+                fs.setDoc(fs.doc(db, "chats", chatId), { typing: { [currentUser.uid]: false } }, { merge: true });
+            }, 2000);
+        }
+
+        // --- RENDER LOGIC ---
+        function renderMessage(msg, container) {
+            const isMe = msg.senderId === currentUser.uid;
+            
+            const alignClass = isMe ? 'self-end bg-[#F47521] text-black rounded-2xl rounded-br-sm' : 'self-start bg-[#111] border border-white/5 text-white rounded-2xl rounded-bl-sm';
+            
+            // Format Timestamp
+            let timeStr = "Sending...";
+            if (msg.timestamp) {
+                const d = msg.timestamp.toDate();
+                timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            }
+
+            let replyHtml = '';
+            if (msg.replyTo) {
+                // We create a skeleton for reply, ideally we should fetch the original msg text, but for speed we keep it simple or store replyText in DB.
+                // Assuming we stored replyText during sending for optimization:
+                if (msg.replyText) {
+                    replyHtml = `<div class="bg-black/20 border-l-2 border-black pl-2 py-1 mb-1 rounded text-[10px] opacity-80 line-clamp-1">${msg.replyText}</div>`;
+                } else {
+                    replyHtml = `<div class="bg-black/20 border-l-2 border-black pl-2 py-1 mb-1 rounded text-[10px] opacity-80"><i class="fas fa-reply"></i> Replied</div>`;
+                }
+            }
+
+            let imgHtml = '';
+            if (msg.imageUrl) {
+                imgHtml = `<img src="${msg.imageUrl}" class="w-full max-w-[200px] md:max-w-[250px] rounded-lg mb-1 cursor-pointer">`;
+            }
+
+            const html = `
+                <div id="msg-${msg.id}" class="message-bubble relative max-w-[75%] px-4 py-2 ${alignClass} shadow-md group" 
+                     data-id="${msg.id}" data-text="${msg.text}" data-isme="${isMe}">
+                    ${replyHtml}
+                    ${imgHtml}
+                    <p class="text-sm break-words">${msg.text ? msg.text.replace(/</g, "&lt;").replace(/>/g, "&gt;") : ''}</p>
+                    <div class="flex items-center justify-end gap-1 mt-1 opacity-70">
+                        <span class="text-[8px] font-bold tracking-wider">${timeStr}</span>
+                        ${msg.isEdited ? `<span class="text-[8px] italic ml-1">(edited)</span>` : ''}
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', html);
+            
+            // Attach Touch Listeners for Swipe & Long Press
+            const newElem = document.getElementById(`msg-${msg.id}`);
+            attachTouchEvents(newElem);
+        }
+
+        function updateMessageDOM(el, data) {
+            const p = el.querySelector('p');
+            if(p) p.innerText = data.text;
+            if(data.isEdited && !el.innerHTML.includes('(edited)')) {
+                el.querySelector('.flex.items-center').insertAdjacentHTML('beforeend', `<span class="text-[8px] italic ml-1">(edited)</span>`);
+            }
+            el.setAttribute('data-text', data.text);
+        }
+
+        function scrollToBottom() {
+            const c = document.getElementById('chat-container');
+            c.scrollTop = c.scrollHeight;
+        }
+
+        // --- MESSAGE ACTIONS (SEND/IMAGE/EDIT) ---
+        async function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            const replyId = document.getElementById('reply-target-id').value;
+            const replyText = document.getElementById('reply-target-text').innerText;
+            const btn = document.getElementById('send-btn');
+            
+            if (!text && !isEditingId) return;
+
+            btn.innerHTML = `<i class="fas fa-circle-notch fa-spin text-sm"></i>`;
+            input.disabled = true;
+
+            try {
+                if (isEditingId) {
+                    await fs.updateDoc(fs.doc(db, `chats/${chatId}/messages`, isEditingId), { text, isEdited: true });
+                    isEditingId = null;
+                } else {
+                    const msgData = {
+                        text, senderId: currentUser.uid, timestamp: fs.serverTimestamp()
+                    };
+                    if (replyId) { msgData.replyTo = replyId; msgData.replyText = replyText; }
+                    
+                    await fs.addDoc(fs.collection(db, `chats/${chatId}/messages`), msgData);
+                }
+
+                input.value = ''; input.style.height = '40px';
+                cancelReply();
+            } catch(e) { alert("Failed to send."); }
+
+            input.disabled = false;
+            btn.innerHTML = `<i class="fas fa-paper-plane text-sm relative right-[1px] bottom-[1px]"></i>`;
+            input.focus();
+        }
+
+        async function sendImage(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const btn = document.getElementById('send-btn');
+            btn.innerHTML = `<i class="fas fa-circle-notch fa-spin text-sm"></i>`;
+            
+            const formData = new FormData();
+            formData.append("image", file);
+
+            try {
+                const res = await fetch(`https://api.imgbb.com/1/upload?key=4a683051e76ed12880a42aefa6ed427b`, { method: 'POST', body: formData });
+                const data = await res.json();
+                
+                if(data.success) {
+                    await fs.addDoc(fs.collection(db, `chats/${chatId}/messages`), {
+                        text: "Photo", imageUrl: data.data.url, senderId: currentUser.uid, timestamp: fs.serverTimestamp()
+                    });
+                }
+            } catch(e) { alert("Image upload failed."); }
+            
+            btn.innerHTML = `<i class="fas fa-paper-plane text-sm relative right-[1px] bottom-[1px]"></i>`;
+            e.target.value = ''; // clear input
+        }
+
+        // --- REPLY & UI HELPERS ---
+        function setReplyState(id, text, username) {
+            document.getElementById('reply-target-id').value = id;
+            document.getElementById('reply-target-name').innerText = username;
+            document.getElementById('reply-target-text').innerText = text;
+            document.getElementById('reply-banner').classList.remove('hidden');
+            document.getElementById('chat-input').focus();
+        }
+
+        function cancelReply() {
+            document.getElementById('reply-target-id').value = '';
+            document.getElementById('reply-banner').classList.add('hidden');
+            isEditingId = null;
+        }
+
+        function openProfile() {
+            window.location.href = `profile.html?user=${targetUser.uid}`;
+        }
+
+        // --- GESTURES (SWIPE & LONG PRESS) ---
+        function attachTouchEvents(el) {
+            let startX = 0; let startY = 0; let currentX = 0;
+
+            el.addEventListener('touchstart', (e) => {
+                startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+                currentX = 0; el.style.transition = 'none';
+                
+                // Long Press Timer
+                pressTimer = setTimeout(() => { triggerLongPress(el); }, 500);
+            }, {passive: true});
+
+            el.addEventListener('touchmove', (e) => {
+                const dx = e.touches[0].clientX - startX;
+                const dy = Math.abs(e.touches[0].clientY - startY);
+                
+                // If moving scroll vertically, cancel long press and swipe
+                if (dy > 10) { clearTimeout(pressTimer); el.style.transform = `translateX(0px)`; return; }
+                
+                // Cancel long press if moved
+                if (Math.abs(dx) > 10) clearTimeout(pressTimer);
+                
+                currentX = dx;
+                
+                // Resistance to swipe
+                if(dx > 0 && dx < 80) el.style.transform = `translateX(${dx}px)`; // Swipe Right
+                if(dx < 0 && dx > -80) el.style.transform = `translateX(${dx}px)`; // Swipe Left
+            }, {passive: true});
+
+            el.addEventListener('touchend', (e) => {
+                clearTimeout(pressTimer);
+                el.style.transition = 'transform 0.2s ease-out';
+                el.style.transform = `translateX(0px)`;
+
+                if (currentX > 50) {
+                    // Swipe Right -> Reply
+                    navigator.vibrate?.(50);
+                    const isMe = el.getAttribute('data-isme') === "true";
+                    setReplyState(el.getAttribute('data-id'), el.getAttribute('data-text'), isMe ? "Yourself" : targetUser.name);
+                } else if (currentX < -50) {
+                    // Swipe Left -> Share
+                    navigator.vibrate?.(50);
+                    if (window.app.components.share) {
+                        window.app.components.share(el.getAttribute('data-text')); // Trigger share.js
+                    } else { alert("Share module not loaded."); }
+                }
+            });
+        }
+
+        // --- LONG PRESS CONTEXT MENU ---
+        function triggerLongPress(el) {
+            navigator.vibrate?.(50);
+            const id = el.getAttribute('data-id');
+            const text = el.getAttribute('data-text');
+            const isMe = el.getAttribute('data-isme') === "true";
+
+            document.getElementById('opt-msg-id').value = id;
+            document.getElementById('opt-msg-text').value = text;
+
+            // Show/Hide Edit/Delete based on ownership
+            document.getElementById('opt-edit').classList.toggle('hidden', !isMe);
+            document.getElementById('opt-delete').classList.toggle('hidden', !isMe);
+
+            const modal = document.getElementById('msg-options-modal');
+            const panel = document.getElementById('msg-options-panel');
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                panel.classList.remove('translate-y-full');
+            }, 10);
+        }
+
+        function closeMsgOptions(e) {
+            if (e && e.target.id !== 'msg-options-modal' && e.target.tagName !== 'BUTTON') return;
+            const modal = document.getElementById('msg-options-modal');
+            const panel = document.getElementById('msg-options-panel');
+            
+            modal.classList.add('opacity-0');
+            panel.classList.add('translate-y-full');
+            setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
+        }
+
+        function optionReply() {
+            const id = document.getElementById('opt-msg-id').value;
+            const text = document.getElementById('opt-msg-text').value;
+            setReplyState(id, text, "Message");
+            closeMsgOptions();
+        }
+
+        function optionEdit() {
+            const id = document.getElementById('opt-msg-id').value;
+            const text = document.getElementById('opt-msg-text').value;
+            isEditingId = id;
+            const input = document.getElementById('chat-input');
+            input.value = text; input.focus();
+            closeMsgOptions();
+        }
+
+        async function optionDelete() {
+            if(!confirm("Delete this message?")) return;
+            const id = document.getElementById('opt-msg-id').value;
+            try {
+                await fs.deleteDoc(fs.doc(db, `chats/${chatId}/messages`, id));
+            } catch(e){}
+            closeMsgOptions();
+        }
+
+        function optionShare() {
+            const text = document.getElementById('opt-msg-text').value;
+            closeMsgOptions();
+            if (window.app.components && window.app.components.share) {
+                window.app.components.share(text);
+            } else { alert("Share module not loaded."); }
+        }
+    </script>
+</body>
+</html>
