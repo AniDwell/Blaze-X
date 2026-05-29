@@ -75,7 +75,6 @@ window.app.components.play = async () => {
     workspace.innerHTML = `
         <div class="w-full max-w-5xl mx-auto flex flex-col gap-6 animate-fade-in opacity-0 transition-opacity duration-500" id="play-content-wrapper">
             
-            <!-- VIDEO PLAYER MOUNT POINT (Loads player.js) -->
             <div id="blazex-player-root" class="w-full aspect-video md:aspect-[21/9] bg-black rounded-xl shadow-lg border border-white/5 overflow-hidden flex flex-col items-center justify-center relative group">
                 <div class="tk-loader scale-125 z-0">
                     <div class="tk-dot tk-dot-1"></div>
@@ -84,11 +83,9 @@ window.app.components.play = async () => {
                 <p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mt-6">Loading Player Engine...</p>
             </div>
 
-            <!-- PLAYER UTILITY BAR (Skip Toggles & Server/Lang Selectors) -->
             <div class="w-full flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-[#0a0a0a] p-3 rounded-lg border border-white/5 shadow-md">
                 
                 <div class="flex flex-wrap items-center gap-3">
-                    <!-- Audio Selector -->
                     <div class="flex items-center gap-2">
                         <span class="text-gray-500 text-[9px] font-black uppercase tracking-widest bg-black px-2 py-1 rounded border border-white/5">Audio</span>
                         <div class="flex bg-[#111] p-1 border border-white/10 rounded-md text-[10px] font-black select-none tracking-wider uppercase">
@@ -97,7 +94,6 @@ window.app.components.play = async () => {
                         </div>
                     </div>
                     
-                    <!-- Server Selector -->
                     <div class="flex items-center gap-2">
                         <span class="text-gray-500 text-[9px] font-black uppercase tracking-widest bg-black px-2 py-1 rounded border border-white/5">Server</span>
                         <div class="flex bg-[#111] p-1 border border-white/10 rounded-md text-[10px] font-black select-none tracking-wider uppercase">
@@ -107,7 +103,6 @@ window.app.components.play = async () => {
                     </div>
                 </div>
 
-                <!-- Auto Skip Toggles -->
                 <div class="flex items-center gap-4 text-[10px] font-bold uppercase tracking-wider text-gray-400">
                     <label class="flex items-center gap-2 cursor-pointer hover:text-white transition-colors">
                         <input type="checkbox" id="toggle-skip-intro" class="hidden" onchange="window.app.toggleAutoSkip('intro')" ${autoSkipIntro ? 'checked' : ''}>
@@ -126,10 +121,8 @@ window.app.components.play = async () => {
                 </div>
             </div>
 
-            <!-- EPISODE METADATA & ACTIONS BAR -->
             <div class="flex flex-col md:flex-row items-start md:items-start justify-between gap-6 py-2 pb-6 relative">
                 
-                <!-- Anime & Episode Info Block -->
                 <div class="flex-1 flex gap-4 w-full">
                     <div class="w-20 md:w-28 flex-shrink-0 rounded-lg overflow-hidden shadow-md border border-white/10 hidden sm:block bg-[#111]">
                         <img id="play-anime-poster" src="https://via.placeholder.com/200x300/111/fff?text=..." class="w-full h-full object-cover aspect-[2/3] animate-pulse">
@@ -145,7 +138,6 @@ window.app.components.play = async () => {
                     </div>
                 </div>
                 
-                <!-- Interaction Community Buttons -->
                 <div class="flex flex-row md:flex-col lg:flex-row items-center justify-start md:justify-end gap-2 shrink-0 w-full md:w-auto mt-4 md:mt-0">
                     <div class="flex items-center gap-2">
                         <button onclick="window.app.handleReaction('like')" id="btn-like" class="flex items-center gap-2 bg-[#111] border border-white/5 hover:border-[#F47521] px-4 py-2 rounded-lg transition-colors text-xs font-bold text-gray-400 group relative">
@@ -164,7 +156,6 @@ window.app.components.play = async () => {
                 </div>
             </div>
 
-            <!-- LIVE COUNTDOWN SCHEDULE TRACKER (Hidden by default) -->
             <div id="play-schedule-container" class="hidden w-full bg-[#111]/80 backdrop-blur-md border border-[#F47521]/30 p-4 md:p-5 rounded-xl shadow-[0_0_20px_rgba(244,117,33,0.05)] flex-col sm:flex-row items-center justify-between gap-4 mt-2">
                 <div class="flex items-center gap-4 w-full sm:w-auto">
                     <div class="w-10 h-10 rounded-full bg-[#F47521]/20 flex items-center justify-center text-[#F47521] shadow-inner shrink-0">
@@ -180,13 +171,11 @@ window.app.components.play = async () => {
                 </div>
             </div>
 
-            <!-- DYNAMIC EPISODES MATRIX GRID (Clean Style) -->
             <div class="w-full flex flex-col gap-4 mt-2 bg-[#0a0a0a] p-4 md:p-5 rounded-xl border border-white/5 shadow-md">
                 <h3 class="text-white text-sm font-black uppercase tracking-widest flex items-center gap-2 mb-2"><i class="fas fa-list text-[#F47521]"></i> Episodes Vault</h3>
                 <div id="episodes-grid-mount-point"></div>
             </div>
 
-            <!-- COMMENTS SECTION MOUNT POINT -->
             <div class="w-full mt-4">
                 <h3 class="text-white text-sm font-black uppercase tracking-widest mb-4 flex items-center gap-2"><i class="fas fa-comments text-[#F47521]"></i> Community Discussion</h3>
                 <div id="comments-section-root" class="min-h-[200px] flex items-center justify-center bg-[#0a0a0a] rounded-xl border border-white/5 shadow-md">
@@ -535,7 +524,6 @@ window.app.renderPlayEpisodesUI = () => {
 
     mountPoint.innerHTML = `
         <div class="flex flex-col gap-4">
-            <!-- Grid Filters -->
             <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between bg-[#111] p-2.5 rounded-xl border border-white/5">
                 
                 <div class="flex bg-black p-1 border border-white/10 rounded-lg max-w-xs md:w-44 text-[11px] font-black select-none tracking-wider uppercase h-10 shrink-0">
@@ -559,7 +547,6 @@ window.app.renderPlayEpisodesUI = () => {
                 </div>
             </div>
 
-            <!-- Grid Numbers -->
             <div id="play-numeric-episodes-grid" class="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-12 lg:grid-cols-16 gap-2 w-full max-h-[350px] overflow-y-auto hide-scrollbar pr-1 pb-2"></div>
         </div>
     `;
@@ -666,7 +653,7 @@ window.app.renderPlayGridItems = () => {
         let interactiveActionAttr = '';
 
         if (isSupportedByLang) {
-            interactiveActionAttr = `onclick="window.location.href='play.html?id=${encodeURIComponent(targetEpisodeSlugId)}&anime=${animeId}&ep=${epNumber}&type=${currentLangMode}&server=${currentServer}'"`;
+            interactiveActionAttr = `onclick="window.app.resolveEpisodeStreamAndRoute('${targetEpisodeSlugId}', ${epNumber}, '${animeId}')"`;
             
             if (isCurrentlyPlaying) {
                 // Flat solid orange for active play state - NO GLOW
@@ -713,3 +700,13 @@ document.addEventListener('click', (e) => {
 
 // Immediately invoke play engine initialization
 window.app.components.play();
+
+// Dynamically load commentsss.js at the end to ensure inline comments work
+if (!document.querySelector('script[src="commentsss.js"]')) {
+    const script = document.createElement('script');
+    script.src = 'commentsss.js';
+    script.onload = () => {
+        if (window.app.components.commentsss) window.app.components.commentsss();
+    };
+    document.body.appendChild(script);
+}
