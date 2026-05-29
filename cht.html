@@ -4,41 +4,58 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blaze-X | Premium Chat</title>
-    
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     
     <style>
-        body { background-color: #050505; color: white; margin: 0; padding: 0; font-family: sans-serif; overflow: hidden; touch-action: pan-y; }
+        body { background-color: #000; color: #fff; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
-        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        .typing-dot { animation: typing-bounce 1.4s infinite ease-in-out both; }
-        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
-        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
-        @keyframes typing-bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
-
-        .message-bubble { transition: transform 0.2s ease-out, background-color 0.2s; will-change: transform; }
+        /* Slim Message Bubbles */
+        .bubble-recv { background: #111; color: #fff; padding: 10px 15px; border-radius: 12px 12px 12px 2px; border: 1px solid #222; max-width: 70%; }
+        .bubble-sent { background: #F47521; color: #000; padding: 10px 15px; border-radius: 12px 12px 2px 12px; max-width: 70%; }
         
-        /* HEAVY UI STYLING */
-        .glass-header { background: #0a0a0a; box-shadow: 0 4px 20px rgba(0,0,0,0.8); z-index: 50; }
-        .bubble-recv { background: #1a1a1a; border: 1px solid rgba(255,255,255,0.05); box-shadow: 0 4px 15px rgba(0,0,0,0.5); border-radius: 16px 16px 16px 4px; }
-        .bubble-sent { background: #F47521; color: #000; box-shadow: 0 4px 15px rgba(244,117,33,0.3); border-radius: 16px 16px 4px 16px; }
-        .bubble-emoji { background: transparent !important; box-shadow: none !important; border: none !important; font-size: 3.5rem; padding: 0 !important; }
+        /* Reply Box (Outside Bubble) */
+        .reply-tag-outside { font-size: 8px; color: #F47521; text-transform: uppercase; font-weight: 900; margin-bottom: 2px; opacity: 0.9; }
+        .reply-content-outside { font-size: 11px; background: #111; padding: 6px 10px; border-radius: 8px; margin-bottom: 4px; border-left: 3px solid #F47521; color: #aaa; max-width: 70%; }
         
-        /* Selection Overlay */
-        .msg-selected { background-color: rgba(244, 117, 33, 0.2) !important; position: relative; }
-        .msg-selected::after { content: '\f00c'; font-family: 'Font Awesome 5 Free'; font-weight: 900; position: absolute; left: -25px; top: 50%; transform: translateY(-50%); color: #F47521; font-size: 14px; }
+        .message-bubble { transition: transform 0.2s; will-change: transform; }
+        .msg-selected { background-color: rgba(244, 117, 33, 0.2) !important; }
     </style>
+</head>
+<body class="flex flex-col h-[100dvh]">
+
+    <header id="default-header" class="w-full h-16 flex items-center justify-between px-4 fixed top-0 bg-[#000] border-b border-[#111] z-50">
+        <button onclick="window.history.back()" class="text-white p-2"><i class="fas fa-arrow-left"></i></button>
+        <div class="flex items-center gap-3" onclick="openProfile()">
+            <img id="header-pfp" src="https://via.placeholder.com/100" class="w-9 h-9 rounded-full border border-[#F47521]">
+            <div class="flex flex-col">
+                <h2 id="header-name" class="text-white font-bold text-sm">Loading...</h2>
+                <span id="header-status" class="text-[9px] text-gray-500 uppercase font-bold">Offline</span>
+            </div>
+        </div>
+        <button onclick="toggleTopMenu()" class="text-white p-2"><i class="fas fa-ellipsis-v"></i></button>
+    </header>
+
+    <main id="chat-container" class="flex-1 overflow-y-auto hide-scrollbar pt-20 pb-24 px-4 flex flex-col gap-4">
+        <div id="messages-list" class="flex flex-col gap-4"></div>
+    </main>
+
+    <footer class="w-full bg-[#000] border-t border-[#111] p-3 fixed bottom-0 z-50 flex gap-2 items-end">
+        <button onclick="document.getElementById('image-upload').click()" class="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-[#F47521] bg-[#111] rounded-xl"><i class="fas fa-camera"></i></button>
+        <input type="file" id="image-upload" accept="image/*" class="hidden" onchange="openImageEditor(event)">
+        <div class="flex-1 bg-[#111] rounded-xl flex items-center relative">
+            <textarea id="chat-input" rows="1" placeholder="Message..." class="w-full bg-transparent text-white text-sm px-4 py-3 outline-none resize-none hide-scrollbar"></textarea>
+        </div>
+        <button onclick="sendMessage()" class="w-10 h-10 bg-[#F47521] text-black rounded-xl"><i class="fas fa-paper-plane"></i></button>
+    </footer>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
-        import { getFirestore } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+        import { getFirestore, collection, query, orderBy, onSnapshot, addDoc, doc, getDoc, updateDoc, deleteDoc, serverTimestamp, where, getDocs, increment } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
-        // Tumehari actual config yahan ayegi
         const firebaseConfig = {
             apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
             authDomain: "blaze-x-db2f5.firebaseapp.com",
@@ -50,692 +67,52 @@
 
         window.app = window.app || {};
         window.app.firebaseApp = initializeApp(firebaseConfig);
-        window.app.db = getFirestore(window.app.firebaseApp);
+        window.db = getFirestore(window.app.firebaseApp);
+        window.fs = { collection, query, orderBy, onSnapshot, addDoc, doc, getDoc, updateDoc, deleteDoc, serverTimestamp, where, getDocs, increment };
     </script>
-</head>
-<body class="flex flex-col h-[100dvh] bg-[#050505]">
-
-    <header id="default-header" class="glass-header w-full h-16 flex items-center justify-between px-4 fixed top-0 w-full transition-transform">
-        <div class="flex items-center gap-3 flex-1">
-            <button onclick="window.history.back()" class="text-white p-2 hover:bg-white/10 rounded-full transition-colors -ml-2">
-                <i class="fas fa-arrow-left text-lg"></i>
-            </button>
-            <div class="flex items-center gap-3 cursor-pointer" onclick="openProfile()">
-                <img id="header-pfp" src="https://via.placeholder.com/100/222/fff?text=U" class="w-10 h-10 rounded-full object-cover border border-[#F47521]">
-                <div class="flex flex-col">
-                    <h2 id="header-name" class="text-white font-black text-sm tracking-wide leading-tight">Loading...</h2>
-                    <span id="header-status" class="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Offline</span>
-                </div>
-            </div>
-        </div>
-        <div class="relative">
-            <button onclick="toggleTopMenu()" class="text-white p-2 hover:bg-white/10 rounded-full transition-colors">
-                <i class="fas fa-ellipsis-v text-lg"></i>
-            </button>
-            <div id="top-dropdown" class="hidden absolute right-0 top-full mt-2 w-40 bg-[#111] border border-white/10 rounded-xl shadow-2xl py-2 z-50 text-xs font-bold uppercase tracking-wider">
-                <button onclick="openProfile()" class="w-full text-left px-4 py-3 text-white hover:bg-white/10"><i class="fas fa-user w-5"></i> Profile</button>
-                <button onclick="clearChat()" class="w-full text-left px-4 py-3 text-white hover:bg-white/10"><i class="fas fa-broom w-5"></i> Clear Chat</button>
-                <button onclick="blockUser()" class="w-full text-left px-4 py-3 text-red-500 hover:bg-red-500/10"><i class="fas fa-ban w-5"></i> Block</button>
-            </div>
-        </div>
-    </header>
-
-    <header id="selection-header" class="glass-header w-full h-16 flex items-center justify-between px-4 fixed top-0 w-full transform -translate-y-full transition-transform bg-[#F47521] text-black">
-        <div class="flex items-center gap-4">
-            <button onclick="exitSelectionMode()" class="p-2 rounded-full hover:bg-black/10 transition-colors -ml-2">
-                <i class="fas fa-arrow-left text-lg"></i>
-            </button>
-            <span id="selection-count" class="font-black text-lg">1</span>
-        </div>
-        <div class="flex items-center gap-2">
-            <button id="sel-btn-reply" onclick="replySelected()" class="p-3 hover:bg-black/10 rounded-full transition-colors"><i class="fas fa-reply text-lg"></i></button>
-            <button id="sel-btn-share" onclick="shareSelected()" class="p-3 hover:bg-black/10 rounded-full transition-colors"><i class="fas fa-share text-lg"></i></button>
-            <button onclick="deleteSelected()" class="p-3 hover:bg-black/10 rounded-full transition-colors"><i class="fas fa-trash text-lg"></i></button>
-        </div>
-    </header>
-
-    <main id="chat-container" class="flex-1 overflow-y-auto hide-scrollbar pt-20 pb-24 px-6 flex flex-col gap-4 scroll-smooth bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]">
-        
-        <div id="chat-loader" class="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <i class="fas fa-circle-notch fa-spin text-3xl text-[#F47521]"></i>
-        </div>
-
-        <div id="chat-intro" class="w-full flex flex-col items-center justify-center py-10 opacity-0 transition-opacity duration-500 hidden mt-auto">
-            <img id="intro-pfp" src="https://via.placeholder.com/150/222/fff?text=U" class="w-28 h-28 rounded-full object-cover border-4 border-[#111] shadow-[0_0_20px_rgba(244,117,33,0.5)] mb-4">
-            <h3 id="intro-name" class="text-xl font-black text-white mb-2 tracking-wide">...</h3>
-            <p class="text-xs text-gray-500 font-bold uppercase tracking-widest mb-4 bg-black/50 px-3 py-1 rounded-full">End-to-End Encrypted</p>
-        </div>
-
-        <div id="messages-list" class="flex flex-col gap-3 pb-4"></div>
-        
-        <div id="typing-indicator" class="hidden flex gap-2 items-center self-start bubble-recv px-5 py-3 ml-2 mb-2">
-            <div class="w-1.5 h-1.5 bg-[#F47521] rounded-full typing-dot"></div>
-            <div class="w-1.5 h-1.5 bg-[#F47521] rounded-full typing-dot"></div>
-            <div class="w-1.5 h-1.5 bg-[#F47521] rounded-full typing-dot"></div>
-        </div>
-    </main>
-
-    <button id="scroll-fab" onclick="scrollToBottom()" class="hidden fixed bottom-24 right-4 z-40 bg-[#111] border border-white/10 rounded-full shadow-[0_4px_15px_rgba(0,0,0,0.8)] flex items-center gap-2 p-1.5 pr-4 animate-fade-in group">
-        <img id="fab-pfp" src="https://via.placeholder.com/50" class="w-8 h-8 rounded-full object-cover border border-[#F47521]">
-        <div class="flex flex-col items-start leading-tight">
-            <span class="text-white text-[10px] font-bold">New Message</span>
-            <i class="fas fa-chevron-down text-[#F47521] text-[10px] group-hover:translate-y-0.5 transition-transform"></i>
-        </div>
-    </button>
-
-    <div id="reply-banner" class="hidden fixed bottom-[70px] left-0 right-0 bg-[#0a0a0a] border-t border-[#F47521]/30 px-4 py-2 flex items-center justify-between z-40 animate-fade-in">
-        <div class="flex flex-col border-l-2 border-[#F47521] pl-3 min-w-0">
-            <span class="text-[10px] font-black text-[#F47521] uppercase tracking-widest">Replying to <span id="reply-target-name">...</span></span>
-            <span id="reply-target-text" class="text-xs text-gray-300 truncate">...</span>
-            <input type="hidden" id="reply-target-id">
-        </div>
-        <button onclick="cancelReply()" class="text-gray-500 hover:text-white p-2 bg-[#111] rounded-full"><i class="fas fa-times"></i></button>
-    </div>
-
-    <footer class="glass-header w-full border-t border-white/10 p-3 shrink-0 fixed bottom-0 z-50 flex gap-3 items-end">
-        <button onclick="document.getElementById('image-upload').click()" class="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-[#F47521] bg-[#1a1a1a] rounded-xl shrink-0 transition-colors shadow-inner border border-white/5">
-            <i class="fas fa-camera text-lg"></i>
-        </button>
-        <input type="file" id="image-upload" accept="image/*" class="hidden" onchange="openImageEditor(event)">
-        
-        <div class="flex-1 bg-[#1a1a1a] border border-white/10 rounded-2xl flex items-center focus-within:border-[#F47521] transition-colors relative min-h-[44px] shadow-inner">
-            <textarea id="chat-input" rows="1" placeholder="Message..." class="w-full bg-transparent text-white text-sm px-4 py-3 outline-none resize-none hide-scrollbar max-h-28" oninput="this.style.height = ''; this.style.height = this.scrollHeight + 'px'; triggerTyping();"></textarea>
-        </div>
-        
-        <button id="send-btn" onclick="sendMessage()" class="w-11 h-11 flex items-center justify-center bg-[#F47521] text-black rounded-xl shrink-0 transition-transform active:scale-95 shadow-[0_4px_15px_rgba(244,117,33,0.4)]">
-            <i class="fas fa-paper-plane text-lg relative right-[2px] bottom-[1px]"></i>
-        </button>
-    </footer>
-
-    <div id="image-editor-modal" class="fixed inset-0 bg-black z-[300] hidden flex-col">
-        <div class="w-full h-16 flex items-center justify-between px-4 bg-[#0a0a0a] border-b border-white/10 shrink-0">
-            <button onclick="closeImageEditor()" class="text-white p-2 hover:bg-white/10 rounded-full"><i class="fas fa-arrow-left text-lg"></i></button>
-            <h2 class="text-white font-black text-sm uppercase tracking-widest">Edit Media</h2>
-            <button onclick="executeImageSend()" class="text-[#F47521] font-bold text-sm bg-[#F47521]/10 px-4 py-1.5 rounded-full hover:bg-[#F47521] hover:text-black transition-colors" id="btn-final-send">Send</button>
-        </div>
-        <div class="flex-1 bg-black relative p-4 flex items-center justify-center overflow-hidden">
-            <img id="cropper-target" src="" class="max-w-full max-h-full block">
-        </div>
-        <div class="p-4 bg-[#0a0a0a] border-t border-white/10 shrink-0 flex flex-col gap-4">
-            <div class="flex items-center justify-between bg-[#111] border border-white/5 rounded-xl p-1">
-                <button type="button" onclick="setMediaType('unlimited')" id="btn-type-unlimited" class="flex-1 py-2 text-[10px] font-black uppercase tracking-wider text-black bg-[#F47521] rounded-lg transition-all shadow-md">Unlimited</button>
-                <button type="button" onclick="setMediaType('twice')" id="btn-type-twice" class="flex-1 py-2 text-[10px] font-black uppercase tracking-wider text-gray-500 hover:text-white rounded-lg transition-all">Twice</button>
-                <button type="button" onclick="setMediaType('once')" id="btn-type-once" class="flex-1 py-2 text-[10px] font-black uppercase tracking-wider text-gray-500 hover:text-white rounded-lg transition-all"><i class="fas fa-stopwatch mr-1"></i> Once</button>
-            </div>
-            <input type="text" id="image-caption" placeholder="Add a caption..." class="w-full bg-[#111] border border-white/10 text-white text-sm p-4 rounded-xl outline-none focus:border-[#F47521] transition-colors">
-        </div>
-    </div>
-
-    <div id="image-viewer-modal" class="fixed inset-0 bg-black/95 z-[400] hidden flex-col transition-opacity duration-300 opacity-0">
-        <div class="w-full h-16 flex items-center justify-between px-4 bg-transparent absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-black/80 to-transparent">
-            <button onclick="closeImageViewer()" class="text-white p-2 bg-black/50 hover:bg-white/10 rounded-full"><i class="fas fa-arrow-left text-lg"></i></button>
-            <a id="img-download-btn" href="#" download="BlazeX_Media.jpg" class="text-white p-2 bg-black/50 hover:bg-white/10 rounded-full"><i class="fas fa-download text-lg"></i></a>
-        </div>
-        <div class="flex-1 flex items-center justify-center p-2">
-            <img id="viewer-img" src="" class="max-w-full max-h-full object-contain drop-shadow-2xl">
-        </div>
-        <div id="viewer-caption" class="absolute bottom-0 left-0 right-0 p-6 text-center text-white text-sm bg-gradient-to-t from-black/90 to-transparent font-medium"></div>
-    </div>
 
     <script>
-        // CORE LOGIC & STATE
-        let currentUser = null;
-        let targetUser = null;
-        let chatId = null;
-        let messagesUnsub = null;
-        let typingTimeout = null;
-        
-        // Selection State
-        let isSelectionMode = false;
-        let selectedMessages = new Set();
-        
-        // Image State
-        let cropperInstance = null;
-        let selectedMediaType = 'unlimited';
-        let currentFileBlob = null;
+        let currentUser = JSON.parse(localStorage.getItem('blazex_user_profile'));
+        let targetUid = new URLSearchParams(window.location.search).get('user');
+        let chatId = currentUser.uid < targetUid ? `${currentUser.uid}_${targetUid}` : `${targetUid}_${currentUser.uid}`;
 
-        // Auto-Scroll Tracker
-        let isScrolledUp = false;
-
-        document.addEventListener("DOMContentLoaded", async () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            const targetUid = urlParams.get('user');
-
-            if (!targetUid) {
-                alert("Target user ID missing.");
-                window.location.href = 'index.html';
-                return;
-            }
-
-            try {
-                const { getAuth, onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
-                const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-                
-                if (!window.app || !window.app.firebaseApp) {
-                    document.getElementById('chat-loader').innerHTML = '<p class="text-red-500">DB Config Missing.</p>';
-                    return;
-                }
-
-                const auth = getAuth(window.app.firebaseApp);
-                window.db = window.app.db;
-                window.fs = firestore;
-
-                onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        const userDoc = await fs.getDoc(fs.doc(db, "users", user.uid));
-                        currentUser = userDoc.exists() ? userDoc.data() : { uid: user.uid, name: user.displayName || "User" };
-                    } else {
-                        const localGuest = localStorage.getItem('blazex_user_profile');
-                        if (localGuest && JSON.parse(localGuest).uid.startsWith('anon_')) {
-                            currentUser = JSON.parse(localGuest);
-                        } else {
-                            alert("Please log in."); window.location.href = 'index.html'; return;
-                        }
-                    }
-
-                    if(currentUser.uid === targetUid) {
-                        alert("Cannot chat with yourself."); window.history.back(); return;
-                    }
-
-                    chatId = currentUser.uid < targetUid ? `${currentUser.uid}_${targetUid}` : `${targetUid}_${currentUser.uid}`;
-
-                    const targetSnap = await fs.getDoc(fs.doc(db, "users", targetUid));
-                    if (!targetSnap.exists()) { alert("User not found."); window.history.back(); return; }
-                    
-                    targetUser = targetSnap.data();
-                    
-                    // Populate UI
-                    const pfp = targetUser.pfpLink || targetUser.photoURL || 'https://via.placeholder.com/150/222/fff?text=U';
-                    document.getElementById('header-pfp').src = pfp;
-                    document.getElementById('intro-pfp').src = pfp;
-                    document.getElementById('fab-pfp').src = pfp; // FAB icon
-                    document.getElementById('header-name').innerText = targetUser.name || 'Anonymous';
-                    document.getElementById('intro-name').innerText = targetUser.name || 'Anonymous';
-                    
-                    document.getElementById('chat-loader').classList.add('hidden');
-                    document.getElementById('chat-intro').classList.remove('hidden');
-                    setTimeout(() => document.getElementById('chat-intro').classList.remove('opacity-0'), 100);
-
-                    setupMessagesListener();
-                    setupTypingListener();
-                    setupScrollListener();
-                });
-            } catch (err) { console.error(err); }
-        });
-
-        // --- SCROLL LOGIC & FAB ---
-        function setupScrollListener() {
-            const c = document.getElementById('chat-container');
-            c.addEventListener('scroll', () => {
-                // Check if user is scrolled up more than 150px from bottom
-                isScrolledUp = (c.scrollHeight - c.scrollTop - c.clientHeight) > 150;
-                
-                if (!isScrolledUp) {
-                    document.getElementById('scroll-fab').classList.add('hidden');
-                }
-            });
-        }
-
-        function scrollToBottom(force = false) {
-            const c = document.getElementById('chat-container');
-            c.scrollTo({ top: c.scrollHeight, behavior: force ? 'auto' : 'smooth' });
-            document.getElementById('scroll-fab').classList.add('hidden');
-            isScrolledUp = false;
-        }
-
-        // --- LISTENERS ---
-        function setupMessagesListener() {
-            const q = fs.query(fs.collection(db, `chats/${chatId}/messages`), fs.orderBy("timestamp", "asc"));
-            
-            messagesUnsub = fs.onSnapshot(q, (snapshot) => {
-                const list = document.getElementById('messages-list');
-                
-                snapshot.docChanges().forEach(change => {
-                    const data = { id: change.doc.id, ...change.doc.data(), hasPendingWrites: snapshot.metadata.hasPendingWrites };
-                    
-                    if (change.type === "added") {
-                        renderMessage(data, list);
-                        // If new message comes from OTHER user and we are scrolled up, show FAB
-                        if (data.senderId !== currentUser.uid && isScrolledUp && !snapshot.metadata.hasPendingWrites) {
-                            document.getElementById('scroll-fab').classList.remove('hidden');
-                            navigator.vibrate?.(100); // Small haptic alert
-                        } else if (!isScrolledUp || data.senderId === currentUser.uid) {
-                            setTimeout(() => scrollToBottom(true), 50);
-                        }
-                        
-                        // Mark as read if not me
-                        if (data.senderId !== currentUser.uid && !data.read) {
-                            fs.updateDoc(fs.doc(db, `chats/${chatId}/messages`, data.id), { read: true });
-                        }
-                    }
-                    if (change.type === "modified") {
-                        const el = document.getElementById(`msg-${change.doc.id}`);
-                        if(el) updateMessageDOM(el, data);
-                    }
-                    if (change.type === "removed") {
-                        const el = document.getElementById(`msg-${change.doc.id}`);
-                        if(el) el.remove();
-                    }
-                });
-            });
-        }
-
-        function setupTypingListener() {
-            fs.onSnapshot(fs.doc(db, "chats", chatId), (doc) => {
-                if (doc.exists() && doc.data().typing && doc.data().typing[targetUser.uid]) {
-                    document.getElementById('header-status').innerText = "Typing...";
-                    document.getElementById('header-status').classList.replace('text-gray-500', 'text-[#F47521]');
-                    document.getElementById('typing-indicator').classList.remove('hidden');
-                    if (!isScrolledUp) scrollToBottom();
-                } else {
-                    document.getElementById('header-status').innerText = "Online";
-                    document.getElementById('header-status').classList.replace('text-[#F47521]', 'text-gray-500');
-                    document.getElementById('typing-indicator').classList.add('hidden');
-                }
-            });
-        }
-
-        function triggerTyping() {
-            if (typingTimeout) clearTimeout(typingTimeout);
-            fs.setDoc(fs.doc(db, "chats", chatId), { typing: { [currentUser.uid]: true } }, { merge: true });
-            typingTimeout = setTimeout(() => {
-                fs.setDoc(fs.doc(db, "chats", chatId), { typing: { [currentUser.uid]: false } }, { merge: true });
-            }, 2000);
-        }
-
-        // --- RENDER LOGIC ---
-        function isOnlyEmojis(str) {
-            if(!str) return false;
-            // Regex to check if string contains ONLY emojis (and spaces)
-            const regex = /^[\p{Emoji}\s]+$/u;
-            return regex.test(str.trim()) && str.trim().length <= 15;
-        }
-
-        function renderMessage(msg, container) {
+        async function renderMessage(msg) {
             const isMe = msg.senderId === currentUser.uid;
-            const isEmojiOnly = isOnlyEmojis(msg.text);
+            let status = msg.read ? "Seen" : "Sent";
             
-            let alignClass = isMe ? 'self-end bubble-sent text-white' : 'self-start bubble-recv text-white';
-            if (isEmojiOnly) alignClass = isMe ? 'self-end bubble-emoji' : 'self-start bubble-emoji';
-
-            // Seen / Pending Ticks logic
-            let statusIcon = '';
-            if (isMe) {
-                if (msg.hasPendingWrites) {
-                    statusIcon = `<i class="far fa-clock text-gray-400"></i>`; // Sending
-                } else if (msg.read) {
-                    statusIcon = `<i class="fas fa-check-double text-[#000] drop-shadow-md"></i>`; // Read (Orange/Blue depending on theme, since sent bubble is orange, black looks best)
-                } else {
-                    statusIcon = `<i class="fas fa-check text-black/60"></i>`; // Sent but unread
-                }
-            }
-            
-            let timeStr = "";
-            if (msg.timestamp) {
-                const d = msg.timestamp.toDate ? msg.timestamp.toDate() : new Date();
-                timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            }
-
-            // Reply Preview
-            let replyHtml = '';
-            if (msg.replyTo) {
-                const rBg = isMe ? 'bg-black/20 border-black/50 text-black' : 'bg-white/5 border-[#F47521] text-gray-300';
-                replyHtml = `
-                    <div class="${rBg} border-l-4 pl-3 py-2 mb-2 rounded-lg text-xs opacity-90">
-                        <span class="font-black text-[9px] uppercase tracking-widest opacity-80 block mb-0.5">Replied Message</span>
-                        <div class="line-clamp-2">${msg.replyText || "Photo"}</div>
-                    </div>`;
-            }
-
-            // Image Handle (View Once logic)
-            let imgHtml = '';
-            if (msg.imageUrl) {
-                if (msg.mediaType === 'once' && msg.viewCount >= 1) {
-                    imgHtml = `<div class="bg-black/30 text-white/50 border border-white/10 px-4 py-3 rounded-xl mb-1 flex items-center gap-2 italic text-xs"><i class="fas fa-eye-slash"></i> Photo Expired</div>`;
-                } else if (msg.mediaType === 'twice' && msg.viewCount >= 2) {
-                    imgHtml = `<div class="bg-black/30 text-white/50 border border-white/10 px-4 py-3 rounded-xl mb-1 flex items-center gap-2 italic text-xs"><i class="fas fa-eye-slash"></i> Photo Expired</div>`;
-                } else {
-                    const blurClass = (msg.mediaType === 'once' || msg.mediaType === 'twice') ? 'blur-md hover:blur-none transition-all duration-300' : '';
-                    imgHtml = `
-                        <div class="relative group cursor-pointer mb-2" onclick="openImageViewer('${msg.imageUrl}', '${(msg.text || '').replace(/'/g, "\\'")}', '${msg.id}', '${msg.mediaType}')">
-                            <img src="${msg.imageUrl}" class="w-full max-w-[240px] md:max-w-[300px] rounded-xl object-cover ${blurClass}">
-                            ${(msg.mediaType === 'once' || msg.mediaType === 'twice') ? `<div class="absolute inset-0 flex items-center justify-center pointer-events-none group-hover:opacity-0 transition-opacity"><div class="bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-full text-white text-[10px] font-black uppercase tracking-widest border border-white/20"><i class="fas fa-bomb mr-1"></i> Tap to View</div></div>` : ''}
-                        </div>`;
-                }
-            }
-
-            const safeText = msg.text ? msg.text.replace(/</g, "&lt;").replace(/>/g, "&gt;") : '';
+            // Dynamic Timestamp/Seen Logic
+            const d = msg.timestamp?.toDate ? msg.timestamp.toDate() : new Date();
+            const diff = Math.floor((new Date() - d) / 60000);
+            if(msg.read) status = diff < 60 ? `Seen ${diff}m` : `Seen ${Math.floor(diff/60)}h`;
+            else status = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
             const html = `
-                <div id="msg-${msg.id}" class="message-bubble relative max-w-[85%] px-4 py-2.5 ${alignClass} group" 
-                     data-id="${msg.id}" data-text="${safeText}" data-isme="${isMe}">
-                    ${replyHtml}
-                    ${imgHtml}
-                    ${(safeText && !imgHtml && msg.text !== "Photo") || (safeText && imgHtml) ? `<p class="${isEmojiOnly ? '' : 'text-sm'} leading-relaxed break-words font-medium">${safeText}</p>` : ''}
-                    
-                    <div class="flex items-center justify-end gap-1.5 mt-1.5 ${isEmojiOnly ? 'opacity-0 h-0 group-hover:opacity-100 group-hover:h-auto transition-all' : 'opacity-80'}">
-                        <span class="text-[9px] font-bold tracking-wider">${timeStr}</span>
-                        ${statusIcon}
+                <div id="msg-${msg.id}" class="message-bubble ${isMe ? 'self-end' : 'self-start'}" data-id="${msg.id}" data-text="${msg.text}">
+                    ${msg.replyTo ? `<div class="reply-tag-outside">Replied</div><div class="reply-content-outside">${msg.replyText}</div>` : ''}
+                    <div class="${isMe ? 'bubble-sent' : 'bubble-recv'}">
+                        ${msg.imageUrl ? `<img src="${msg.imageUrl}" class="w-48 rounded-lg mb-1">` : ''}
+                        <p class="text-sm">${msg.text}</p>
                     </div>
+                    <div class="text-[8px] font-bold text-gray-600 mt-1 ${isMe ? 'text-right' : 'text-left'}">${status}</div>
                 </div>
             `;
-            container.insertAdjacentHTML('beforeend', html);
-            
-            attachTouchEvents(document.getElementById(`msg-${msg.id}`));
+            document.getElementById('messages-list').insertAdjacentHTML('beforeend', html);
         }
 
-        function updateMessageDOM(el, data) {
-            // Re-render whole element easily by replacing outerHTML is complex, so we update parts
-            const isMe = el.getAttribute('data-isme') === "true";
-            
-            if (data.read && isMe) {
-                const statusBox = el.querySelector('.flex.items-center.justify-end');
-                if (statusBox) {
-                    statusBox.innerHTML = `
-                        <span class="text-[9px] font-bold tracking-wider">${statusBox.innerText.replace('✓','').trim()}</span>
-                        <i class="fas fa-check-double text-[#000] drop-shadow-md"></i>
-                    `;
-                }
-            }
+        // Live Listener
+        fs.onSnapshot(fs.query(fs.collection(db, `chats/${chatId}/messages`), fs.orderBy("timestamp", "asc")), (snap) => {
+            document.getElementById('messages-list').innerHTML = '';
+            snap.forEach(doc => renderMessage({id: doc.id, ...doc.data()}));
+            document.getElementById('chat-container').scrollTop = document.getElementById('chat-container').scrollHeight;
+        });
 
-            if (data.mediaType && (data.mediaType === 'once' || data.mediaType === 'twice')) {
-                const imgContainer = el.querySelector('.relative.group');
-                if (imgContainer && ((data.mediaType === 'once' && data.viewCount >= 1) || (data.mediaType === 'twice' && data.viewCount >= 2))) {
-                    imgContainer.outerHTML = `<div class="bg-black/30 text-white/50 border border-white/10 px-4 py-3 rounded-xl mb-1 flex items-center gap-2 italic text-xs"><i class="fas fa-eye-slash"></i> Photo Expired</div>`;
-                }
-            }
-        }
-
-        // --- MESSAGE SENDING ---
         async function sendMessage() {
             const input = document.getElementById('chat-input');
-            const text = input.value.trim();
-            const replyId = document.getElementById('reply-target-id').value;
-            const replyText = document.getElementById('reply-target-text').innerText;
-            const btn = document.getElementById('send-btn');
-            
-            if (!text) return;
-
-            btn.innerHTML = `<i class="fas fa-circle-notch fa-spin text-lg"></i>`;
-            input.disabled = true;
-
-            try {
-                const msgData = { text, senderId: currentUser.uid, timestamp: fs.serverTimestamp(), read: false };
-                if (replyId) { msgData.replyTo = replyId; msgData.replyText = replyText; }
-                await fs.addDoc(fs.collection(db, `chats/${chatId}/messages`), msgData);
-                
-                input.value = ''; input.style.height = '44px';
-                cancelReply();
-            } catch(e) { alert("Failed to send."); }
-
-            input.disabled = false;
-            btn.innerHTML = `<i class="fas fa-paper-plane text-lg relative right-[2px] bottom-[1px]"></i>`;
-            input.focus();
-        }
-
-        // --- IMAGE FLOW (CROP -> MODAL -> UPLOAD -> SEND) ---
-        function openImageEditor(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                const modal = document.getElementById('image-editor-modal');
-                const target = document.getElementById('cropper-target');
-                target.src = ev.target.result;
-                
-                modal.classList.remove('hidden');
-                modal.classList.add('flex');
-
-                if(cropperInstance) cropperInstance.destroy();
-                cropperInstance = new Cropper(target, { viewMode: 1, dragMode: 'move', background: false });
-                
-                // reset state
-                setMediaType('unlimited');
-                document.getElementById('image-caption').value = '';
-            };
-            reader.readAsDataURL(file);
-            e.target.value = ''; // clear
-        }
-
-        function closeImageEditor() {
-            document.getElementById('image-editor-modal').classList.add('hidden');
-            document.getElementById('image-editor-modal').classList.remove('flex');
-            if(cropperInstance) { cropperInstance.destroy(); cropperInstance = null; }
-        }
-
-        function setMediaType(type) {
-            selectedMediaType = type;
-            const btns = ['unlimited', 'twice', 'once'];
-            btns.forEach(b => {
-                const el = document.getElementById(`btn-type-${b}`);
-                if (b === type) {
-                    el.className = 'flex-1 py-2 text-[10px] font-black uppercase tracking-wider text-black bg-[#F47521] rounded-lg transition-all shadow-md';
-                } else {
-                    el.className = 'flex-1 py-2 text-[10px] font-black uppercase tracking-wider text-gray-500 hover:text-white rounded-lg transition-all';
-                }
+            await fs.addDoc(fs.collection(db, `chats/${chatId}/messages`), {
+                text: input.value, senderId: currentUser.uid, timestamp: fs.serverTimestamp(), read: false
             });
+            input.value = '';
         }
-
-        async function executeImageSend() {
-            if(!cropperInstance) return;
-            const btn = document.getElementById('btn-final-send');
-            const caption = document.getElementById('image-caption').value.trim();
-            const replyId = document.getElementById('reply-target-id').value;
-            const replyText = document.getElementById('reply-target-text').innerText;
-            
-            btn.innerHTML = `<i class="fas fa-circle-notch fa-spin"></i>`;
-            btn.disabled = true;
-
-            cropperInstance.getCroppedCanvas({ imageSmoothingEnabled: true, imageSmoothingQuality: 'high' }).toBlob(async (blob) => {
-                const formData = new FormData();
-                formData.append("image", blob, "media.jpg");
-
-                try {
-                    const res = await fetch(`https://api.imgbb.com/1/upload?key=4a683051e76ed12880a42aefa6ed427b`, { method: 'POST', body: formData });
-                    const data = await res.json();
-                    
-                    if(data.success) {
-                        const msgData = {
-                            text: caption, imageUrl: data.data.url, mediaType: selectedMediaType, viewCount: 0,
-                            senderId: currentUser.uid, timestamp: fs.serverTimestamp(), read: false
-                        };
-                        if (replyId) { msgData.replyTo = replyId; msgData.replyText = replyText; }
-                        await fs.addDoc(fs.collection(db, `chats/${chatId}/messages`), msgData);
-                        
-                        closeImageEditor();
-                        cancelReply();
-                    }
-                } catch(e) { alert("Upload failed."); }
-                
-                btn.innerText = "Send"; btn.disabled = false;
-            }, 'image/jpeg', 0.9);
-        }
-
-        // --- FULLSCREEN VIEWER ---
-        async function openImageViewer(url, caption, msgId, type) {
-            const modal = document.getElementById('image-viewer-modal');
-            document.getElementById('viewer-img').src = url;
-            document.getElementById('viewer-caption').innerText = caption;
-            document.getElementById('img-download-btn').href = url;
-
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-            setTimeout(() => modal.classList.remove('opacity-0'), 10);
-
-            // Update View Count for Ephemeral Messages
-            if (type === 'once' || type === 'twice') {
-                const docRef = fs.doc(db, `chats/${chatId}/messages`, msgId);
-                const snap = await fs.getDoc(docRef);
-                if (snap.exists() && snap.data().senderId !== currentUser.uid) {
-                    await fs.updateDoc(docRef, { viewCount: fs.increment(1) });
-                }
-            }
-        }
-
-        function closeImageViewer() {
-            const modal = document.getElementById('image-viewer-modal');
-            modal.classList.add('opacity-0');
-            setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
-        }
-
-        // --- SELECTION MODE (BULK ACTIONS) ---
-        function toggleSelection(el) {
-            const id = el.getAttribute('data-id');
-            if (selectedMessages.has(id)) {
-                selectedMessages.delete(id);
-                el.classList.remove('msg-selected');
-            } else {
-                selectedMessages.add(id);
-                el.classList.add('msg-selected');
-            }
-            
-            const count = selectedMessages.size;
-            if (count === 0) {
-                exitSelectionMode();
-            } else {
-                document.getElementById('selection-count').innerText = count;
-                // Only allow reply if exactly 1 message is selected
-                document.getElementById('sel-btn-reply').style.display = count === 1 ? 'block' : 'none';
-            }
-        }
-
-        function enterSelectionMode(el) {
-            navigator.vibrate?.(50);
-            isSelectionMode = true;
-            document.getElementById('default-header').classList.add('-translate-y-full');
-            document.getElementById('selection-header').classList.remove('-translate-y-full');
-            toggleSelection(el);
-        }
-
-        function exitSelectionMode() {
-            isSelectionMode = false;
-            selectedMessages.clear();
-            document.querySelectorAll('.message-bubble').forEach(el => el.classList.remove('msg-selected'));
-            document.getElementById('default-header').classList.remove('-translate-y-full');
-            document.getElementById('selection-header').classList.add('-translate-y-full');
-        }
-
-        function replySelected() {
-            if (selectedMessages.size !== 1) return;
-            const id = Array.from(selectedMessages)[0];
-            const el = document.getElementById(`msg-${id}`);
-            const isMe = el.getAttribute('data-isme') === "true";
-            
-            document.getElementById('reply-target-id').value = id;
-            document.getElementById('reply-target-name').innerText = isMe ? "Yourself" : targetUser.name;
-            document.getElementById('reply-target-text').innerText = el.getAttribute('data-text') || "Photo";
-            document.getElementById('reply-banner').classList.remove('hidden');
-            document.getElementById('chat-input').focus();
-            
-            exitSelectionMode();
-        }
-
-        function shareSelected() {
-            if (selectedMessages.size === 0) return;
-            let texts = [];
-            selectedMessages.forEach(id => {
-                const el = document.getElementById(`msg-${id}`);
-                if(el && el.getAttribute('data-text')) texts.push(el.getAttribute('data-text'));
-            });
-            const finalString = texts.join('\n\n');
-            exitSelectionMode();
-            
-            if (window.app.components && window.app.components.share && finalString) {
-                window.app.components.share(finalString);
-            } else {
-                if (navigator.share) { navigator.share({ title: 'Forward Message', text: finalString }); }
-            }
-        }
-
-        async function deleteSelected() {
-            if (selectedMessages.size === 0) return;
-            if(!confirm(`Delete ${selectedMessages.size} messages?`)) return;
-            
-            const batch = []; // Real code should use Firestore Batch, but loop works for now
-            for (let id of selectedMessages) {
-                const el = document.getElementById(`msg-${id}`);
-                if(el && el.getAttribute('data-isme') === "true") {
-                    await fs.deleteDoc(fs.doc(db, `chats/${chatId}/messages`, id));
-                }
-            }
-            exitSelectionMode();
-        }
-
-        // --- GESTURES (SWIPE & TAP) ---
-        function attachTouchEvents(el) {
-            let startX = 0; let startY = 0; let currentX = 0;
-
-            // Tap handling for selection mode
-            el.addEventListener('click', (e) => {
-                if (isSelectionMode) {
-                    e.preventDefault();
-                    toggleSelection(el);
-                }
-            });
-
-            el.addEventListener('touchstart', (e) => {
-                if(isSelectionMode) return;
-                startX = e.touches[0].clientX; startY = e.touches[0].clientY;
-                currentX = 0; el.style.transition = 'none';
-                
-                pressTimer = setTimeout(() => { enterSelectionMode(el); }, 600); // 600ms for long press
-            }, {passive: true});
-
-            el.addEventListener('touchmove', (e) => {
-                if(isSelectionMode) return;
-                const dx = e.touches[0].clientX - startX;
-                const dy = Math.abs(e.touches[0].clientY - startY);
-                
-                if (dy > 15 || Math.abs(dx) > 15) clearTimeout(pressTimer); // cancel long press if scrolling/swiping
-                
-                currentX = dx;
-                
-                // Longer threshold for swipe visuals
-                if(dx > 0 && dx < 120) el.style.transform = `translateX(${dx}px)`; 
-                if(dx < 0 && dx > -120) el.style.transform = `translateX(${dx}px)`; 
-            }, {passive: true});
-
-            el.addEventListener('touchend', (e) => {
-                if(isSelectionMode) return;
-                clearTimeout(pressTimer);
-                el.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'; // bouncy return
-                el.style.transform = `translateX(0px)`;
-
-                // Threshold set to 80 for activation
-                if (currentX > 80) {
-                    navigator.vibrate?.(50);
-                    const isMe = el.getAttribute('data-isme') === "true";
-                    document.getElementById('reply-target-id').value = el.getAttribute('data-id');
-                    document.getElementById('reply-target-name').innerText = isMe ? "Yourself" : targetUser.name;
-                    document.getElementById('reply-target-text').innerText = el.getAttribute('data-text') || "Photo";
-                    document.getElementById('reply-banner').classList.remove('hidden');
-                    document.getElementById('chat-input').focus();
-                } else if (currentX < -80) {
-                    navigator.vibrate?.(50);
-                    const msgText = el.getAttribute('data-text');
-                    if (window.app.components && window.app.components.share && msgText) {
-                        window.app.components.share(msgText); 
-                    } else if (navigator.share) {
-                        navigator.share({ title: 'Forward Message', text: msgText });
-                    }
-                }
-            });
-        }
-
-        // --- MENU HELPERS ---
-        function toggleTopMenu() {
-            document.getElementById('top-dropdown').classList.toggle('hidden');
-        }
-        function openProfile() { window.location.href = `profile.html?user=${targetUser.uid}`; }
-        async function clearChat() {
-            if(!confirm("Clear all your messages in this chat?")) return;
-            toggleTopMenu();
-            // Complex batch delete needed. For safety, UI alerts.
-            alert("Clear chat requires server-side cloud function for complete wipe. Not implemented in client to save bandwidth.");
-        }
-        function blockUser() { alert("Block function integrated with user profile schema."); toggleTopMenu(); }
-        function cancelReply() { document.getElementById('reply-target-id').value = ''; document.getElementById('reply-banner').classList.add('hidden'); }
     </script>
 </body>
 </html>
