@@ -1,135 +1,119 @@
-// play.js - Cinematic Heavy Player Engine (v2.1 - API Fixed & Robust)
+// player.js - Custom Cinematic Video Engine
 
-window.app.components.play = async () => {
-    const workspace = document.getElementById('player-workspace');
-    if (!workspace) return;
+window.app.components.player = async () => {
+    const playerRoot = document.getElementById('blazex-player-root');
+    if (!playerRoot) return;
 
-    // --- DIAGNOSTIC BOOT HUD ---
+    // --- BOOT SEQUENCE LOGGER ---
     const setBootStatus = (msg, isError = false) => {
         if (isError) {
-            workspace.innerHTML = `
-                <div class="flex flex-col items-center justify-center text-center p-6 w-full h-[60vh] bg-[#050505] border border-red-500/20 rounded-xl shadow-2xl">
-                    <i class="fas fa-exclamation-triangle text-4xl text-red-500 mb-4 animate-pulse"></i>
-                    <h3 class="text-white font-black text-lg uppercase tracking-widest">Playback Halted</h3>
-                    <p class="text-red-400 font-mono text-xs mt-2 bg-red-500/10 px-4 py-2 rounded border border-red-500/20 max-w-md">${msg}</p>
-                    <button onclick="window.location.reload()" class="mt-6 border border-white/10 bg-white/5 px-8 py-3 rounded-xl text-xs font-black uppercase text-white hover:bg-[#F47521] hover:text-black transition-all duration-300">Reboot Stream</button>
+            playerRoot.innerHTML = `
+                <div class="flex flex-col items-center justify-center text-center p-6 w-full h-full bg-[#050505] border border-red-500/20 rounded-xl shadow-2xl z-50 absolute inset-0">
+                    <i class="fas fa-exclamation-triangle text-3xl text-red-500 mb-2 animate-pulse"></i>
+                    <h3 class="text-white font-black text-sm uppercase tracking-widest">Playback Halted</h3>
+                    <p class="text-red-400 font-mono text-[10px] mt-2 bg-red-500/10 px-3 py-1 rounded border border-red-500/20 max-w-md">${msg}</p>
+                    <button onclick="window.location.reload()" class="mt-5 border border-white/10 bg-white/5 px-6 py-2 rounded-lg text-[10px] font-bold uppercase text-white hover:bg-[#F47521] hover:text-black transition-colors">Reboot Stream</button>
                 </div>
             `;
         } else {
-            if (!document.getElementById('boot-overlay')) {
-                workspace.innerHTML = `
-                    <div class="flex flex-col items-center justify-center text-center p-6 w-full h-[60vh] bg-[#050505] rounded-xl border border-white/5" id="boot-overlay">
-                        <div class="tk-loader scale-150 z-0 mb-8"><div class="tk-dot tk-dot-1"></div><div class="tk-dot tk-dot-2"></div></div>
-                        <p id="boot-status-text" class="text-[#F47521] font-mono font-black uppercase tracking-widest text-[10px] md:text-xs px-6 py-2 rounded shadow-2xl animate-pulse bg-[#F47521]/10 border border-[#F47521]/20">${msg}</p>
+            if (!document.getElementById('boot-status-text')) {
+                playerRoot.innerHTML = `
+                    <div class="flex flex-col items-center justify-center text-center p-6 w-full h-full bg-[#050505] z-50 absolute inset-0" id="boot-overlay">
+                        <div class="tk-loader scale-125 z-0 mb-6"><div class="tk-dot tk-dot-1"></div><div class="tk-dot tk-dot-2"></div></div>
+                        <p id="boot-status-text" class="text-[#F47521] font-mono font-bold uppercase tracking-widest text-[9px] md:text-[10px] px-4 py-1.5 rounded animate-pulse">${msg}</p>
                     </div>
                 `;
             } else {
-                const statusEl = document.getElementById('boot-status-text');
-                if (statusEl) statusEl.innerText = msg;
+                document.getElementById('boot-status-text').innerText = msg;
             }
         }
     };
 
-    setBootStatus("Initializing Engine...");
+    setBootStatus("Analyzing URL Parameters...");
 
-    // 🚀 FIXED: PROPER PARAMETER EXTRACTION
     const urlParams = new URLSearchParams(window.location.search);
-    const animeId = urlParams.get('anime'); // For Info & Episodes (e.g. re-zero-...)
-    const episodeId = urlParams.get('id'); // For Stream API (e.g. 1)
+    const animeId = urlParams.get('anime'); 
     const currentEpNum = parseInt(urlParams.get('ep') || '1'); 
-    let audioType = urlParams.get('type') || 'sub';
+    const audioType = urlParams.get('type') || 'sub';
     let targetServer = urlParams.get('server') || 'hd-1';
 
-    if (!animeId || !episodeId) {
-        setBootStatus("Missing core URL parameters (anime or id).", true);
+    if (!animeId || !currentEpNum) {
+        setBootStatus("Missing URL Parameters (Anime ID or Episode).", true);
         return;
     }
 
     const baseUrl = 'https://anikoto-api-xi.vercel.app';
     const customProxyUrl = 'https://icy-wave-30d8.prashant-yash69.workers.dev/proxy?url='; 
 
-    const profile = window.app.state?.activeProfile || null;
-    let autoSkipIntro = localStorage.getItem('blazex_autoskip_intro') === 'true';
-    let autoSkipOutro = localStorage.getItem('blazex_autoskip_outro') === 'true';
-
-    // Inject Custom Heavy CSS
-    if (!document.getElementById('blazex-heavy-css')) {
+    // Inject Player CSS safely
+    if (!document.getElementById('blazex-player-css')) {
         const style = document.createElement('style');
-        style.id = 'blazex-heavy-css';
+        style.id = 'blazex-player-css';
         style.innerHTML = `
-            .heavy-transition { transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); }
-            .player-ui-layer { opacity: 1; transition: opacity 0.5s ease; }
-            .player-ui-layer.idle { opacity: 0; cursor: none; pointer-events: none; }
+            input[type=range].blazex-slider { -webkit-appearance: none; width: 100%; background: transparent; cursor: pointer; height: 6px; outline: none; }
+            input[type=range].blazex-slider::-webkit-slider-runnable-track { background: rgba(255,255,255,0.2); height: 4px; border-radius: 4px; }
+            input[type=range].blazex-slider::-webkit-slider-thumb { -webkit-appearance: none; height: 12px; width: 12px; border-radius: 50%; background: #F47521; margin-top: -4px; box-shadow: 0 0 10px rgba(244,117,33,0.8); transition: transform 0.1s; }
+            input[type=range].blazex-slider:hover::-webkit-slider-thumb { transform: scale(1.3); }
             
-            /* Custom Premium Progress Bar */
-            .custom-slider-container { position: relative; width: 100%; height: 24px; display: flex; align-items: center; cursor: pointer; }
-            .custom-slider-track { position: absolute; top: 50%; transform: translateY(-50%); width: 100%; height: 4px; background: rgba(255,255,255,0.2); border-radius: 4px; overflow: hidden; transition: height 0.2s; }
-            .custom-slider-container:hover .custom-slider-track { height: 6px; }
-            .custom-slider-fill { position: absolute; top: 0; left: 0; height: 100%; background: #F47521; width: 0%; pointer-events: none; transition: width 0.1s linear; }
-            .custom-slider-marker { position: absolute; top: 0; height: 100%; background: rgba(168, 85, 247, 0.7); pointer-events: none; } 
-            .custom-slider-thumb { position: absolute; top: 50%; left: 0%; transform: translate(-50%, -50%) scale(0); width: 14px; height: 14px; background: #fff; border-radius: 50%; box-shadow: 0 0 10px rgba(0,0,0,0.5); pointer-events: none; transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-            .custom-slider-container:hover .custom-slider-thumb { transform: translate(-50%, -50%) scale(1); }
+            .player-ui-layer { transition: opacity 0.3s ease, background 0.3s ease; opacity: 1; }
+            .player-ui-layer.idle { opacity: 0; cursor: none; }
             
-            /* Fullscreen Fixes */
+            .ripple { position: absolute; border-radius: 50%; background: rgba(255,255,255,0.4); transform: scale(0); animation: ripple-anim 0.4s linear; pointer-events: none; }
+            @keyframes ripple-anim { to { transform: scale(4); opacity: 0; } }
+            
             #blazex-player-root:fullscreen { width: 100vw; height: 100vh; max-width: none; border-radius: 0; border: none; }
             #blazex-player-root:-webkit-full-screen { width: 100vw; height: 100vh; max-width: none; border-radius: 0; border: none; }
         `;
         document.head.appendChild(style);
     }
 
-    // Load HLS.js safely
     if (typeof window.Hls === 'undefined') {
         try {
             await new Promise((resolve, reject) => {
                 const script = document.createElement('script');
                 script.src = "https://cdn.jsdelivr.net/npm/hls.js@latest";
                 script.onload = resolve;
-                script.onerror = reject;
+                script.onerror = () => reject(new Error("Blocked script injection."));
                 document.head.appendChild(script);
+                setTimeout(() => reject(new Error("Timeout HLS engine.")), 5000);
             });
         } catch (e) {
-            setBootStatus(`HLS Engine injection failed. Check connection.`, true);
+            setBootStatus(`Engine Failure: ${e.message}`, true);
             return;
         }
     }
 
     try {
-        setBootStatus(`Connecting to Server ${targetServer.toUpperCase()}...`);
+        setBootStatus(`Connecting to ${targetServer.toUpperCase()}...`);
         
         let streamData = null;
-        let episodesList = [];
-        let animeInfo = {};
+        
+        const fetchStream = async (srv) => {
+            try {
+                const res = await fetch(`${baseUrl}/api/stream?id=${animeId}&ep=${currentEpNum}&server=${srv}&type=${audioType}`);
+                const json = await res.json();
+                if (json.success && json.data?.m3u8) return json.data;
+            } catch (err) {}
+            return null;
+        };
 
-        // 🚀 FIXED: Fetch Stream using `episodeId` instead of `animeId`
-        const [streamRes, epsRes, infoRes] = await Promise.all([
-            fetch(`${baseUrl}/api/stream?id=${episodeId}&server=${targetServer}&type=${audioType}`).then(r => r.json()).catch(()=>null),
-            fetch(`${baseUrl}/api/episodes/${animeId}`).then(r => r.json()).catch(()=>null),
-            fetch(`${baseUrl}/api/info?id=${animeId}`).then(r => r.json()).catch(()=>null)
-        ]);
-
-        if (streamRes && streamRes.success && streamRes.data?.m3u8) {
-            streamData = streamRes.data;
-        } else {
-            setBootStatus("Primary server offline. Auto-switching to fallback HD-2...");
-            const fallbackServer = targetServer === 'hd-1' ? 'hd-2' : 'hd-1';
-            const fbRes = await fetch(`${baseUrl}/api/stream?id=${episodeId}&server=${fallbackServer}&type=${audioType}`).then(r=>r.json()).catch(()=>null);
+        streamData = await fetchStream(targetServer);
+        
+        // 🚀 AUTO-SWITCH SERVER LOGIC
+        if (!streamData && targetServer === 'hd-1') {
+            setBootStatus("HD-1 Offline. Auto-switching to HD-2...");
+            targetServer = 'hd-2';
+            streamData = await fetchStream(targetServer);
             
-            if (fbRes && fbRes.success && fbRes.data?.m3u8) {
-                streamData = fbRes.data;
-                targetServer = fallbackServer;
-                const newUrl = new URL(window.location);
-                newUrl.searchParams.set('server', targetServer);
-                window.history.replaceState({}, '', newUrl);
-            } else {
-                throw new Error("All streaming servers are unresponsive for this episode. Please try another server or Audio Type.");
-            }
+            // Silently update URL param
+            const newUrl = new URL(window.location);
+            newUrl.searchParams.set('server', 'hd-2');
+            window.history.replaceState({}, '', newUrl);
         }
 
-        if (infoRes && infoRes.success) animeInfo = infoRes.data;
-        if (epsRes && epsRes.success) {
-            if (Array.isArray(epsRes.data)) episodesList = epsRes.data;
-            else if (epsRes.results && Array.isArray(epsRes.results.episodes)) episodesList = epsRes.results.episodes;
-        }
+        if (!streamData) throw new Error("All stream servers are unresponsive for this episode.");
+
+        setBootStatus("Constructing Cinematic Pipeline...");
 
         const streamUrl = streamData.m3u8; 
         const targetReferer = streamData.referer || "https://vidwish.live/";
@@ -141,207 +125,101 @@ window.app.components.play = async () => {
 
         const proxiedStreamUrl = customProxyUrl + encodeURIComponent(streamUrl) + '&referer=' + encodeURIComponent(targetReferer);
 
-        const hasNextEp = episodesList.some(e => parseInt(e.num || e.episode_no) === currentEpNum + 1);
+        // 🚀 SMART NEXT EPISODE LOGIC
+        const epsList = window.app.state.currentEpisodesListProcessed || [];
+        const hasNextEp = epsList.some(e => parseInt(e.num || e.episode_no) === currentEpNum + 1);
         let nextEpSlug = null;
         if (hasNextEp) {
-            const nextEpData = episodesList.find(e => parseInt(e.num || e.episode_no) === currentEpNum + 1);
+            const nextEpData = epsList.find(e => parseInt(e.num || e.episode_no) === currentEpNum + 1);
             nextEpSlug = nextEpData.slug || nextEpData.id || String(currentEpNum + 1);
         }
 
-        const animeTitle = animeInfo.title || animeId.replace(/-/g, ' ').toUpperCase();
-
-        // 🚀 MASTER PLAYER UI HTML
-        workspace.innerHTML = `
-            <div class="w-full max-w-6xl mx-auto flex flex-col gap-6 animate-fade-in opacity-0 heavy-transition" id="play-content-wrapper">
+        // --- CUSTOM UI HTML ---
+        playerRoot.innerHTML = `
+            <div id="video-container" class="relative w-full h-full bg-black group flex items-center justify-center overflow-hidden">
+                <video id="main-video-player" playsinline class="w-full h-full object-contain pointer-events-none"></video>
                 
-                <div id="blazex-player-root" class="w-full aspect-video md:aspect-[21/9] bg-black rounded-xl shadow-2xl border border-white/5 overflow-hidden flex flex-col relative group select-none">
-                    
-                    <video id="main-video-player" playsinline class="w-full h-full object-contain pointer-events-none absolute inset-0"></video>
-                    
-                    <!-- Gesture Overlay (Handles Taps) -->
-                    <div id="gesture-overlay" class="absolute inset-0 z-10 cursor-pointer"></div>
-                    
-                    <!-- 2x Speed Indicator -->
-                    <div id="speed-indicator" class="absolute top-8 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-md text-white px-5 py-2 rounded-full text-[10px] font-black tracking-widest uppercase transition-opacity duration-300 opacity-0 z-40 flex items-center gap-2 border border-[#F47521]/30 shadow-[0_0_15px_rgba(244,117,33,0.3)] pointer-events-none">
-                        <span>2x Speed</span> <i class="fas fa-forward text-[#F47521]"></i>
-                    </div>
-
-                    <!-- Double Tap Feedback -->
-                    <div id="dt-left" class="absolute left-1/4 top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center text-white/90 opacity-0 transition-opacity duration-300 z-20 pointer-events-none bg-black/40 p-4 rounded-full backdrop-blur-sm">
-                        <div class="flex"><i class="fas fa-caret-left text-3xl"></i><i class="fas fa-caret-left text-3xl -ml-2"></i></div>
-                        <span class="text-xs font-black mt-1">10s</span>
-                    </div>
-                    <div id="dt-right" class="absolute right-1/4 top-1/2 -translate-y-1/2 translate-x-1/2 flex flex-col items-center text-white/90 opacity-0 transition-opacity duration-300 z-20 pointer-events-none bg-black/40 p-4 rounded-full backdrop-blur-sm">
-                        <div class="flex"><i class="fas fa-caret-right text-3xl"></i><i class="fas fa-caret-right text-3xl -ml-2"></i></div>
-                        <span class="text-xs font-black mt-1">10s</span>
-                    </div>
-
-                    <!-- Skip Buttons -->
-                    <button id="skip-intro-btn" class="absolute bottom-24 right-6 bg-white/95 backdrop-blur-md text-black font-black uppercase tracking-widest text-[10px] px-5 py-2.5 rounded-lg shadow-2xl heavy-transition transform translate-x-[150%] opacity-0 hover:bg-[#F47521] hover:text-white hover:scale-105 z-40 border border-white/20">
-                        Skip Intro <i class="fas fa-forward ml-2"></i>
-                    </button>
-                    <button id="skip-outro-btn" class="absolute bottom-24 right-6 bg-white/95 backdrop-blur-md text-black font-black uppercase tracking-widest text-[10px] px-5 py-2.5 rounded-lg shadow-2xl heavy-transition transform translate-x-[150%] opacity-0 hover:bg-[#F47521] hover:text-white hover:scale-105 z-40 border border-white/20">
-                        ${hasNextEp ? `Next Episode <i class="fas fa-step-forward ml-2"></i>` : `Skip Outro <i class="fas fa-forward ml-2"></i>`}
-                    </button>
-
-                    <!-- UI CONTROLS LAYER -->
-                    <div id="ui-layer" class="player-ui-layer absolute inset-0 z-30 flex flex-col justify-between bg-gradient-to-t from-black/95 via-transparent to-black/80 pointer-events-none">
-                        
-                        <!-- Top Bar (Title & Settings) -->
-                        <div class="w-full flex items-center justify-between p-4 md:p-6 pointer-events-auto">
-                            <button id="in-player-ep-btn" class="flex flex-col items-start hover:bg-white/10 p-2 -m-2 rounded-lg heavy-transition group">
-                                <span class="text-[#F47521] text-[9px] font-black uppercase tracking-widest mb-0.5 group-hover:text-white">${animeTitle}</span>
-                                <div class="flex items-center gap-2">
-                                    <h2 class="text-white text-sm md:text-lg font-black tracking-wide drop-shadow-md">Episode ${currentEpNum}</h2>
-                                    <i class="fas fa-chevron-down text-gray-400 text-[10px] group-hover:translate-y-0.5 heavy-transition"></i>
-                                </div>
-                            </button>
-                            
-                            <div class="flex items-center gap-3">
-                                ${targetServer === 'hd-2' ? '<span class="bg-red-500/20 text-red-500 border border-red-500/30 px-2 py-0.5 rounded text-[8px] font-black uppercase shadow-sm">Server 2</span>' : ''}
-                                <button id="master-settings-btn" class="w-10 h-10 rounded-full bg-black/50 border border-white/10 text-white hover:text-[#F47521] hover:border-[#F47521] heavy-transition flex items-center justify-center backdrop-blur-md">
-                                    <i class="fas fa-cog text-lg transition-transform duration-500" id="master-settings-icon"></i>
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <!-- Center Play/Pause (Animated) -->
-                        <div class="flex items-center justify-center pointer-events-none">
-                            <div id="center-play-anim" class="w-20 h-20 bg-black/50 backdrop-blur-md border-2 border-white/20 rounded-full text-white flex items-center justify-center opacity-0 scale-150 heavy-transition">
-                                <i id="center-anim-icon" class="fas fa-play text-3xl ml-1"></i>
-                            </div>
-                        </div>
-
-                        <!-- Bottom Controls -->
-                        <div class="w-full flex flex-col px-4 md:px-6 pb-4 pt-8 pointer-events-auto">
-                            
-                            <!-- Custom Interactive Progress Bar -->
-                            <div class="w-full flex items-center gap-4 mb-3">
-                                <span id="time-current" class="text-white text-[11px] font-mono font-bold w-12 text-right">00:00</span>
-                                
-                                <div id="progress-container" class="custom-slider-container flex-1">
-                                    <div class="custom-slider-track">
-                                        <div id="intro-marker" class="custom-slider-marker hidden"></div>
-                                        <div id="outro-marker" class="custom-slider-marker hidden"></div>
-                                        <div id="progress-fill" class="custom-slider-fill"></div>
-                                    </div>
-                                    <div id="progress-thumb" class="custom-slider-thumb"></div>
-                                </div>
-
-                                <span id="time-duration" class="text-gray-400 text-[11px] font-mono font-bold w-12">00:00</span>
-                            </div>
-
-                            <!-- Action Buttons -->
-                            <div class="w-full flex items-center justify-between">
-                                <div class="flex items-center gap-5">
-                                    <button id="bottom-play-btn" class="text-white hover:text-[#F47521] heavy-transition w-8 flex justify-center"><i id="bottom-play-icon" class="fas fa-play text-xl"></i></button>
-                                    <button id="vol-btn" class="text-white hover:text-[#F47521] heavy-transition hidden sm:block w-8 flex justify-center"><i id="vol-icon" class="fas fa-volume-up text-lg"></i></button>
-                                </div>
-                                <div class="flex items-center gap-5">
-                                    <button id="skip-fwd-btn" class="text-white hover:text-[#F47521] heavy-transition w-8 flex justify-center hidden sm:block"><i class="fas fa-forward text-lg"></i></button>
-                                    <button id="fs-btn" class="text-white hover:text-[#F47521] heavy-transition w-8 flex justify-center"><i id="fs-icon" class="fas fa-expand text-xl"></i></button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- OVERLAYS (Settings & Episodes) -->
-                    
-                    <!-- Settings Modal -->
-                    <div id="settings-modal" class="absolute inset-y-0 right-0 w-full sm:w-80 bg-black/95 backdrop-blur-2xl border-l border-white/10 z-[60] transform translate-x-full heavy-transition flex flex-col pointer-events-auto">
-                        <div class="p-4 border-b border-white/10 flex items-center justify-between bg-[#111]">
-                            <h3 class="text-white font-black uppercase tracking-widest text-sm"><i class="fas fa-sliders-h text-[#F47521] mr-2"></i> Player Settings</h3>
-                            <button id="close-settings-btn" class="text-gray-400 hover:text-white p-2 rounded-full hover:bg-white/10 heavy-transition"><i class="fas fa-times"></i></button>
-                        </div>
-                        <div class="flex-1 overflow-y-auto hide-scrollbar p-4 flex flex-col gap-6">
-                            
-                            <!-- Quality -->
-                            <div>
-                                <h4 class="text-gray-500 text-[9px] font-black uppercase tracking-widest mb-2">Video Quality</h4>
-                                <div id="settings-quality-list" class="flex flex-col gap-1"></div>
-                            </div>
-
-                            <!-- Audio / Server -->
-                            <div>
-                                <h4 class="text-gray-500 text-[9px] font-black uppercase tracking-widest mb-2">Audio & Server</h4>
-                                <div class="grid grid-cols-2 gap-2 mb-2">
-                                    <button onclick="window.app.changePlayerConfig('type', 'sub')" class="py-2 rounded-lg text-xs font-bold ${audioType === 'sub' ? 'bg-[#F47521] text-black' : 'bg-[#111] text-white border border-white/10 hover:bg-white/10'} heavy-transition">Sub</button>
-                                    <button onclick="window.app.changePlayerConfig('type', 'dub')" class="py-2 rounded-lg text-xs font-bold ${audioType === 'dub' ? 'bg-[#F47521] text-black' : 'bg-[#111] text-white border border-white/10 hover:bg-white/10'} heavy-transition">Dub</button>
-                                </div>
-                                <div class="grid grid-cols-2 gap-2">
-                                    <button onclick="window.app.changePlayerConfig('server', 'hd-1')" class="py-2 rounded-lg text-xs font-bold ${targetServer === 'hd-1' ? 'bg-white text-black' : 'bg-[#111] text-white border border-white/10 hover:bg-white/10'} heavy-transition">HD-1</button>
-                                    <button onclick="window.app.changePlayerConfig('server', 'hd-2')" class="py-2 rounded-lg text-xs font-bold ${targetServer === 'hd-2' ? 'bg-white text-black' : 'bg-[#111] text-white border border-white/10 hover:bg-white/10'} heavy-transition">HD-2</button>
-                                </div>
-                            </div>
-
-                            <!-- Subtitles -->
-                            <div>
-                                <h4 class="text-gray-500 text-[9px] font-black uppercase tracking-widest mb-2">Captions / Subtitles</h4>
-                                <div id="settings-subs-list" class="flex flex-col gap-1"></div>
-                            </div>
-
-                        </div>
-                    </div>
-
-                    <!-- Episodes In-Player Modal -->
-                    <div id="episodes-modal" class="absolute inset-0 bg-black/95 backdrop-blur-2xl z-[60] flex flex-col transform -translate-y-full heavy-transition pointer-events-auto">
-                        <div class="p-4 border-b border-white/10 flex items-center justify-between bg-gradient-to-b from-[#111] to-transparent">
-                            <h3 class="text-white font-black uppercase tracking-widest text-sm"><i class="fas fa-list text-[#F47521] mr-2"></i> Select Episode</h3>
-                            <button id="close-episodes-btn" class="text-gray-400 hover:text-white w-8 h-8 flex justify-center items-center rounded-full bg-white/5 hover:bg-[#F47521] hover:text-black heavy-transition"><i class="fas fa-times"></i></button>
-                        </div>
-                        <div class="flex-1 overflow-y-auto hide-scrollbar p-4">
-                            <div class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-10 lg:grid-cols-12 gap-2" id="in-player-ep-grid"></div>
-                        </div>
-                    </div>
-
+                <div id="gesture-overlay" class="absolute inset-0 z-10"></div>
+                
+                <div id="speed-indicator" class="absolute top-6 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm text-white px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase transition-opacity duration-200 opacity-0 z-40 flex items-center gap-2 border border-white/10">
+                    <span>2x Speed</span> <i class="fas fa-forward text-[#F47521]"></i>
                 </div>
-                
-                <!-- OUTSIDE PLAYER CONTROLS -->
-                <div class="w-full flex items-center justify-between gap-4 bg-[#0a0a0a] p-4 rounded-xl border border-white/5 shadow-md mt-2">
-                    <h1 class="text-lg md:text-xl font-black text-white tracking-tight leading-tight truncate flex-1">E${currentEpNum}: ${animeTitle}</h1>
-                    <div class="flex items-center gap-5 text-[10px] font-black uppercase tracking-wider text-gray-400 shrink-0">
-                        <label class="flex items-center gap-2 cursor-pointer hover:text-white transition-colors">
-                            <input type="checkbox" id="toggle-skip-intro" class="hidden" onchange="window.app.toggleAutoSkip('intro')" ${autoSkipIntro ? 'checked' : ''}>
-                            <div class="w-8 h-4 bg-[#111] border border-white/20 rounded-full relative transition-colors toggle-bg"><div class="w-3 h-3 bg-gray-400 rounded-full absolute top-[1px] left-[2px] transition-transform toggle-dot"></div></div>
-                            Skip Intro
-                        </label>
-                        <label class="flex items-center gap-2 cursor-pointer hover:text-white transition-colors">
-                            <input type="checkbox" id="toggle-skip-outro" class="hidden" onchange="window.app.toggleAutoSkip('outro')" ${autoSkipOutro ? 'checked' : ''}>
-                            <div class="w-8 h-4 bg-[#111] border border-white/20 rounded-full relative transition-colors toggle-bg"><div class="w-3 h-3 bg-gray-400 rounded-full absolute top-[1px] left-[2px] transition-transform toggle-dot"></div></div>
-                            Skip Outro
-                        </label>
+
+                <div id="dt-left" class="absolute left-10 top-1/2 -translate-y-1/2 flex flex-col items-center text-white/80 opacity-0 transition-opacity z-20 pointer-events-none">
+                    <div class="flex"><i class="fas fa-caret-left text-2xl"></i><i class="fas fa-caret-left text-2xl -ml-2"></i></div>
+                    <span class="text-xs font-bold mt-1">10s</span>
+                </div>
+                <div id="dt-right" class="absolute right-10 top-1/2 -translate-y-1/2 flex flex-col items-center text-white/80 opacity-0 transition-opacity z-20 pointer-events-none">
+                    <div class="flex"><i class="fas fa-caret-right text-2xl"></i><i class="fas fa-caret-right text-2xl -ml-2"></i></div>
+                    <span class="text-xs font-bold mt-1">10s</span>
+                </div>
+
+                <button id="skip-intro-btn" class="absolute bottom-20 right-4 bg-white/90 backdrop-blur-sm text-black font-black uppercase tracking-widest text-[10px] px-4 py-2 rounded-lg shadow-lg transition-all transform translate-x-[150%] opacity-0 hover:bg-[#F47521] hover:text-white z-40 border border-white/20">
+                    Skip Intro <i class="fas fa-forward ml-1"></i>
+                </button>
+                <button id="skip-outro-btn" class="absolute bottom-20 right-4 bg-white/90 backdrop-blur-sm text-black font-black uppercase tracking-widest text-[10px] px-4 py-2 rounded-lg shadow-lg transition-all transform translate-x-[150%] opacity-0 hover:bg-[#F47521] hover:text-white z-40 border border-white/20">
+                    ${hasNextEp ? `Next Episode <i class="fas fa-step-forward ml-1"></i>` : `Skip Outro <i class="fas fa-forward ml-1"></i>`}
+                </button>
+
+                <div id="ui-layer" class="player-ui-layer absolute inset-0 z-30 flex flex-col justify-between bg-gradient-to-t from-black/90 via-transparent to-black/60 pointer-events-none">
+                    
+                    <div class="w-full flex items-center justify-between p-4 pointer-events-auto">
+                        <h2 class="text-white text-xs md:text-sm font-bold tracking-wide drop-shadow-md truncate pr-4">Episode ${currentEpNum}</h2>
+                        ${targetServer === 'hd-2' ? '<span class="bg-[#F47521] text-black px-2 py-0.5 rounded text-[8px] font-black uppercase shadow-sm border border-black">HD-2</span>' : ''}
+                    </div>
+                    
+                    <div class="flex items-center justify-center pointer-events-auto">
+                        <button id="center-play-btn" class="w-16 h-16 bg-black/40 backdrop-blur-sm border border-white/20 rounded-full text-white flex items-center justify-center hover:bg-[#F47521]/90 hover:border-[#F47521] hover:scale-110 transition-all">
+                            <i id="center-play-icon" class="fas fa-play text-2xl ml-1"></i>
+                        </button>
+                    </div>
+
+                    <div class="w-full flex flex-col px-4 pb-3 pt-4 pointer-events-auto">
+                        
+                        <div class="w-full flex items-center gap-3 mb-2">
+                            <span id="time-current" class="text-white text-[10px] font-mono w-10 text-right">00:00</span>
+                            <input type="range" id="progress-bar" class="blazex-slider flex-1" value="0" min="0" step="0.1">
+                            <span id="time-duration" class="text-gray-400 text-[10px] font-mono w-10">00:00</span>
+                        </div>
+
+                        <div class="w-full flex items-center justify-between">
+                            <div class="flex items-center gap-4">
+                                <button id="bottom-play-btn" class="text-white hover:text-[#F47521] transition-colors"><i id="bottom-play-icon" class="fas fa-play text-lg"></i></button>
+                                <button id="vol-btn" class="text-white hover:text-[#F47521] transition-colors hidden sm:block"><i id="vol-icon" class="fas fa-volume-up"></i></button>
+                            </div>
+                            
+                            <div class="flex items-center gap-4 relative">
+                                <button id="settings-btn" class="text-white hover:text-[#F47521] transition-colors"><i class="fas fa-cog text-lg transition-transform" id="settings-icon"></i></button>
+                                <button id="fs-btn" class="text-white hover:text-[#F47521] transition-colors"><i id="fs-icon" class="fas fa-expand text-lg"></i></button>
+                                
+                                <div id="settings-menu" class="hidden absolute bottom-full right-0 mb-4 w-48 bg-[#111]/95 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-2 flex flex-col gap-1 z-50">
+                                    <div class="text-[9px] font-black uppercase text-gray-500 px-2 pt-1">Quality</div>
+                                    <div id="quality-list" class="flex flex-col gap-1 max-h-32 overflow-y-auto hide-scrollbar mb-2"></div>
+                                    <div class="text-[9px] font-black uppercase text-gray-500 px-2 pt-1 border-t border-white/5">Subtitles</div>
+                                    <div id="subs-list" class="flex flex-col gap-1 max-h-32 overflow-y-auto hide-scrollbar"></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         `;
 
-        const tStyle = document.createElement('style');
-        tStyle.innerHTML = `input:checked + .toggle-bg { background-color: #F47521; border-color: #F47521; } input:checked + .toggle-bg .toggle-dot { transform: translateX(14px); background-color: black; }`;
-        document.head.appendChild(tStyle);
-
-        setTimeout(() => { 
-            const wrapper = document.getElementById('play-content-wrapper');
-            if(wrapper) wrapper.classList.remove('opacity-0'); 
-        }, 150);
-
-        // --- DOM REFERENCES ---
         const video = document.getElementById('main-video-player');
         const overlay = document.getElementById('gesture-overlay');
         const uiLayer = document.getElementById('ui-layer');
+        const progressBar = document.getElementById('progress-bar');
         const playBtnBottom = document.getElementById('bottom-play-btn');
         const playIconBottom = document.getElementById('bottom-play-icon');
-        const centerAnim = document.getElementById('center-play-anim');
-        const centerAnimIcon = document.getElementById('center-anim-icon');
+        const playBtnCenter = document.getElementById('center-play-btn');
+        const playIconCenter = document.getElementById('center-play-icon');
         const fsBtn = document.getElementById('fs-btn');
+        const fsIcon = document.getElementById('fs-icon');
         const timeCurr = document.getElementById('time-current');
         const timeDur = document.getElementById('time-duration');
+        const settingsBtn = document.getElementById('settings-btn');
+        const settingsMenu = document.getElementById('settings-menu');
         
-        const progContainer = document.getElementById('progress-container');
-        const progFill = document.getElementById('progress-fill');
-        const progThumb = document.getElementById('progress-thumb');
-        const introMarker = document.getElementById('intro-marker');
-        const outroMarker = document.getElementById('outro-marker');
-
         let hlsInstance = null;
 
         // --- SUBTITLES ---
@@ -357,7 +235,7 @@ window.app.components.play = async () => {
             }
         });
 
-        // --- HLS ENGINE ---
+        // --- HLS LOGIC ---
         if (Hls.isSupported()) {
             hlsInstance = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 60 });
             hlsInstance.loadSource(proxiedStreamUrl);
@@ -365,7 +243,8 @@ window.app.components.play = async () => {
             
             hlsInstance.on(Hls.Events.MANIFEST_PARSED, function() {
                 buildSettingsMenu(hlsInstance, video);
-                // Resume Progress
+                // Attempt to resume progress
+                const profile = window.app.state?.activeProfile || null;
                 if (profile && profile.uid) {
                     const stored = localStorage.getItem(`blazex_progress_${profile.uid}_${animeId}`);
                     if (stored) {
@@ -375,143 +254,133 @@ window.app.components.play = async () => {
                         }
                     }
                 }
-                video.play().catch(e=>console.log("Autoplay blocked by browser"));
+                video.play().catch(e => console.log("Autoplay blocked."));
             });
 
             hlsInstance.on(Hls.Events.ERROR, function (event, data) {
                 if (data.fatal) {
-                    if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hlsInstance.recoverMediaError();
-                    else { setBootStatus(`HLS Fatal Error: ${data.details}`, true); hlsInstance.destroy(); }
+                    if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+                        hlsInstance.recoverMediaError();
+                    } else {
+                        setBootStatus(`Stream Data Corrupted. Details: ${data.details}`, true);
+                        hlsInstance.destroy();
+                    }
                 }
             });
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
             video.src = proxiedStreamUrl;
-            video.addEventListener('loadedmetadata', () => { video.play().catch(e=>e); buildSettingsMenu(null, video); });
+            video.addEventListener('loadedmetadata', () => {
+                video.play().catch(e=>e);
+                buildSettingsMenu(null, video);
+            });
         }
 
-        // --- PROGRESS BAR LOGIC (CUSTOM) ---
-        const formatTime = (sec) => {
-            if (isNaN(sec)) return "00:00";
-            const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.floor(sec % 60);
-            return h > 0 ? `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}` : `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
-        };
-
-        video.addEventListener('loadedmetadata', () => {
-            timeDur.innerText = formatTime(video.duration);
-            // Draw Highlight Markers for Intro/Outro
-            if(introEnd > 0 && video.duration > 0) {
-                introMarker.style.left = `${(introStart/video.duration)*100}%`;
-                introMarker.style.width = `${((introEnd-introStart)/video.duration)*100}%`;
-                introMarker.classList.remove('hidden');
-            }
-            if(outroEnd > 0 && video.duration > 0) {
-                outroMarker.style.left = `${(outroStart/video.duration)*100}%`;
-                outroMarker.style.width = `${((outroEnd-outroStart)/video.duration)*100}%`;
-                outroMarker.classList.remove('hidden');
-            }
-        });
-
-        video.addEventListener('timeupdate', () => {
-            if (isDraggingProgress) return;
-            const pct = (video.currentTime / video.duration) * 100;
-            progFill.style.width = `${pct}%`;
-            progThumb.style.left = `${pct}%`;
-            timeCurr.innerText = formatTime(video.currentTime);
-            
-            // Auto Save Progress every 5 sec
-            if (Math.floor(video.currentTime) % 5 === 0 && video.currentTime > 0) saveProgress(video.currentTime);
-        });
-
-        let isDraggingProgress = false;
-        const updateProgressFromEvent = (e) => {
-            const rect = progContainer.getBoundingClientRect();
-            let pct = (e.clientX || (e.touches ? e.touches[0].clientX : 0)) - rect.left;
-            pct = Math.max(0, Math.min(1, pct / rect.width));
-            progFill.style.width = `${pct * 100}%`;
-            progThumb.style.left = `${pct * 100}%`;
-            timeCurr.innerText = formatTime(pct * video.duration);
-            return pct;
-        };
-
-        progContainer.addEventListener('mousedown', (e) => { isDraggingProgress = true; updateProgressFromEvent(e); });
-        progContainer.addEventListener('touchstart', (e) => { isDraggingProgress = true; updateProgressFromEvent(e); }, {passive: true});
-        
-        document.addEventListener('mousemove', (e) => { if(isDraggingProgress) updateProgressFromEvent(e); });
-        document.addEventListener('touchmove', (e) => { if(isDraggingProgress) updateProgressFromEvent(e); }, {passive: true});
-        
-        document.addEventListener('mouseup', (e) => { if(isDraggingProgress) { video.currentTime = updateProgressFromEvent(e) * video.duration; isDraggingProgress = false; } });
-        document.addEventListener('touchend', (e) => { if(isDraggingProgress) { isDraggingProgress = false; } });
-
-        // --- PLAY/PAUSE ANIMATION ---
-        const triggerCenterAnim = (iconClass) => {
-            centerAnimIcon.className = `${iconClass} text-3xl`;
-            if (iconClass.includes('play')) centerAnimIcon.classList.add('ml-1'); else centerAnimIcon.classList.remove('ml-1');
-            
-            centerAnim.classList.remove('opacity-0', 'scale-150');
-            centerAnim.classList.add('opacity-100', 'scale-100');
-            setTimeout(() => {
-                centerAnim.classList.remove('opacity-100', 'scale-100');
-                centerAnim.classList.add('opacity-0', 'scale-150');
-            }, 400);
-        };
-
-        const togglePlayPause = () => {
-            if (video.paused) { video.play(); triggerCenterAnim('fas fa-play'); }
-            else { video.pause(); triggerCenterAnim('fas fa-pause'); }
-        };
-
-        video.addEventListener('play', () => { playIconBottom.className = 'fas fa-pause text-xl'; resetHideTimer(); });
-        video.addEventListener('pause', () => { playIconBottom.className = 'fas fa-play text-xl ml-0.5'; uiLayer.classList.remove('idle'); clearTimeout(hideTimer); });
-        playBtnBottom.addEventListener('click', (e) => { e.stopPropagation(); togglePlayPause(); });
-
-        // --- AUTO-HIDE UI ---
+        // --- UI AUTO-HIDE LOGIC ---
         let hideTimer;
         const resetHideTimer = () => {
             uiLayer.classList.remove('idle');
-            workspace.style.cursor = 'default';
+            playerRoot.style.cursor = 'default';
             clearTimeout(hideTimer);
             if (!video.paused) {
                 hideTimer = setTimeout(() => {
-                    if(!isSettingsOpen && !isEpisodesOpen) {
-                        uiLayer.classList.add('idle');
-                        workspace.style.cursor = 'none';
-                    }
+                    uiLayer.classList.add('idle');
+                    playerRoot.style.cursor = 'none';
+                    settingsMenu.classList.add('hidden');
                 }, 4000);
             }
         };
 
-        overlay.addEventListener('mousemove', resetHideTimer);
-        uiLayer.addEventListener('mousemove', resetHideTimer);
+        playerRoot.addEventListener('mousemove', resetHideTimer);
+        playerRoot.addEventListener('touchstart', resetHideTimer, {passive: true});
+        playerRoot.addEventListener('mouseleave', () => { if(!video.paused) { uiLayer.classList.add('idle'); settingsMenu.classList.add('hidden'); } });
 
-        // --- GESTURES (HEAVY DELAY LOGIC) ---
+        // --- PLAY/PAUSE LOGIC ---
+        const togglePlay = () => {
+            if (video.paused) video.play();
+            else video.pause();
+        };
+
+        video.addEventListener('play', () => {
+            playIconBottom.className = 'fas fa-pause text-lg';
+            playIconCenter.className = 'fas fa-pause text-2xl ml-0';
+            playBtnCenter.classList.add('opacity-0', 'scale-150'); // pop out animation
+            setTimeout(() => playBtnCenter.classList.add('hidden'), 300);
+            resetHideTimer();
+        });
+
+        video.addEventListener('pause', () => {
+            playIconBottom.className = 'fas fa-play text-lg';
+            playIconCenter.className = 'fas fa-play text-2xl ml-1';
+            playBtnCenter.classList.remove('hidden');
+            setTimeout(() => playBtnCenter.classList.remove('opacity-0', 'scale-150'), 10);
+            uiLayer.classList.remove('idle');
+            clearTimeout(hideTimer);
+        });
+
+        playBtnBottom.addEventListener('click', (e) => { e.stopPropagation(); togglePlay(); });
+        playBtnCenter.addEventListener('click', (e) => { e.stopPropagation(); togglePlay(); });
+
+        // --- PROGRESS BAR LOGIC ---
+        const formatTime = (sec) => {
+            const h = Math.floor(sec / 3600);
+            const m = Math.floor((sec % 3600) / 60);
+            const s = Math.floor(sec % 60);
+            if (h > 0) return `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+            return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+        };
+
+        video.addEventListener('loadedmetadata', () => {
+            progressBar.max = video.duration;
+            timeDur.innerText = formatTime(video.duration);
+        });
+
+        video.addEventListener('timeupdate', () => {
+            progressBar.value = video.currentTime;
+            timeCurr.innerText = formatTime(video.currentTime);
+            // Update slider background fill
+            const pct = (video.currentTime / video.duration) * 100;
+            progressBar.style.background = `linear-gradient(to right, #F47521 ${pct}%, rgba(255,255,255,0.2) ${pct}%)`;
+
+            // Progress Save Throttler (Every 5 sec)
+            if (Math.floor(video.currentTime) % 5 === 0) saveProgress(video.currentTime);
+        });
+
+        progressBar.addEventListener('input', (e) => {
+            video.currentTime = e.target.value;
+            const pct = (e.target.value / video.duration) * 100;
+            e.target.style.background = `linear-gradient(to right, #F47521 ${pct}%, rgba(255,255,255,0.2) ${pct}%)`;
+        });
+
+        // --- GESTURES: DOUBLE TAP & LONG PRESS ---
         let lastTapTime = 0;
         let tapTimeout;
         let pressTimer;
         let isLongPressing = false;
 
-        const handleDoubleTap = (xPos) => {
+        const handleDoubleTap = (e) => {
             const rect = overlay.getBoundingClientRect();
-            if (xPos > rect.width / 2) {
+            const x = (e.clientX || e.changedTouches[0].clientX) - rect.left;
+            
+            if (x > rect.width / 2) {
                 video.currentTime = Math.min(video.duration, video.currentTime + 10);
                 const icon = document.getElementById('dt-right');
-                icon.classList.remove('opacity-0'); setTimeout(()=>icon.classList.add('opacity-0'), 400);
+                icon.classList.remove('opacity-0'); setTimeout(()=>icon.classList.add('opacity-0'), 500);
             } else {
                 video.currentTime = Math.max(0, video.currentTime - 10);
                 const icon = document.getElementById('dt-left');
-                icon.classList.remove('opacity-0'); setTimeout(()=>icon.classList.add('opacity-0'), 400);
+                icon.classList.remove('opacity-0'); setTimeout(()=>icon.classList.add('opacity-0'), 500);
             }
-            resetHideTimer();
         };
 
-        const handleGestureStart = () => {
+        overlay.addEventListener('touchstart', (e) => {
             pressTimer = setTimeout(() => {
                 isLongPressing = true;
                 video.playbackRate = 2.0;
                 document.getElementById('speed-indicator').classList.remove('opacity-0');
-            }, 500); 
-        };
+            }, 600); // 600ms hold for 2x
+        }, {passive: true});
 
-        const handleGestureEnd = (xPos) => {
+        overlay.addEventListener('touchend', (e) => {
             clearTimeout(pressTimer);
             if (isLongPressing) {
                 video.playbackRate = 1.0;
@@ -524,134 +393,97 @@ window.app.components.play = async () => {
             const tapLength = currentTime - lastTapTime;
             
             if (tapLength < 300 && tapLength > 0) {
-                clearTimeout(tapTimeout); // Cancel single tap
-                handleDoubleTap(xPos);
+                clearTimeout(tapTimeout);
+                handleDoubleTap(e);
             } else {
-                // Wait 300ms to confirm it's not a double tap
                 tapTimeout = setTimeout(() => {
-                    if(!isLongPressing) {
-                        if(uiLayer.classList.contains('idle')) resetHideTimer();
-                        else togglePlayPause();
-                    }
+                    if(!isLongPressing) { togglePlay(); resetHideTimer(); }
                 }, 300);
             }
             lastTapTime = currentTime;
-        };
+        });
 
-        overlay.addEventListener('touchstart', (e) => handleGestureStart(), {passive: true});
-        overlay.addEventListener('touchend', (e) => handleGestureEnd(e.changedTouches[0].clientX));
-        overlay.addEventListener('mousedown', (e) => handleGestureStart());
-        overlay.addEventListener('mouseup', (e) => handleGestureEnd(e.clientX));
+        // Add mouse support for PC testing
+        overlay.addEventListener('mousedown', (e) => {
+            pressTimer = setTimeout(() => { isLongPressing = true; video.playbackRate = 2.0; document.getElementById('speed-indicator').classList.remove('opacity-0'); }, 600);
+        });
+        overlay.addEventListener('mouseup', (e) => {
+            clearTimeout(pressTimer);
+            if (isLongPressing) { video.playbackRate = 1.0; document.getElementById('speed-indicator').classList.add('opacity-0'); isLongPressing = false; return; }
+            
+            const currentTime = new Date().getTime();
+            const tapLength = currentTime - lastTapTime;
+            if (tapLength < 300 && tapLength > 0) { clearTimeout(tapTimeout); handleDoubleTap(e); } 
+            else { tapTimeout = setTimeout(() => { if(!isLongPressing) togglePlay(); }, 300); }
+            lastTapTime = currentTime;
+        });
 
         // --- FULLSCREEN ---
         fsBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            const root = document.getElementById('blazex-player-root');
-            if (!document.fullscreenElement) {
-                if (root.requestFullscreen) root.requestFullscreen();
-                else if (root.webkitRequestFullscreen) root.webkitRequestFullscreen();
-                document.getElementById('fs-icon').className = 'fas fa-compress text-xl';
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                if (playerRoot.requestFullscreen) playerRoot.requestFullscreen();
+                else if (playerRoot.webkitRequestFullscreen) playerRoot.webkitRequestFullscreen();
+                fsIcon.className = 'fas fa-compress text-lg';
             } else {
                 if (document.exitFullscreen) document.exitFullscreen();
                 else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-                document.getElementById('fs-icon').className = 'fas fa-expand text-xl';
+                fsIcon.className = 'fas fa-expand text-lg';
             }
         });
 
-        // --- MODALS (Settings & Episodes) ---
-        let isSettingsOpen = false;
-        let isEpisodesOpen = false;
-        const setModal = document.getElementById('settings-modal');
-        const epModal = document.getElementById('episodes-modal');
-
-        document.getElementById('master-settings-btn').addEventListener('click', (e) => {
+        // --- SETTINGS MENU (QUALITY & CC) ---
+        settingsBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            isSettingsOpen = true;
-            setModal.classList.remove('translate-x-full');
-            document.getElementById('master-settings-icon').classList.add('rotate-90');
-            resetHideTimer();
-        });
-        document.getElementById('close-settings-btn').addEventListener('click', () => {
-            isSettingsOpen = false;
-            setModal.classList.add('translate-x-full');
-            document.getElementById('master-settings-icon').classList.remove('rotate-90');
-            resetHideTimer();
-        });
-
-        document.getElementById('in-player-ep-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            isEpisodesOpen = true;
-            epModal.classList.remove('-translate-y-full');
-            populateInPlayerEpisodes();
-            resetHideTimer();
-        });
-        document.getElementById('close-episodes-btn').addEventListener('click', () => {
-            isEpisodesOpen = false;
-            epModal.classList.add('-translate-y-full');
+            settingsMenu.classList.toggle('hidden');
+            document.getElementById('settings-icon').classList.toggle('rotate-90');
             resetHideTimer();
         });
 
         function buildSettingsMenu(hls, vid) {
-            const qList = document.getElementById('settings-quality-list');
-            const cList = document.getElementById('settings-subs-list');
+            const qList = document.getElementById('quality-list');
+            const cList = document.getElementById('subs-list');
             
-            // Qualities (Upto 144p dynamically from m3u8)
-            if (hls && hls.levels && hls.levels.length > 0) {
-                qList.innerHTML = `<button onclick="window.setQuality(-1)" class="w-full text-left text-xs px-4 py-3 rounded-lg bg-[#F47521] text-black font-black heavy-transition q-btn" data-level="-1">Auto Quality</button>`;
-                
-                const sortedLevels = hls.levels.map((l, i) => ({...l, oIdx: i})).sort((a,b) => b.height - a.height);
-                
-                sortedLevels.forEach(l => {
-                    qList.innerHTML += `<button onclick="window.setQuality(${l.oIdx})" class="w-full text-left text-xs px-4 py-3 rounded-lg bg-[#111] text-gray-300 hover:bg-white/10 border border-white/5 heavy-transition q-btn" data-level="${l.oIdx}">${l.height}p</button>`;
+            // Qualities
+            if (hls && hls.levels) {
+                qList.innerHTML = `<button onclick="window.setQuality(-1)" class="text-left text-xs px-3 py-2 rounded bg-[#F47521] text-black font-bold mb-1 q-btn" data-level="-1">Auto</button>`;
+                hls.levels.forEach((l, i) => {
+                    qList.innerHTML += `<button onclick="window.setQuality(${i})" class="text-left text-xs px-3 py-2 rounded text-gray-300 hover:bg-white/10 transition-colors q-btn" data-level="${i}">${l.height}p</button>`;
                 });
                 
                 window.setQuality = (levelIndex) => {
                     hls.currentLevel = levelIndex;
                     document.querySelectorAll('.q-btn').forEach(b => {
-                        if (parseInt(b.getAttribute('data-level')) === levelIndex) b.className = 'w-full text-left text-xs px-4 py-3 rounded-lg bg-[#F47521] text-black font-black heavy-transition q-btn';
-                        else b.className = 'w-full text-left text-xs px-4 py-3 rounded-lg bg-[#111] text-gray-300 hover:bg-white/10 border border-white/5 heavy-transition q-btn';
+                        if (parseInt(b.getAttribute('data-level')) === levelIndex) b.className = 'text-left text-xs px-3 py-2 rounded bg-[#F47521] text-black font-bold mb-1 q-btn';
+                        else b.className = 'text-left text-xs px-3 py-2 rounded text-gray-300 hover:bg-white/10 transition-colors mb-1 q-btn';
                     });
+                    settingsMenu.classList.add('hidden');
                 };
             } else {
-                qList.innerHTML = `<div class="bg-[#111] border border-white/5 text-xs text-gray-500 p-3 rounded-lg text-center">Auto (Native API)</div>`;
+                qList.innerHTML = `<span class="text-xs text-gray-500 px-2">Auto (Native)</span>`;
             }
 
             // Subtitles
             if (vid.textTracks.length > 0) {
-                cList.innerHTML = `<button onclick="window.setCC(-1)" class="w-full text-left text-xs px-4 py-3 rounded-lg bg-white/10 text-white hover:bg-white/20 border border-white/10 heavy-transition mb-2 c-btn" data-idx="-1">Turn Off Subs</button>`;
+                cList.innerHTML = `<button onclick="window.setCC(-1)" class="text-left text-xs px-3 py-2 rounded bg-white/10 text-white hover:bg-white/20 mb-1 c-btn" data-idx="-1">Off</button>`;
                 for (let i=0; i<vid.textTracks.length; i++) {
                     const tk = vid.textTracks[i];
-                    cList.innerHTML += `<button onclick="window.setCC(${i})" class="w-full text-left text-xs px-4 py-3 rounded-lg ${tk.mode==='showing' ? 'bg-[#F47521] text-black font-black' : 'bg-[#111] text-gray-300 hover:bg-white/10 border border-white/5'} heavy-transition mb-2 c-btn" data-idx="${i}">${tk.label || 'Lang '+i}</button>`;
+                    cList.innerHTML += `<button onclick="window.setCC(${i})" class="text-left text-xs px-3 py-2 rounded ${tk.mode==='showing' ? 'bg-[#F47521] text-black font-bold' : 'text-gray-300 hover:bg-white/10'} mb-1 c-btn" data-idx="${i}">${tk.label || 'Lang '+i}</button>`;
                 }
 
                 window.setCC = (idx) => {
-                    for (let i=0; i<vid.textTracks.length; i++) { vid.textTracks[i].mode = (i === idx) ? 'showing' : 'hidden'; }
+                    for (let i=0; i<vid.textTracks.length; i++) {
+                        vid.textTracks[i].mode = (i === idx) ? 'showing' : 'hidden';
+                    }
                     document.querySelectorAll('.c-btn').forEach(b => {
-                        if (parseInt(b.getAttribute('data-idx')) === idx) b.className = 'w-full text-left text-xs px-4 py-3 rounded-lg bg-[#F47521] text-black font-black heavy-transition mb-2 c-btn';
-                        else b.className = 'w-full text-left text-xs px-4 py-3 rounded-lg bg-[#111] text-gray-300 hover:bg-white/10 border border-white/5 heavy-transition mb-2 c-btn';
+                        if (parseInt(b.getAttribute('data-idx')) === idx) b.className = 'text-left text-xs px-3 py-2 rounded bg-[#F47521] text-black font-bold mb-1 c-btn';
+                        else b.className = 'text-left text-xs px-3 py-2 rounded text-gray-300 hover:bg-white/10 mb-1 c-btn';
                     });
+                    settingsMenu.classList.add('hidden');
                 };
             } else {
-                cList.innerHTML = `<div class="bg-[#111] border border-white/5 text-xs text-gray-500 p-3 rounded-lg text-center">Hardcoded or Not Available</div>`;
+                cList.innerHTML = `<span class="text-xs text-gray-500 px-2">No Subtitles</span>`;
             }
-        }
-
-        function populateInPlayerEpisodes() {
-            const grid = document.getElementById('in-player-ep-grid');
-            if(!grid || episodesList.length === 0) return;
-            
-            grid.innerHTML = episodesList.map(ep => {
-                const epNum = ep.num || ep.episode_no;
-                const slug = ep.slug || ep.id || String(epNum);
-                const isCurrent = parseInt(epNum) === currentEpNum;
-                const isSubSupported = audioType === 'sub' && ep.isSub !== false;
-                const isDubSupported = audioType === 'dub' && ep.isDub === true;
-                const isValid = isSubSupported || isDubSupported;
-
-                if (!isValid) return `<div class="w-full aspect-square flex items-center justify-center rounded-lg bg-black/50 border border-white/5 text-gray-700 text-xs font-black opacity-50 cursor-not-allowed">${epNum}</div>`;
-
-                return `<button onclick="window.app.resolveEpisodeStreamAndRoute('${slug}', ${epNum}, '${animeId}')" class="w-full aspect-square flex items-center justify-center rounded-lg border ${isCurrent ? 'bg-[#F47521] border-[#F47521] text-black font-black shadow-[0_0_15px_rgba(244,117,33,0.5)]' : 'bg-[#111] border-white/5 text-white hover:border-[#F47521] hover:text-[#F47521] transition-colors'} text-sm font-bold">${epNum}</button>`;
-            }).join('');
         }
 
         // --- AUTO-SKIP LOGIC ---
@@ -660,8 +492,8 @@ window.app.components.play = async () => {
 
         video.addEventListener('timeupdate', () => {
             const t = video.currentTime;
-            autoSkipIntro = localStorage.getItem('blazex_autoskip_intro') === 'true';
-            autoSkipOutro = localStorage.getItem('blazex_autoskip_outro') === 'true';
+            const autoSkipIntro = localStorage.getItem('blazex_autoskip_intro') === 'true';
+            const autoSkipOutro = localStorage.getItem('blazex_autoskip_outro') === 'true';
 
             if (introEnd > 0 && t >= introStart && t < introEnd) {
                 if (autoSkipIntro) { video.currentTime = introEnd; } 
@@ -681,20 +513,9 @@ window.app.components.play = async () => {
             else video.currentTime = video.duration; 
         });
 
-        // Hide skip buttons after 5 seconds
-        const hideSkipObserver = new MutationObserver((mutations) => {
-            mutations.forEach(m => {
-                if (!m.target.classList.contains('opacity-0')) {
-                    setTimeout(() => m.target.classList.add('translate-x-[150%]', 'opacity-0'), 5000);
-                }
-            });
-        });
-        hideSkipObserver.observe(skipIntroBtn, { attributes: true, attributeFilter: ['class'] });
-        hideSkipObserver.observe(skipOutroBtn, { attributes: true, attributeFilter: ['class'] });
-
-        document.getElementById('skip-fwd-btn')?.addEventListener('click', (e) => { e.stopPropagation(); video.currentTime += 10; });
-
+        // Progress Save Helper
         function saveProgress(time) {
+            const profile = window.app.state?.activeProfile || null;
             if (profile && profile.uid) {
                 const key = `blazex_progress_${profile.uid}_${animeId}`;
                 let history = JSON.parse(localStorage.getItem(key)) || { watchedHistoryList: [] };
@@ -702,35 +523,14 @@ window.app.components.play = async () => {
                 history.lastSlug = urlParams.get('id');
                 history.lastTime = time;
                 if(!history.watchedHistoryList.includes(parseInt(currentEpNum))) {
+                    // Consider watched if > 85%
                     if (time > (video.duration * 0.85)) history.watchedHistoryList.push(parseInt(currentEpNum));
                 }
                 localStorage.setItem(key, JSON.stringify(history));
             }
         }
 
-        // External Components Init
-        if (window.app.components.commentsss) window.app.components.commentsss();
-
     } catch (error) {
         setBootStatus(error.message, true);
     }
-};
-
-window.app.resolveEpisodeStreamAndRoute = (epId, epNum, animeId) => {
-    const urlParams = new URLSearchParams(window.location.search);
-    urlParams.set('id', epId); urlParams.set('ep', epNum); urlParams.set('anime', animeId);
-    window.location.search = urlParams.toString();
-};
-
-window.app.changePlayerConfig = (param, value) => {
-    if (param === 'type') localStorage.setItem('blazex_audio', value);
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get(param) === value) return;
-    urlParams.set(param, value);
-    window.location.search = urlParams.toString();
-};
-
-window.app.toggleAutoSkip = (type) => {
-    const isChecked = document.getElementById(`toggle-skip-${type}`).checked;
-    localStorage.setItem(`blazex_autoskip_${type}`, isChecked ? 'true' : 'false');
 };
