@@ -7,8 +7,9 @@ window.app.components.commentsss = async () => {
     const root = document.getElementById('comments-section-root');
     if (!root) return;
 
+    // 🚀 FIXED EXTRACTION LOGIC: Prioritizes 'anime' param over 'id' for play.html compatibility
     const urlParams = new URLSearchParams(window.location.search);
-    const animeId = urlParams.get('id') || urlParams.get('anime') || window.app.state?.currentAnimePage?.id;
+    const animeId = urlParams.get('anime') || urlParams.get('id') || window.app.state?.currentAnimePage?.id;
 
     if (!animeId) {
         root.innerHTML = `<div class="text-center text-gray-500 text-xs py-10 w-full">Cannot load comments: Missing ID.</div>`;
@@ -136,7 +137,7 @@ window.app.components.commentsss = async () => {
                             ? `<button onclick="window.app.editInlineComment('${comment.id}', decodeURIComponent('${safeText}'))" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-pen mr-2"></i> Edit</button>
                                <button onclick="window.app.deleteInlineComment('${comment.id}')" class="w-full text-left px-3 py-2 text-red-400 hover:bg-white/10 hover:text-red-500 transition-colors"><i class="fas fa-trash mr-2"></i> Delete</button>` 
                             : `<button onclick="window.location.href='profile.html?user=${comment.userId}'" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-user mr-2"></i> View Profile</button>
-                               <button onclick="window.location.href='cht.html?user=${comment.userId}'" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-comment-dots mr-2"></i> Discuss</button>`;
+                               <button onclick="window.location.href='cht.html?id=${animeId}'" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-comments mr-2"></i> Discuss</button>`;
 
                         const likesCount = Array.isArray(comment.likes) ? comment.likes.length : 0;
                         const dislikesCount = Array.isArray(comment.dislikes) ? comment.dislikes.length : 0;
@@ -260,8 +261,25 @@ window.app.editInlineComment = (commentId, text) => {
     input.focus();
 };
 
-window.app.deleteInlineComment = async (commentId) => {
-    if(!confirm("Delete this comment permanently?")) return;
+// 🚀 SMART DELETE: Uses CSS Custom Alert instead of blocking prompts
+window.app.deleteInlineComment = (commentId) => {
+    document.getElementById(`inline-menu-${commentId}`).classList.add('hidden');
+
+    if (window.app.showCustomAlert) {
+        window.app.showCustomAlert(
+            "Are you sure you want to delete this comment?", 
+            "error", 
+            "Yes, Delete", 
+            () => { window.app.performInlineCommentDeletion(commentId); }
+        );
+    } else {
+        if(confirm("Delete this comment permanently?")) {
+            window.app.performInlineCommentDeletion(commentId);
+        }
+    }
+};
+
+window.app.performInlineCommentDeletion = async (commentId) => {
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const db = window.app.db;
@@ -282,7 +300,10 @@ window.app.deleteInlineComment = async (commentId) => {
             }
         }
         await firestore.deleteDoc(commentRef);
-    } catch(e) {}
+        if (window.app.showCustomAlert) window.app.showCustomAlert("Comment deleted successfully.", "success");
+    } catch(e) {
+        if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to delete comment.", "error");
+    }
 };
 
 window.app.toggleInlineCommentReaction = async (commentId, type) => {
@@ -332,8 +353,9 @@ window.app.submitInlineComment = async (e) => {
     const text = input.value.trim();
     if (!text) return;
 
+    // 🚀 FIXED EXTRACTION LOGIC: Prioritizes 'anime' param over 'id' for play.html compatibility
     const urlParams = new URLSearchParams(window.location.search);
-    const animeId = urlParams.get('id') || urlParams.get('anime') || window.app.state?.currentAnimePage?.id;
+    const animeId = urlParams.get('anime') || urlParams.get('id') || window.app.state?.currentAnimePage?.id;
     const epNum = urlParams.get('ep') || window.app.state?.currentPlayingEpNum || 1;
     
     if (!animeId) {
