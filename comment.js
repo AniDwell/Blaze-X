@@ -36,6 +36,7 @@ window.app.getAvatarHtml = window.app.getAvatarHtml || function (url) {
 };
 
 window.app.components.comment = async () => {
+    // 🚀 ISOLATION LOGIC: Gets ID specifically for the current anime page
     const urlParams = new URLSearchParams(window.location.search);
     const animeId = urlParams.get('id') || urlParams.get('anime') || window.app.state?.currentAnimePage?.id;
 
@@ -161,6 +162,7 @@ window.app.loadComments = async (animeId, profile) => {
 
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        // 🚀 STRICT QUERY: Only fetches comments where animeId matches the current page!
         const q = firestore.query(firestore.collection(window.app.db, "comments"), firestore.where("animeId", "==", animeId));
         
         if (window.app.commentsUnsub) window.app.commentsUnsub();
@@ -334,8 +336,31 @@ window.app.editComment = (commentId, text) => {
     input.focus();
 };
 
+// 🚀 CSS ALERT DELETE FUNCTION
 window.app.deleteComment = async (commentId) => {
-    if(!confirm("Delete this comment permanently?")) return;
+    document.getElementById(`menu-${commentId}`).classList.add('hidden');
+    
+    // Fallback if custom alert doesn't exist
+    if (!window.app.showCustomAlert) {
+        if(confirm("Delete this comment permanently?")) {
+            await window.app.executeCommentDelete(commentId);
+        }
+        return;
+    }
+
+    // Modern CSS Alert Request
+    window.app.showCustomAlert(
+        "Are you sure you want to delete this comment? This cannot be undone.", 
+        "error", 
+        "Delete", 
+        async () => {
+            await window.app.executeCommentDelete(commentId);
+        }
+    );
+};
+
+// Extracted Execution for easy async logic
+window.app.executeCommentDelete = async (commentId) => {
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const db = window.app.db;
@@ -356,7 +381,10 @@ window.app.deleteComment = async (commentId) => {
             }
         }
         await firestore.deleteDoc(commentRef);
-    } catch(e) {}
+        if (window.app.showCustomAlert) window.app.showCustomAlert("Comment deleted successfully.", "success");
+    } catch(e) {
+        if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to delete comment.", "error");
+    }
 };
 
 window.app.toggleCommentReaction = async (commentId, type) => {
