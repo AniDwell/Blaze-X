@@ -36,8 +36,9 @@ window.app.getAvatarHtml = window.app.getAvatarHtml || function (url) {
 };
 
 window.app.components.comment = async () => {
+    // 🚀 FIXED EXTRACTION LOGIC: Prioritizes 'anime' param over 'id' for play.html compatibility
     const urlParams = new URLSearchParams(window.location.search);
-    const animeId = urlParams.get('id') || urlParams.get('anime') || window.app.state?.currentAnimePage?.id;
+    const animeId = urlParams.get('anime') || urlParams.get('id') || window.app.state?.currentAnimePage?.id;
 
     if (!animeId) {
         if (window.app.showCustomAlert) window.app.showCustomAlert("Cannot load comments: Anime ID missing.", "error");
@@ -161,6 +162,7 @@ window.app.loadComments = async (animeId, profile) => {
 
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        // 🚀 ISOLATION APPLIED HERE
         const q = firestore.query(firestore.collection(window.app.db, "comments"), firestore.where("animeId", "==", animeId));
         
         if (window.app.commentsUnsub) window.app.commentsUnsub();
@@ -217,7 +219,6 @@ window.app.loadComments = async (animeId, profile) => {
                         const safeText = encodeURIComponent(comment.text || "");
                         const escapedTextHtml = (comment.text || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
                         
-                        // 🚀 UPDATED REDIRECT LOGIC: Discuss button now redirects to Global Anime Room instead of individual user chat!
                         const menuOptions = isMine 
                             ? `<button onclick="window.app.editComment('${comment.id}', decodeURIComponent('${safeText}'))" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-pen mr-2"></i> Edit</button>
                                <button onclick="window.app.deleteComment('${comment.id}')" class="w-full text-left px-3 py-2 text-red-400 hover:bg-white/10 hover:text-red-500 transition-colors"><i class="fas fa-trash mr-2"></i> Delete</button>` 
@@ -426,8 +427,9 @@ window.app.submitComment = async (e) => {
     const text = input.value.trim();
     if (!text) return;
 
+    // 🚀 FIXED EXTRACTION LOGIC: Prioritizes 'anime' param over 'id' for play.html compatibility
     const urlParams = new URLSearchParams(window.location.search);
-    const animeId = urlParams.get('id') || urlParams.get('anime') || window.app.state?.currentAnimePage?.id;
+    const animeId = urlParams.get('anime') || urlParams.get('id') || window.app.state?.currentAnimePage?.id;
     const epNum = urlParams.get('ep') || window.app.state?.currentPlayingEpNum || 1;
     
     if (!animeId) {
