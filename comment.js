@@ -36,7 +36,6 @@ window.app.getAvatarHtml = window.app.getAvatarHtml || function (url) {
 };
 
 window.app.components.comment = async () => {
-    // 🚀 ISOLATION LOGIC: Grabs the exact ID from the URL (e.g., re-zero-starting-life-in-another-world-season-3-6bjrx)
     const urlParams = new URLSearchParams(window.location.search);
     const animeId = urlParams.get('id') || urlParams.get('anime') || window.app.state?.currentAnimePage?.id;
 
@@ -162,7 +161,6 @@ window.app.loadComments = async (animeId, profile) => {
 
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-        // 🚀 ISOLATION APPLIED HERE
         const q = firestore.query(firestore.collection(window.app.db, "comments"), firestore.where("animeId", "==", animeId));
         
         if (window.app.commentsUnsub) window.app.commentsUnsub();
@@ -219,11 +217,12 @@ window.app.loadComments = async (animeId, profile) => {
                         const safeText = encodeURIComponent(comment.text || "");
                         const escapedTextHtml = (comment.text || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
                         
+                        // 🚀 UPDATED REDIRECT LOGIC: Discuss button now redirects to Global Anime Room instead of individual user chat!
                         const menuOptions = isMine 
                             ? `<button onclick="window.app.editComment('${comment.id}', decodeURIComponent('${safeText}'))" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-pen mr-2"></i> Edit</button>
                                <button onclick="window.app.deleteComment('${comment.id}')" class="w-full text-left px-3 py-2 text-red-400 hover:bg-white/10 hover:text-red-500 transition-colors"><i class="fas fa-trash mr-2"></i> Delete</button>` 
                             : `<button onclick="window.location.href='profile.html?user=${comment.userId}'" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-user mr-2"></i> View Profile</button>
-                               <button onclick="window.location.href='cht.html?user=${comment.userId}'" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-comment-dots mr-2"></i> Discuss</button>`;
+                               <button onclick="window.location.href='cht.html?id=${animeId}'" class="w-full text-left px-3 py-2 text-white hover:bg-white/10 hover:text-[#F47521] transition-colors"><i class="fas fa-comments mr-2"></i> Discuss</button>`;
 
                         const likesCount = Array.isArray(comment.likes) ? comment.likes.length : 0;
                         const dislikesCount = Array.isArray(comment.dislikes) ? comment.dislikes.length : 0;
@@ -336,7 +335,6 @@ window.app.editComment = (commentId, text) => {
     input.focus();
 };
 
-// 🚀 SMART DELETE: Uses CSS Custom Alert instead of blocking prompts
 window.app.deleteComment = (commentId) => {
     document.getElementById(`menu-${commentId}`).classList.add('hidden');
 
@@ -428,7 +426,6 @@ window.app.submitComment = async (e) => {
     const text = input.value.trim();
     if (!text) return;
 
-    // 🚀 ISOLATION APPLIED HERE (Saves strictly under the URL parameter ID)
     const urlParams = new URLSearchParams(window.location.search);
     const animeId = urlParams.get('id') || urlParams.get('anime') || window.app.state?.currentAnimePage?.id;
     const epNum = urlParams.get('ep') || window.app.state?.currentPlayingEpNum || 1;
