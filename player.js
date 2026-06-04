@@ -1,4 +1,4 @@
-// play.js - Cinematic Heavy Player Engine (v2.0)
+// play.js - Cinematic Heavy Player Engine (v2.1 - API Fixed & Robust)
 
 window.app.components.play = async () => {
     const workspace = document.getElementById('player-workspace');
@@ -24,21 +24,24 @@ window.app.components.play = async () => {
                     </div>
                 `;
             } else {
-                document.getElementById('boot-status-text').innerText = msg;
+                const statusEl = document.getElementById('boot-status-text');
+                if (statusEl) statusEl.innerText = msg;
             }
         }
     };
 
     setBootStatus("Initializing Engine...");
 
+    // 🚀 FIXED: PROPER PARAMETER EXTRACTION
     const urlParams = new URLSearchParams(window.location.search);
-    const animeId = urlParams.get('anime'); 
+    const animeId = urlParams.get('anime'); // For Info & Episodes (e.g. re-zero-...)
+    const episodeId = urlParams.get('id'); // For Stream API (e.g. 1)
     const currentEpNum = parseInt(urlParams.get('ep') || '1'); 
     let audioType = urlParams.get('type') || 'sub';
     let targetServer = urlParams.get('server') || 'hd-1';
 
-    if (!animeId || !currentEpNum) {
-        setBootStatus("Missing core URL parameters.", true);
+    if (!animeId || !episodeId) {
+        setBootStatus("Missing core URL parameters (anime or id).", true);
         return;
     }
 
@@ -59,11 +62,11 @@ window.app.components.play = async () => {
             .player-ui-layer.idle { opacity: 0; cursor: none; pointer-events: none; }
             
             /* Custom Premium Progress Bar */
-            .custom-slider-container { position: relative; width: 100%; height: 24px; display: flex; items-center; cursor: pointer; group; }
+            .custom-slider-container { position: relative; width: 100%; height: 24px; display: flex; align-items: center; cursor: pointer; }
             .custom-slider-track { position: absolute; top: 50%; transform: translateY(-50%); width: 100%; height: 4px; background: rgba(255,255,255,0.2); border-radius: 4px; overflow: hidden; transition: height 0.2s; }
             .custom-slider-container:hover .custom-slider-track { height: 6px; }
-            .custom-slider-fill { position: absolute; top: 0; left: 0; height: 100%; background: #F47521; width: 0%; pointer-events: none; }
-            .custom-slider-marker { position: absolute; top: 0; height: 100%; background: rgba(168, 85, 247, 0.7); pointer-events: none; } /* Purple for Intro/Outro */
+            .custom-slider-fill { position: absolute; top: 0; left: 0; height: 100%; background: #F47521; width: 0%; pointer-events: none; transition: width 0.1s linear; }
+            .custom-slider-marker { position: absolute; top: 0; height: 100%; background: rgba(168, 85, 247, 0.7); pointer-events: none; } 
             .custom-slider-thumb { position: absolute; top: 50%; left: 0%; transform: translate(-50%, -50%) scale(0); width: 14px; height: 14px; background: #fff; border-radius: 50%; box-shadow: 0 0 10px rgba(0,0,0,0.5); pointer-events: none; transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
             .custom-slider-container:hover .custom-slider-thumb { transform: translate(-50%, -50%) scale(1); }
             
@@ -74,31 +77,32 @@ window.app.components.play = async () => {
         document.head.appendChild(style);
     }
 
+    // Load HLS.js safely
     if (typeof window.Hls === 'undefined') {
         try {
             await new Promise((resolve, reject) => {
                 const script = document.createElement('script');
                 script.src = "https://cdn.jsdelivr.net/npm/hls.js@latest";
                 script.onload = resolve;
-                script.onerror = () => reject();
+                script.onerror = reject;
                 document.head.appendChild(script);
             });
         } catch (e) {
-            setBootStatus(`HLS Engine injection failed.`, true);
+            setBootStatus(`HLS Engine injection failed. Check connection.`, true);
             return;
         }
     }
 
     try {
-        setBootStatus(`Fetching streams from ${targetServer.toUpperCase()}...`);
+        setBootStatus(`Connecting to Server ${targetServer.toUpperCase()}...`);
         
         let streamData = null;
         let episodesList = [];
         let animeInfo = {};
 
-        // Parallel Fetch for Speed
+        // 🚀 FIXED: Fetch Stream using `episodeId` instead of `animeId`
         const [streamRes, epsRes, infoRes] = await Promise.all([
-            fetch(`${baseUrl}/api/stream?id=${animeId}&ep=${currentEpNum}&server=${targetServer}&type=${audioType}`).then(r => r.json()).catch(()=>null),
+            fetch(`${baseUrl}/api/stream?id=${episodeId}&server=${targetServer}&type=${audioType}`).then(r => r.json()).catch(()=>null),
             fetch(`${baseUrl}/api/episodes/${animeId}`).then(r => r.json()).catch(()=>null),
             fetch(`${baseUrl}/api/info?id=${animeId}`).then(r => r.json()).catch(()=>null)
         ]);
@@ -106,9 +110,10 @@ window.app.components.play = async () => {
         if (streamRes && streamRes.success && streamRes.data?.m3u8) {
             streamData = streamRes.data;
         } else {
-            setBootStatus("Target server failed. Auto-switching to fallback...");
+            setBootStatus("Primary server offline. Auto-switching to fallback HD-2...");
             const fallbackServer = targetServer === 'hd-1' ? 'hd-2' : 'hd-1';
-            const fbRes = await fetch(`${baseUrl}/api/stream?id=${animeId}&ep=${currentEpNum}&server=${fallbackServer}&type=${audioType}`).then(r=>r.json()).catch(()=>null);
+            const fbRes = await fetch(`${baseUrl}/api/stream?id=${episodeId}&server=${fallbackServer}&type=${audioType}`).then(r=>r.json()).catch(()=>null);
+            
             if (fbRes && fbRes.success && fbRes.data?.m3u8) {
                 streamData = fbRes.data;
                 targetServer = fallbackServer;
@@ -116,7 +121,7 @@ window.app.components.play = async () => {
                 newUrl.searchParams.set('server', targetServer);
                 window.history.replaceState({}, '', newUrl);
             } else {
-                throw new Error("All servers failed to respond with a valid stream.");
+                throw new Error("All streaming servers are unresponsive for this episode. Please try another server or Audio Type.");
             }
         }
 
@@ -157,7 +162,7 @@ window.app.components.play = async () => {
                     <div id="gesture-overlay" class="absolute inset-0 z-10 cursor-pointer"></div>
                     
                     <!-- 2x Speed Indicator -->
-                    <div id="speed-indicator" class="absolute top-8 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-md text-white px-5 py-2 rounded-full text-[10px] font-black tracking-widest uppercase transition-opacity duration-300 opacity-0 z-40 flex items-center gap-2 border border-[#F47521]/30 shadow-[0_0_15px_rgba(244,117,33,0.3)]">
+                    <div id="speed-indicator" class="absolute top-8 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-md text-white px-5 py-2 rounded-full text-[10px] font-black tracking-widest uppercase transition-opacity duration-300 opacity-0 z-40 flex items-center gap-2 border border-[#F47521]/30 shadow-[0_0_15px_rgba(244,117,33,0.3)] pointer-events-none">
                         <span>2x Speed</span> <i class="fas fa-forward text-[#F47521]"></i>
                     </div>
 
@@ -216,10 +221,8 @@ window.app.components.play = async () => {
                                 
                                 <div id="progress-container" class="custom-slider-container flex-1">
                                     <div class="custom-slider-track">
-                                        <!-- Highlights -->
                                         <div id="intro-marker" class="custom-slider-marker hidden"></div>
                                         <div id="outro-marker" class="custom-slider-marker hidden"></div>
-                                        <!-- Fill -->
                                         <div id="progress-fill" class="custom-slider-fill"></div>
                                     </div>
                                     <div id="progress-thumb" class="custom-slider-thumb"></div>
@@ -293,8 +296,8 @@ window.app.components.play = async () => {
 
                 </div>
                 
-                <!-- OUTSIDE PLAYER CONTROLS (Toggles & Details) -->
-                <div class="w-full flex items-center justify-between gap-4 bg-[#0a0a0a] p-4 rounded-xl border border-white/5 shadow-md">
+                <!-- OUTSIDE PLAYER CONTROLS -->
+                <div class="w-full flex items-center justify-between gap-4 bg-[#0a0a0a] p-4 rounded-xl border border-white/5 shadow-md mt-2">
                     <h1 class="text-lg md:text-xl font-black text-white tracking-tight leading-tight truncate flex-1">E${currentEpNum}: ${animeTitle}</h1>
                     <div class="flex items-center gap-5 text-[10px] font-black uppercase tracking-wider text-gray-400 shrink-0">
                         <label class="flex items-center gap-2 cursor-pointer hover:text-white transition-colors">
@@ -309,16 +312,17 @@ window.app.components.play = async () => {
                         </label>
                     </div>
                 </div>
-
             </div>
         `;
 
-        // Apply toggle CSS
         const tStyle = document.createElement('style');
         tStyle.innerHTML = `input:checked + .toggle-bg { background-color: #F47521; border-color: #F47521; } input:checked + .toggle-bg .toggle-dot { transform: translateX(14px); background-color: black; }`;
         document.head.appendChild(tStyle);
 
-        setTimeout(() => { document.getElementById('play-content-wrapper').classList.remove('opacity-0'); }, 150);
+        setTimeout(() => { 
+            const wrapper = document.getElementById('play-content-wrapper');
+            if(wrapper) wrapper.classList.remove('opacity-0'); 
+        }, 150);
 
         // --- DOM REFERENCES ---
         const video = document.getElementById('main-video-player');
@@ -332,7 +336,6 @@ window.app.components.play = async () => {
         const timeCurr = document.getElementById('time-current');
         const timeDur = document.getElementById('time-duration');
         
-        // Progress Bar
         const progContainer = document.getElementById('progress-container');
         const progFill = document.getElementById('progress-fill');
         const progThumb = document.getElementById('progress-thumb');
@@ -354,7 +357,7 @@ window.app.components.play = async () => {
             }
         });
 
-        // --- HLS ENGINE (QUALITIES INCLUDED) ---
+        // --- HLS ENGINE ---
         if (Hls.isSupported()) {
             hlsInstance = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 60 });
             hlsInstance.loadSource(proxiedStreamUrl);
@@ -372,13 +375,13 @@ window.app.components.play = async () => {
                         }
                     }
                 }
-                video.play().catch(e=>e);
+                video.play().catch(e=>console.log("Autoplay blocked by browser"));
             });
 
             hlsInstance.on(Hls.Events.ERROR, function (event, data) {
                 if (data.fatal) {
                     if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hlsInstance.recoverMediaError();
-                    else { setBootStatus(`Stream Data Corrupted. Details: ${data.details}`, true); hlsInstance.destroy(); }
+                    else { setBootStatus(`HLS Fatal Error: ${data.details}`, true); hlsInstance.destroy(); }
                 }
             });
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -395,7 +398,7 @@ window.app.components.play = async () => {
 
         video.addEventListener('loadedmetadata', () => {
             timeDur.innerText = formatTime(video.duration);
-            // Draw Markers
+            // Draw Highlight Markers for Intro/Outro
             if(introEnd > 0 && video.duration > 0) {
                 introMarker.style.left = `${(introStart/video.duration)*100}%`;
                 introMarker.style.width = `${((introEnd-introStart)/video.duration)*100}%`;
@@ -437,9 +440,9 @@ window.app.components.play = async () => {
         document.addEventListener('touchmove', (e) => { if(isDraggingProgress) updateProgressFromEvent(e); }, {passive: true});
         
         document.addEventListener('mouseup', (e) => { if(isDraggingProgress) { video.currentTime = updateProgressFromEvent(e) * video.duration; isDraggingProgress = false; } });
-        document.addEventListener('touchend', (e) => { if(isDraggingProgress) { isDraggingProgress = false; } }); // Touchend doesn't have clientX reliably, handled in touchmove
+        document.addEventListener('touchend', (e) => { if(isDraggingProgress) { isDraggingProgress = false; } });
 
-        // --- PLAY/PAUSE LOGIC WITH CENTER ANIMATION ---
+        // --- PLAY/PAUSE ANIMATION ---
         const triggerCenterAnim = (iconClass) => {
             centerAnimIcon.className = `${iconClass} text-3xl`;
             if (iconClass.includes('play')) centerAnimIcon.classList.add('ml-1'); else centerAnimIcon.classList.remove('ml-1');
@@ -505,7 +508,7 @@ window.app.components.play = async () => {
                 isLongPressing = true;
                 video.playbackRate = 2.0;
                 document.getElementById('speed-indicator').classList.remove('opacity-0');
-            }, 500); // 500ms to trigger 2x
+            }, 500); 
         };
 
         const handleGestureEnd = (xPos) => {
@@ -524,7 +527,7 @@ window.app.components.play = async () => {
                 clearTimeout(tapTimeout); // Cancel single tap
                 handleDoubleTap(xPos);
             } else {
-                // Wait 300ms to confirm it's not a double tap (Gives heavy feel)
+                // Wait 300ms to confirm it's not a double tap
                 tapTimeout = setTimeout(() => {
                     if(!isLongPressing) {
                         if(uiLayer.classList.contains('idle')) resetHideTimer();
@@ -566,6 +569,7 @@ window.app.components.play = async () => {
             isSettingsOpen = true;
             setModal.classList.remove('translate-x-full');
             document.getElementById('master-settings-icon').classList.add('rotate-90');
+            resetHideTimer();
         });
         document.getElementById('close-settings-btn').addEventListener('click', () => {
             isSettingsOpen = false;
@@ -579,6 +583,7 @@ window.app.components.play = async () => {
             isEpisodesOpen = true;
             epModal.classList.remove('-translate-y-full');
             populateInPlayerEpisodes();
+            resetHideTimer();
         });
         document.getElementById('close-episodes-btn').addEventListener('click', () => {
             isEpisodesOpen = false;
@@ -594,7 +599,6 @@ window.app.components.play = async () => {
             if (hls && hls.levels && hls.levels.length > 0) {
                 qList.innerHTML = `<button onclick="window.setQuality(-1)" class="w-full text-left text-xs px-4 py-3 rounded-lg bg-[#F47521] text-black font-black heavy-transition q-btn" data-level="-1">Auto Quality</button>`;
                 
-                // Sort levels descending (1080p -> 144p)
                 const sortedLevels = hls.levels.map((l, i) => ({...l, oIdx: i})).sort((a,b) => b.height - a.height);
                 
                 sortedLevels.forEach(l => {
@@ -677,7 +681,7 @@ window.app.components.play = async () => {
             else video.currentTime = video.duration; 
         });
 
-        // Hide skip buttons after 5 seconds of appearing if untouched
+        // Hide skip buttons after 5 seconds
         const hideSkipObserver = new MutationObserver((mutations) => {
             mutations.forEach(m => {
                 if (!m.target.classList.contains('opacity-0')) {
@@ -688,10 +692,8 @@ window.app.components.play = async () => {
         hideSkipObserver.observe(skipIntroBtn, { attributes: true, attributeFilter: ['class'] });
         hideSkipObserver.observe(skipOutroBtn, { attributes: true, attributeFilter: ['class'] });
 
-        // Forward Button UI
         document.getElementById('skip-fwd-btn')?.addEventListener('click', (e) => { e.stopPropagation(); video.currentTime += 10; });
 
-        // Progress Save Helper
         function saveProgress(time) {
             if (profile && profile.uid) {
                 const key = `blazex_progress_${profile.uid}_${animeId}`;
@@ -706,6 +708,9 @@ window.app.components.play = async () => {
             }
         }
 
+        // External Components Init
+        if (window.app.components.commentsss) window.app.components.commentsss();
+
     } catch (error) {
         setBootStatus(error.message, true);
     }
@@ -713,7 +718,7 @@ window.app.components.play = async () => {
 
 window.app.resolveEpisodeStreamAndRoute = (epId, epNum, animeId) => {
     const urlParams = new URLSearchParams(window.location.search);
-    urlParams.set('id', epId); urlParams.set('ep', epNum);
+    urlParams.set('id', epId); urlParams.set('ep', epNum); urlParams.set('anime', animeId);
     window.location.search = urlParams.toString();
 };
 
