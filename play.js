@@ -73,14 +73,14 @@ window.app.components.play = async () => {
 
     // 4. DYNAMIC UI SKELETON GENERATION
     workspace.innerHTML = `
-        <div class="w-full max-w-5xl mx-auto flex flex-col gap-6 animate-fade-in opacity-0 transition-opacity duration-500" id="play-content-wrapper">
+        <div class="w-full max-w-5xl mx-auto flex flex-col gap-6 animate-fade-in opacity-0 transition-opacity duration-300" id="play-content-wrapper">
             
             <div id="blazex-player-root" class="w-full aspect-video md:aspect-[21/9] bg-black rounded-xl shadow-lg border border-white/5 overflow-hidden flex flex-col items-center justify-center relative group">
-                <div class="tk-loader scale-125 z-0">
+                <div class="tk-loader scale-75 z-0">
                     <div class="tk-dot tk-dot-1"></div>
                     <div class="tk-dot tk-dot-2"></div>
                 </div>
-                <p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mt-6">Loading Player Engine...</p>
+                <p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mt-4">Loading Player Engine...</p>
             </div>
 
             <div class="w-full flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-[#0a0a0a] p-3 rounded-lg border border-white/5 shadow-md">
@@ -198,102 +198,97 @@ window.app.components.play = async () => {
     setTimeout(() => {
         const wrapper = document.getElementById('play-content-wrapper');
         if (wrapper) wrapper.classList.remove('opacity-0');
-    }, 50);
+    }, 10);
 
-    // 5. FETCH ANIME DATA, SCHEDULE & EPISODES
+    // 5. FETCH ANIME DATA, SCHEDULE & EPISODES (Optimized Parallel Fetching)
     try {
         const baseUrl = 'https://anikoto-api-xi.vercel.app';
         let episodesList = [];
         let baseAnime = {};
         let aniData = {};
 
-        // A. Fetch Info (API)
-        try {
-            const infoResponse = await fetch(`${baseUrl}/api/info?id=${animeId}`);
-            const infoJson = await infoResponse.json();
-            if (infoJson && infoJson.success && infoJson.data) baseAnime = infoJson.data;
-        } catch(e) { console.error("Info fetch failed."); }
+        // Parallel execution for faster load times
+        const [infoRes, epsRes] = await Promise.all([
+            fetch(`${baseUrl}/api/info?id=${animeId}`).then(r => r.json()).catch(() => null),
+            fetch(`${baseUrl}/api/episodes/${animeId}`).then(r => r.json()).catch(() => null)
+        ]);
 
-        // B. Fetch AniList Metadata for Schedule & High-Res Poster
-        try {
-            const hasValidAniId = baseAnime.anilistId && !isNaN(baseAnime.anilistId);
-            const query = `query ($id: Int, $search: String) { 
-                Media (id: $id, search: $search, type: ANIME) { 
-                    id title { romaji english native } description coverImage { extraLarge }
-                    nextAiringEpisode { airingAt timeUntilAiring episode }
-                } 
-            }`;
-            const variables = hasValidAniId ? { id: parseInt(baseAnime.anilistId) } : { search: (baseAnime.title || animeId).replace(/\(Dub\)|\(Sub\)/gi, '').trim() };
-            const aniRes = await fetch('https://graphql.anilist.co', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                body: JSON.stringify({ query, variables })
-            });
-            const json = await aniRes.json();
+        if (infoRes && infoRes.success && infoRes.data) baseAnime = infoRes.data;
+        
+        if (epsRes && epsRes.success) {
+            if (Array.isArray(epsRes.data)) episodesList = epsRes.data;
+            else if (epsRes.results && Array.isArray(epsRes.results.episodes)) episodesList = epsRes.results.episodes;
+        }
+
+        // Run AniList query asynchronously to not block the main rendering completely
+        const hasValidAniId = baseAnime.anilistId && !isNaN(baseAnime.anilistId);
+        const query = `query ($id: Int, $search: String) { 
+            Media (id: $id, search: $search, type: ANIME) { 
+                id title { romaji english native } description coverImage { extraLarge }
+                nextAiringEpisode { airingAt timeUntilAiring episode }
+            } 
+        }`;
+        const variables = hasValidAniId ? { id: parseInt(baseAnime.anilistId) } : { search: (baseAnime.title || animeId).replace(/\(Dub\)|\(Sub\)/gi, '').trim() };
+        
+        fetch('https://graphql.anilist.co', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ query, variables })
+        }).then(r => r.json()).then(json => {
             aniData = json?.data?.Media || {};
-        } catch (e) { console.log("AniList sync bypassed."); }
-
-        // C. Fetch Episode List
-        try {
-            const epsResponse = await fetch(`${baseUrl}/api/episodes/${animeId}`);
-            const epsJson = await epsResponse.json();
-            if (epsJson && epsJson.success && Array.isArray(epsJson.data)) {
-                episodesList = epsJson.data;
-            } else if (epsJson && epsJson.success && epsJson.results && Array.isArray(epsJson.results.episodes)) {
-                episodesList = epsJson.results.episodes;
-            }
-        } catch(e) { console.error("Episode list fetch failed."); }
-
-        // Update Header UI Meta Data
-        const finalTitle = baseAnime.title || aniData.title?.english || aniData.title?.romaji || animeId.replace(/-/g, ' ').toUpperCase();
-        const finalDesc = (baseAnime.description || aniData.description || 'No description available.').replace(/<[^>]*>?/gm, '');
-        const finalPoster = aniData.coverImage?.extraLarge || baseAnime.poster || 'https://via.placeholder.com/800x1200/111/fff?text=Poster';
-
-        document.getElementById('current-anime-title').innerText = finalTitle;
-        document.getElementById('current-anime-desc').innerText = finalDesc;
-        
-        // Show "See More" if description is long
-        if (finalDesc.length > 150) {
-            document.getElementById('desc-load-more-btn').classList.remove('hidden');
-        }
-        
-        const posterImg = document.getElementById('play-anime-poster');
-        if(posterImg) {
-            posterImg.src = finalPoster;
-            posterImg.classList.remove('animate-pulse');
-        }
-
-        // Live Countdown Logic setup
-        if (aniData.nextAiringEpisode) {
-            const targetTime = aniData.nextAiringEpisode.airingAt * 1000;
-            document.getElementById('countdown-ep-label').innerText = `Episode ${aniData.nextAiringEpisode.episode}`;
             
-            const schedContainer = document.getElementById('play-schedule-container');
-            schedContainer.classList.remove('hidden');
-            schedContainer.classList.add('flex');
+            // Post-load UI updates for Anilist data
+            const finalTitle = baseAnime.title || aniData.title?.english || aniData.title?.romaji || animeId.replace(/-/g, ' ').toUpperCase();
+            const finalDesc = (baseAnime.description || aniData.description || 'No description available.').replace(/<[^>]*>?/gm, '');
+            const finalPoster = aniData.coverImage?.extraLarge || baseAnime.poster || 'https://via.placeholder.com/800x1200/111/fff?text=Poster';
 
-            if (window.app.state.scheduleInterval) clearInterval(window.app.state.scheduleInterval);
+            document.getElementById('current-anime-title').innerText = finalTitle;
+            document.getElementById('current-anime-desc').innerText = finalDesc;
+            
+            if (finalDesc.length > 150) {
+                document.getElementById('desc-load-more-btn').classList.remove('hidden');
+            }
+            
+            const posterImg = document.getElementById('play-anime-poster');
+            if(posterImg) {
+                posterImg.src = finalPoster;
+                posterImg.classList.remove('animate-pulse');
+            }
 
-            window.app.state.scheduleInterval = setInterval(() => {
-                const now = new Date().getTime();
-                const distance = targetTime - now;
+            if (aniData.nextAiringEpisode) {
+                const targetTime = aniData.nextAiringEpisode.airingAt * 1000;
+                document.getElementById('countdown-ep-label').innerText = `Episode ${aniData.nextAiringEpisode.episode}`;
+                
+                const schedContainer = document.getElementById('play-schedule-container');
+                schedContainer.classList.remove('hidden');
+                schedContainer.classList.add('flex');
 
-                if (distance < 0) {
-                    clearInterval(window.app.state.scheduleInterval);
-                    document.getElementById('countdown-timer-display').innerText = "AIRING NOW";
-                    return;
-                }
+                if (window.app.state.scheduleInterval) clearInterval(window.app.state.scheduleInterval);
 
-                const d = Math.floor(distance / (1000 * 60 * 60 * 24));
-                const h = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                const m = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-                const s = Math.floor((distance % (1000 * 60)) / 1000);
+                window.app.state.scheduleInterval = setInterval(() => {
+                    const now = new Date().getTime();
+                    const distance = targetTime - now;
 
-                document.getElementById('countdown-timer-display').innerText = 
-                    `${d.toString().padStart(2, '0')}d : ${h.toString().padStart(2, '0')}h : ${m.toString().padStart(2, '0')}m : ${s.toString().padStart(2, '0')}s`;
-            }, 1000);
-        }
+                    if (distance < 0) {
+                        clearInterval(window.app.state.scheduleInterval);
+                        document.getElementById('countdown-timer-display').innerText = "AIRING NOW";
+                        return;
+                    }
 
+                    const d = Math.floor(distance / (1000 * 60 * 60 * 24));
+                    const h = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                    const m = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                    const s = Math.floor((distance % (1000 * 60)) / 1000);
+
+                    document.getElementById('countdown-timer-display').innerText = 
+                        `${d.toString().padStart(2, '0')}d : ${h.toString().padStart(2, '0')}h : ${m.toString().padStart(2, '0')}m : ${s.toString().padStart(2, '0')}s`;
+                }, 1000);
+            }
+        }).catch(e => console.log("AniList sync bypassed."));
+
+        // Fallback title update while Anilist fetches
+        document.getElementById('current-anime-title').innerText = baseAnime.title || animeId.replace(/-/g, ' ').toUpperCase();
+        
         // Set Episode Specific Title
         if (episodesList && episodesList.length > 0) {
             const currentEpObj = episodesList.find(e => (e.num || e.episode_no) == currentEpNum);
@@ -333,6 +328,13 @@ window.app.components.play = async () => {
 // ==========================================
 // --- CLOUD-SYNCED PLAYER ACTIONS ---
 // ==========================================
+
+window.app.resolveEpisodeStreamAndRoute = (epId, epNum, animeId) => {
+    const urlParams = new URLSearchParams(window.location.search);
+    urlParams.set('id', epId);
+    urlParams.set('ep', epNum);
+    window.location.search = urlParams.toString();
+};
 
 window.app.togglePlayDesc = () => {
     const desc = document.getElementById('current-anime-desc');
@@ -599,7 +601,6 @@ window.app.renderPlayGridItems = () => {
     const rangeArray = window.app.state.epRangeFilter ? window.app.state.epRangeFilter.split('-') : [];
     const currentLangMode = window.app.state.activeLanguageType || 'sub';
     const currentlyPlayingEp = window.app.state.currentPlayingEpNum;
-    const currentServer = new URLSearchParams(window.location.search).get('server') || 'hd-1';
     
     let episodesToRender = [...episodesToFilter];
 
@@ -635,7 +636,7 @@ window.app.renderPlayGridItems = () => {
         const targetEpisodeSlugId = ep.slug || ep.id || String(epNumber); 
         
         const isFillerEpisode = ep.isFiller === true;
-        const fillerIconDot = isFillerEpisode ? `<div class="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full"></div>` : '';
+        const fillerIconDot = isFillerEpisode ? `<div class="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full shadow-[0_0_5px_rgba(239,68,68,0.8)]"></div>` : '';
         const isSupportedByLang = (currentLangMode === 'sub' && ep.isSub !== false) || 
                                   (currentLangMode === 'dub' && ep.isDub === true);
 
@@ -656,14 +657,13 @@ window.app.renderPlayGridItems = () => {
             interactiveActionAttr = `onclick="window.app.resolveEpisodeStreamAndRoute('${targetEpisodeSlugId}', ${epNumber}, '${animeId}')"`;
             
             if (isCurrentlyPlaying) {
-                // Flat solid orange for active play state - NO GLOW
-                buttonStyleClass = 'border-[#F47521] text-black bg-[#F47521] font-black text-base z-10';
+                buttonStyleClass = 'border-[#F47521] text-black bg-[#F47521] font-black text-base z-10 shadow-[0_0_10px_rgba(244,117,33,0.5)]';
             } else if (isAlreadyWatched) {
-                buttonStyleClass = 'border-[#F47521]/30 text-[#F47521] bg-[#F47521]/5 hover:bg-[#F47521] hover:text-black font-black text-base transition-colors';
+                buttonStyleClass = 'border-transparent text-gray-500 bg-white/5 opacity-50 hover:opacity-100 hover:text-white font-medium text-base transition-all';
+            } else if (isFillerEpisode) {
+                buttonStyleClass = 'border-red-500/40 text-red-400 hover:bg-red-500 hover:text-white hover:border-red-500 font-black text-base transition-colors bg-red-500/10';
             } else {
-                buttonStyleClass = isFillerEpisode 
-                    ? 'border-red-500/30 text-gray-300 hover:bg-red-500 hover:text-white hover:border-red-500 font-black text-base transition-colors bg-red-500/5' 
-                    : 'border-white/10 bg-[#111] text-gray-300 hover:bg-[#F47521] hover:text-black hover:border-[#F47521] font-black text-base transition-colors shadow-sm';
+                buttonStyleClass = 'border-white/10 bg-[#111] text-gray-300 hover:bg-[#F47521] hover:text-black hover:border-[#F47521] font-black text-base transition-colors shadow-sm';
             }
         } else {
             interactiveActionAttr = 'disabled';
