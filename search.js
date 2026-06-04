@@ -364,4 +364,93 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/90 to-transparent"></div>
                     </div>
                     <div class="relative flex flex-col md:flex-row gap-4 p-4 z-10">
-                        <img
+                        <img src="${topImg}" class="w-28 md:w-36 h-40 md:h-52 object-cover rounded-lg shadow-2xl border border-white/5">
+                        <div class="flex flex-col flex-1">
+                            <span class="text-[9px] font-black uppercase tracking-widest text-[#F47521] mb-1"><i class="fas fa-star mr-1"></i> Top Result</span>
+                            <h3 class="text-base md:text-xl font-black leading-tight text-white mb-2">${topAnime.title}</h3>
+                            <p class="text-[10px] text-gray-400 line-clamp-4 mb-4 leading-relaxed">${description}</p>
+                            <div class="flex items-center gap-2 mt-auto">
+                                <button onclick="event.stopPropagation(); window.location.href='info.html?id=${topAnime.id}'" class="bg-white text-black px-4 py-2 rounded font-black text-[10px] uppercase tracking-widest hover:bg-[#F47521] hover:text-white transition"><i class="fas fa-play mr-1"></i> Play</button>
+                                ${libraryBtnHtml}
+                                <div class="flex gap-1 ml-auto text-[9px] font-bold">
+                                    <span class="bg-[#111] text-white px-1.5 py-0.5 rounded border border-white/10">${topAnime.type || 'TV'}</span>
+                                    <span class="bg-[#F47521]/10 border border-[#F47521]/30 text-[#F47521] px-1.5 py-0.5 rounded">SUB ${topSubEps}</span>
+                                    ${topDubEps > 0 ? `<span class="bg-purple-500/10 border border-purple-500/30 text-purple-400 px-1.5 py-0.5 rounded">DUB ${topDubEps}</span>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            }
+
+            if(resultsListContainer) {
+                resultsListContainer.innerHTML = restAnime.map(anime => {
+                    const aSub = anime.tvInfo?.sub || anime.sub || '?';
+                    const aDub = anime.tvInfo?.dub || anime.dub || 0;
+                    return `
+                    <div onclick="window.location.href='info.html?id=${anime.id}'" class="flex gap-3 items-center bg-[#111] p-2 rounded-xl cursor-pointer hover:border-[#F47521] transition border border-transparent shadow-sm group">
+                        <img src="${anime.image || anime.poster}" class="w-14 h-20 object-cover rounded-lg">
+                        <div class="flex-1 min-w-0 pr-2">
+                            <h4 class="text-sm font-bold text-white truncate">${anime.title}</h4>
+                            <div class="flex gap-2 mt-2 items-center text-[9px] font-black uppercase tracking-wider">
+                                <span class="text-gray-400 border border-gray-600 px-1.5 py-0.5 rounded">${anime.type || 'TV'}</span>
+                                <div class="flex gap-1 ml-auto">
+                                    <span class="text-gray-300">SUB <span class="text-white">${aSub}</span></span>
+                                    ${aDub > 0 ? `<span class="text-gray-300 ml-1">DUB <span class="text-white">${aDub}</span></span>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+        } catch (err) {
+            render404State("Network error occurred while communicating with the database.");
+        }
+    };
+
+    // --- LIBRARY BUTTON ACTION ---
+    window.app.toggleSearchLibraryClick = async (event, id, title, img) => {
+        event.stopPropagation(); 
+        const profile = window.app.state?.activeProfile || null;
+        if (!profile || !profile.uid || profile.uid.startsWith('anon_')) {
+            if (window.app.components && window.app.components.auth) window.app.components.auth();
+            else if (window.app.showCustomAlert) window.app.showCustomAlert("Log in to save to your Library!", "error");
+            return;
+        }
+
+        if(!profile.library) profile.library = [];
+        const formattedAnime = { id, title, img };
+        const existingItemIndex = profile.library.findIndex(item => item.id === id);
+        const isCurrentlyAdded = existingItemIndex !== -1;
+        const btn = event.currentTarget;
+
+        try {
+            const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+            const userRef = firestore.doc(window.app.db, "users", profile.uid);
+
+            if (isCurrentlyAdded) {
+                profile.library.splice(existingItemIndex, 1); 
+                localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
+                if (btn) {
+                    btn.className = "bg-[#111] text-white px-3 py-2 rounded font-black text-[10px] uppercase hover:border-[#F47521] transition border border-white/10 flex items-center gap-2";
+                    btn.innerHTML = `<i class="fas fa-plus"></i> Library`;
+                }
+                await firestore.updateDoc(userRef, { library: firestore.arrayRemove(formattedAnime) });
+                if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
+            } else {
+                profile.library.unshift(formattedAnime);
+                localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
+                if (btn) {
+                    btn.className = "bg-[#F47521] text-black px-3 py-2 rounded font-black text-[10px] uppercase hover:bg-white transition border border-[#F47521] flex items-center gap-2";
+                    btn.innerHTML = `<i class="fas fa-check"></i> Added`;
+                }
+                await firestore.updateDoc(userRef, { library: firestore.arrayUnion(formattedAnime) });
+                if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
+            }
+        } catch (error) { 
+            if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to sync with cloud.", "error");
+        }
+    };
+
+    initSearchPage();
+});
