@@ -49,7 +49,7 @@ window.app.components.player = async () => {
     const baseUrl = 'https://anikoto-api-xi.vercel.app';
     const customProxyUrl = 'https://icy-wave-30d8.prashant-yash69.workers.dev/proxy?url='; 
 
-    // Inject Player & Expanded Subtitle CSS
+    // Inject Player & Expanded Subtitle CSS (Including Height Elevation Trick)
     if (!document.getElementById('blazex-player-css')) {
         const style = document.createElement('style');
         style.id = 'blazex-player-css';
@@ -60,6 +60,10 @@ window.app.components.player = async () => {
                 --sub-font: sans-serif;
                 --sub-size: 100%;
                 --sub-shadow: 1px 1px 3px rgba(0,0,0,0.8), 0px 0px 5px rgba(0,0,0,0.8);
+                --sub-elev: 0px;
+            }
+            video::-webkit-media-text-track-display {
+                transform: translateY(var(--sub-elev)) !important;
             }
             ::cue {
                 color: var(--sub-color);
@@ -83,7 +87,6 @@ window.app.components.player = async () => {
             
             #blazex-player-root:fullscreen, #blazex-player-root:-webkit-full-screen { width: 100vw; height: 100vh; max-width: none; border-radius: 0; border: none; }
             
-            /* Buffer Spinner */
             .loader-ring { width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.1); border-left-color: #F47521; border-radius: 50%; animation: spin 1s linear infinite; }
             @keyframes spin { to { transform: rotate(360deg); } }
         `;
@@ -100,10 +103,7 @@ window.app.components.player = async () => {
                 document.head.appendChild(script);
                 setTimeout(() => reject(new Error("Timeout HLS engine.")), 5000);
             });
-        } catch (e) {
-            setBootStatus(`Engine Failure: ${e.message}`, true);
-            return;
-        }
+        } catch (e) { setBootStatus(`Engine Failure: ${e.message}`, true); return; }
     }
 
     try {
@@ -120,7 +120,6 @@ window.app.components.player = async () => {
         };
 
         streamData = await fetchStream(targetServer);
-        
         if (!streamData && targetServer === 'hd-1') {
             targetServer = 'hd-2';
             streamData = await fetchStream(targetServer);
@@ -130,17 +129,13 @@ window.app.components.player = async () => {
         }
 
         if (!streamData) throw new Error("All stream servers are unresponsive for this episode.");
-
         setBootStatus("Constructing Cinematic Pipeline...");
 
         const streamUrl = streamData.m3u8; 
         const targetReferer = streamData.referer || "https://vidwish.live/";
         const tracks = streamData.subtitles || []; 
-        const introStart = streamData.intro?.start || 0;
-        const introEnd = streamData.intro?.end || 0;
-        const outroStart = streamData.outro?.start || 0;
-        const outroEnd = streamData.outro?.end || 0;
-
+        const introStart = streamData.intro?.start || 0, introEnd = streamData.intro?.end || 0;
+        const outroStart = streamData.outro?.start || 0, outroEnd = streamData.outro?.end || 0;
         const proxiedStreamUrl = customProxyUrl + encodeURIComponent(streamUrl) + '&referer=' + encodeURIComponent(targetReferer);
 
         const epsList = window.app.state?.currentEpisodesListProcessed || [];
@@ -161,7 +156,7 @@ window.app.components.player = async () => {
 
                 <div id="gesture-overlay" class="absolute inset-0 z-10"></div>
                 
-                <div id="speed-indicator" class="absolute top-6 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm text-white px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase transition-opacity duration-200 opacity-0 z-40 flex items-center gap-2 border border-white/10">
+                <div id="speed-indicator" class="absolute top-6 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm text-white px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase transition-opacity duration-200 opacity-0 z-40 flex items-center gap-2 border border-white/10 pointer-events-none">
                     <span id="speed-indicator-text">2x Speed</span> <i class="fas fa-forward text-[#F47521]"></i>
                 </div>
 
@@ -212,8 +207,10 @@ window.app.components.player = async () => {
                             
                             <div class="flex items-center gap-4 relative">
                                 
+                                <!-- Speed Button -->
                                 <button id="speed-btn" class="text-white hover:text-[#F47521] transition-colors font-black text-[12px] w-8 text-center">1x</button>
                                 
+                                <!-- Audio Menu -->
                                 <div class="relative hidden group audio-container">
                                     <button id="audio-btn" class="text-white hover:text-[#F47521] transition-colors"><i class="fas fa-headphones text-lg"></i></button>
                                     <div id="audio-menu" class="hidden absolute bottom-full right-0 mb-4 w-40 bg-[#111]/95 backdrop-blur-md border border-white/10 rounded-xl p-2 flex flex-col gap-1 z-50">
@@ -222,6 +219,7 @@ window.app.components.player = async () => {
                                     </div>
                                 </div>
 
+                                <!-- Expanded Subtitles Menu -->
                                 <div class="relative group subs-container">
                                     <button id="subs-btn" class="text-white hover:text-[#F47521] transition-colors"><i class="fas fa-closed-captioning text-lg"></i></button>
                                     <div id="subs-menu" class="hidden absolute bottom-full right-[-50px] md:right-0 mb-4 w-56 bg-[#111]/95 backdrop-blur-md border border-white/10 rounded-xl p-3 flex flex-col gap-2 z-50 max-h-[60vh] overflow-y-auto hide-scrollbar shadow-2xl">
@@ -234,14 +232,15 @@ window.app.components.player = async () => {
                                         <div class="border-t border-white/10 pt-2">
                                             <div class="text-[9px] font-black uppercase text-gray-500 px-1 pb-1">Color</div>
                                             <div class="flex flex-wrap gap-2 px-1">
-                                                <button class="sub-color-btn w-5 h-5 rounded-full border border-white/20 bg-white" data-color="#FFFFFF"></button>
-                                                <button class="sub-color-btn w-5 h-5 rounded-full border border-white/20 bg-[#F47521]" data-color="#F47521"></button>
-                                                <button class="sub-color-btn w-5 h-5 rounded-full border border-white/20 bg-yellow-400" data-color="#FACC15"></button>
-                                                <button class="sub-color-btn w-5 h-5 rounded-full border border-white/20 bg-green-400" data-color="#4ADE80"></button>
-                                                <button class="sub-color-btn w-5 h-5 rounded-full border border-white/20 bg-blue-400" data-color="#60A5FA"></button>
-                                                <button class="sub-color-btn w-5 h-5 rounded-full border border-white/20 bg-pink-400" data-color="#F472B6"></button>
-                                                <button class="sub-color-btn w-5 h-5 rounded-full border border-white/20 bg-red-500" data-color="#EF4444"></button>
-                                                <button class="sub-color-btn w-5 h-5 rounded-full border border-white/20 bg-purple-400" data-color="#A78BFA"></button>
+                                                <!-- Added outline class setup for highlighting -->
+                                                <button class="sub-color-btn w-5 h-5 rounded-full border border-black ring-offset-black transition-transform" data-color="#FFFFFF" style="background:#FFFFFF;"></button>
+                                                <button class="sub-color-btn w-5 h-5 rounded-full border border-black ring-offset-black transition-transform" data-color="#F47521" style="background:#F47521;"></button>
+                                                <button class="sub-color-btn w-5 h-5 rounded-full border border-black ring-offset-black transition-transform" data-color="#FACC15" style="background:#FACC15;"></button>
+                                                <button class="sub-color-btn w-5 h-5 rounded-full border border-black ring-offset-black transition-transform" data-color="#4ADE80" style="background:#4ADE80;"></button>
+                                                <button class="sub-color-btn w-5 h-5 rounded-full border border-black ring-offset-black transition-transform" data-color="#60A5FA" style="background:#60A5FA;"></button>
+                                                <button class="sub-color-btn w-5 h-5 rounded-full border border-black ring-offset-black transition-transform" data-color="#F472B6" style="background:#F472B6;"></button>
+                                                <button class="sub-color-btn w-5 h-5 rounded-full border border-black ring-offset-black transition-transform" data-color="#EF4444" style="background:#EF4444;"></button>
+                                                <button class="sub-color-btn w-5 h-5 rounded-full border border-black ring-offset-black transition-transform" data-color="#A78BFA" style="background:#A78BFA;"></button>
                                             </div>
                                         </div>
 
@@ -265,7 +264,16 @@ window.app.components.player = async () => {
                                             </div>
                                         </div>
 
-                                        <div class="border-t border-white/10 pt-2 pb-1">
+                                        <div class="border-t border-white/10 pt-2">
+                                            <div class="text-[9px] font-black uppercase text-gray-500 px-1 pb-1">Height Position</div>
+                                            <div class="flex gap-1 px-1">
+                                                <button class="sub-elev-btn flex-1 text-[10px] py-1 bg-[#F47521] text-black font-bold rounded" data-elev="0px">Low</button>
+                                                <button class="sub-elev-btn flex-1 text-[10px] py-1 bg-white/5 rounded hover:bg-[#F47521] hover:text-black" data-elev="-30px">Mid</button>
+                                                <button class="sub-elev-btn flex-1 text-[10px] py-1 bg-white/5 rounded hover:bg-[#F47521] hover:text-black" data-elev="-60px">High</button>
+                                            </div>
+                                        </div>
+
+                                        <div class="border-t border-white/10 pt-2 pb-1 mt-1">
                                             <div class="flex items-center justify-between px-1">
                                                 <span class="text-[9px] font-black uppercase text-gray-500">Text Border</span>
                                                 <button id="sub-border-toggle" class="text-[10px] px-3 py-1 bg-white/10 rounded hover:bg-white/20 transition-colors" data-active="true">ON</button>
@@ -275,8 +283,10 @@ window.app.components.player = async () => {
                                     </div>
                                 </div>
 
+                                <!-- Aspect Ratio -->
                                 <button id="ar-btn" class="text-white hover:text-[#F47521] transition-colors"><i id="ar-icon" class="fas fa-tv text-md"></i></button>
 
+                                <!-- Quality Menu -->
                                 <div class="relative group quality-container">
                                     <button id="quality-btn" class="text-white hover:text-[#F47521] transition-colors"><i class="fas fa-cog text-lg"></i></button>
                                     <div id="quality-menu" class="hidden absolute bottom-full right-0 mb-4 w-40 bg-[#111]/95 backdrop-blur-md border border-white/10 rounded-xl p-2 flex flex-col gap-1 z-50">
@@ -312,10 +322,8 @@ window.app.components.player = async () => {
         const subsBtn = document.getElementById('subs-btn'), subsMenu = document.getElementById('subs-menu');
         const qualityBtn = document.getElementById('quality-btn'), qualityMenu = document.getElementById('quality-menu');
         const speedBtn = document.getElementById('speed-btn');
-        const arBtn = document.getElementById('ar-btn');
-        const arIcon = document.getElementById('ar-icon');
+        const arBtn = document.getElementById('ar-btn'), arIcon = document.getElementById('ar-icon');
 
-        // Buffer Events
         video.addEventListener('waiting', () => bufferOverlay.classList.remove('hidden'));
         video.addEventListener('playing', () => bufferOverlay.classList.add('hidden'));
         video.addEventListener('canplay', () => bufferOverlay.classList.add('hidden'));
@@ -325,63 +333,28 @@ window.app.components.player = async () => {
             try {
                 const epDescEl = document.getElementById('ep-desc');
                 const cleanSearch = animeId.replace(/-/g, ' ').replace(/[0-9a-z]{5}$/i, '').trim();
-                
-                const query = `
-                query ($search: String) {
-                    Media(search: $search, type: ANIME) {
-                        id
-                        title { romaji english }
-                        description(asHtml: false)
-                    }
-                }`;
-                
-                const res = await fetch('https://graphql.anilist.co', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query, variables: { search: cleanSearch } })
-                });
+                const query = `query ($search: String) { Media(search: $search, type: ANIME) { id title { romaji english } description(asHtml: false) } }`;
+                const res = await fetch('https://graphql.anilist.co', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, variables: { search: cleanSearch } }) });
                 const data = await res.json();
-                
                 if (data.data?.Media) {
-                    epDescEl.innerText = data.data.Media.description 
-                        ? data.data.Media.description.replace(/<[^>]*>?/gm, '')
-                        : `${data.data.Media.title.english || data.data.Media.title.romaji} - Episode ${currentEpNum}`;
+                    epDescEl.innerText = data.data.Media.description ? data.data.Media.description.replace(/<[^>]*>?/gm, '') : `${data.data.Media.title.english || data.data.Media.title.romaji} - Episode ${currentEpNum}`;
                 }
-            } catch (err) {
-                console.warn("Failed to fetch AniList metadata.");
-            }
+            } catch (err) { console.warn("Failed to fetch AniList metadata."); }
         };
         fetchEpisodeMetadata();
 
-        const closeAllMenus = () => {
-            audioMenu.classList.add('hidden');
-            subsMenu.classList.add('hidden');
-            qualityMenu.classList.add('hidden');
-        };
+        const isAnyMenuOpen = () => !audioMenu.classList.contains('hidden') || !subsMenu.classList.contains('hidden') || !qualityMenu.classList.contains('hidden');
+        const closeAllMenus = () => { audioMenu.classList.add('hidden'); subsMenu.classList.add('hidden'); qualityMenu.classList.add('hidden'); };
 
-        // Aspect Ratio Logic with Dynamic SVGs
-        const arModes = [
-            { fit: 'contain', icon: 'fas fa-tv' },
-            { fit: 'cover', icon: 'fas fa-crop' },
-            { fit: 'fill', icon: 'fas fa-arrows-alt' }
-        ];
+        // Aspect Ratio
+        const arModes = [ { fit: 'contain', icon: 'fas fa-tv' }, { fit: 'cover', icon: 'fas fa-crop' }, { fit: 'fill', icon: 'fas fa-arrows-alt' } ];
         let arIndex = 0;
-        arBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            arIndex = (arIndex + 1) % arModes.length;
-            video.style.objectFit = arModes[arIndex].fit;
-            arIcon.className = `${arModes[arIndex].icon} text-md`;
-        });
+        arBtn.addEventListener('click', (e) => { e.stopPropagation(); arIndex = (arIndex + 1) % arModes.length; video.style.objectFit = arModes[arIndex].fit; arIcon.className = `${arModes[arIndex].icon} text-md`; });
 
         // Speed Logic
         const speeds = [0.5, 1, 1.25, 1.5, 2];
-        let speedIdx = 1; // Default to 1x
-        speedBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            speedIdx = (speedIdx + 1) % speeds.length;
-            video.playbackRate = speeds[speedIdx];
-            speedBtn.innerText = speeds[speedIdx] + 'x';
-        });
+        let speedIdx = 1;
+        speedBtn.addEventListener('click', (e) => { e.stopPropagation(); speedIdx = (speedIdx + 1) % speeds.length; video.playbackRate = speeds[speedIdx]; speedBtn.innerText = speeds[speedIdx] + 'x'; });
 
         // --- SUBTITLE CONTROLS & FIREBASE SYNC ---
         const db = window.db || (typeof firebase !== 'undefined' ? firebase.firestore() : null);
@@ -389,96 +362,78 @@ window.app.components.player = async () => {
 
         async function saveSettingsToFirebase(settingsObj) {
             if (!db || !userUid || userUid === 'guest') return;
-            try {
-                await db.collection('users').doc(userUid).collection('episodes').doc(`${animeId}_${currentEpNum}`).set({
-                    settings: settingsObj
-                }, { merge: true });
-            } catch(e) { console.warn("Firebase settings sync failed", e); }
+            try { await db.collection('users').doc(userUid).collection('episodes').doc(`${animeId}_${currentEpNum}`).set({ settings: settingsObj }, { merge: true }); } 
+            catch(e) { console.warn("Firebase settings sync failed", e); }
         }
 
-        let currentSubSettings = { color: '#FFFFFF', font: 'sans-serif', size: '100%', shadow: true };
+        let currentSubSettings = { color: '#FFFFFF', font: 'sans-serif', size: '100%', shadow: true, elev: '0px' };
 
         const updateSubCSSVars = () => {
             document.documentElement.style.setProperty('--sub-color', currentSubSettings.color);
             document.documentElement.style.setProperty('--sub-font', currentSubSettings.font);
             document.documentElement.style.setProperty('--sub-size', currentSubSettings.size);
+            document.documentElement.style.setProperty('--sub-elev', currentSubSettings.elev);
             document.documentElement.style.setProperty('--sub-shadow', currentSubSettings.shadow ? '1px 1px 3px rgba(0,0,0,0.8), 0px 0px 5px rgba(0,0,0,0.8)' : 'none');
-            document.documentElement.style.setProperty('--sub-bg', currentSubSettings.shadow ? 'transparent' : 'rgba(0,0,0,0.5)'); // fallback background if no border
+            document.documentElement.style.setProperty('--sub-bg', currentSubSettings.shadow ? 'transparent' : 'rgba(0,0,0,0.5)'); 
+            
+            // Highlight selected color button
+            document.querySelectorAll('.sub-color-btn').forEach(b => {
+                if(b.getAttribute('data-color') === currentSubSettings.color) { b.classList.add('ring-2', 'ring-white', 'scale-110'); } 
+                else { b.classList.remove('ring-2', 'ring-white', 'scale-110'); }
+            });
         };
 
-        // Color Listeners
+        // UI Handlers for Sub settings
         document.querySelectorAll('.sub-color-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                currentSubSettings.color = btn.getAttribute('data-color');
-                updateSubCSSVars();
-                saveSettingsToFirebase(currentSubSettings);
-            });
+            btn.addEventListener('click', (e) => { e.stopPropagation(); currentSubSettings.color = btn.getAttribute('data-color'); updateSubCSSVars(); saveSettingsToFirebase(currentSubSettings); });
         });
 
-        // Font Listeners
         document.querySelectorAll('.sub-font-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                document.querySelectorAll('.sub-font-btn').forEach(b => { b.classList.remove('bg-[#F47521]', 'text-black'); b.classList.add('bg-white/5'); });
-                btn.classList.add('bg-[#F47521]', 'text-black');
-                btn.classList.remove('bg-white/5');
-                currentSubSettings.font = btn.getAttribute('data-font');
-                updateSubCSSVars();
-                saveSettingsToFirebase(currentSubSettings);
+                e.stopPropagation(); document.querySelectorAll('.sub-font-btn').forEach(b => { b.classList.remove('bg-[#F47521]', 'text-black'); b.classList.add('bg-white/5'); });
+                btn.classList.add('bg-[#F47521]', 'text-black'); btn.classList.remove('bg-white/5');
+                currentSubSettings.font = btn.getAttribute('data-font'); updateSubCSSVars(); saveSettingsToFirebase(currentSubSettings);
             });
         });
 
-        // Size Listeners
         document.querySelectorAll('.sub-size-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                document.querySelectorAll('.sub-size-btn').forEach(b => { b.classList.remove('bg-[#F47521]', 'text-black', 'font-bold'); b.classList.add('bg-white/5'); });
-                btn.classList.add('bg-[#F47521]', 'text-black', 'font-bold');
-                btn.classList.remove('bg-white/5');
-                currentSubSettings.size = btn.getAttribute('data-size');
-                updateSubCSSVars();
-                saveSettingsToFirebase(currentSubSettings);
+                e.stopPropagation(); document.querySelectorAll('.sub-size-btn').forEach(b => { b.classList.remove('bg-[#F47521]', 'text-black', 'font-bold'); b.classList.add('bg-white/5'); });
+                btn.classList.add('bg-[#F47521]', 'text-black', 'font-bold'); btn.classList.remove('bg-white/5');
+                currentSubSettings.size = btn.getAttribute('data-size'); updateSubCSSVars(); saveSettingsToFirebase(currentSubSettings);
             });
         });
 
-        // Border Toggle
-        const borderToggle = document.getElementById('sub-border-toggle');
-        borderToggle.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const isActive = borderToggle.getAttribute('data-active') === 'true';
-            currentSubSettings.shadow = !isActive;
-            borderToggle.setAttribute('data-active', !isActive);
-            borderToggle.innerText = !isActive ? 'ON' : 'OFF';
-            borderToggle.className = !isActive 
-                ? 'text-[10px] px-3 py-1 bg-white/10 rounded hover:bg-white/20 transition-colors' 
-                : 'text-[10px] px-3 py-1 bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition-colors';
-            updateSubCSSVars();
-            saveSettingsToFirebase(currentSubSettings);
+        document.querySelectorAll('.sub-elev-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation(); document.querySelectorAll('.sub-elev-btn').forEach(b => { b.classList.remove('bg-[#F47521]', 'text-black', 'font-bold'); b.classList.add('bg-white/5'); });
+                btn.classList.add('bg-[#F47521]', 'text-black', 'font-bold'); btn.classList.remove('bg-white/5');
+                currentSubSettings.elev = btn.getAttribute('data-elev'); updateSubCSSVars(); saveSettingsToFirebase(currentSubSettings);
+            });
         });
 
-        // Inject Native Subtitles
+        const borderToggle = document.getElementById('sub-border-toggle');
+        borderToggle.addEventListener('click', (e) => {
+            e.stopPropagation(); const isActive = borderToggle.getAttribute('data-active') === 'true'; currentSubSettings.shadow = !isActive;
+            borderToggle.setAttribute('data-active', !isActive); borderToggle.innerText = !isActive ? 'ON' : 'OFF';
+            borderToggle.className = !isActive ? 'text-[10px] px-3 py-1 bg-white/10 rounded hover:bg-white/20 transition-colors' : 'text-[10px] px-3 py-1 bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition-colors';
+            updateSubCSSVars(); saveSettingsToFirebase(currentSubSettings);
+        });
+
+        updateSubCSSVars(); // Initial color highlight
+
         tracks.forEach((track, index) => {
             if (track.kind === 'captions' || track.kind === 'subtitles') {
-                const trackEl = document.createElement('track');
-                trackEl.kind = track.kind;
-                trackEl.label = track.label || `Track ${index+1}`;
-                trackEl.srclang = track.label ? track.label.substring(0, 2).toLowerCase() : 'en';
-                trackEl.src = customProxyUrl + encodeURIComponent(track.file) + '&referer=' + encodeURIComponent(targetReferer); 
-                if (track.default) trackEl.default = true;
-                video.appendChild(trackEl);
+                const trackEl = document.createElement('track'); trackEl.kind = track.kind; trackEl.label = track.label || `Track ${index+1}`; trackEl.srclang = track.label ? track.label.substring(0, 2).toLowerCase() : 'en'; trackEl.src = customProxyUrl + encodeURIComponent(track.file) + '&referer=' + encodeURIComponent(targetReferer); 
+                if (track.default) trackEl.default = true; video.appendChild(trackEl);
             }
         });
 
-        // Initialize HLS
         if (Hls.isSupported()) {
-            hlsInstance = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 60 });
-            hlsInstance.loadSource(proxiedStreamUrl);
-            hlsInstance.attachMedia(video);
+            hlsInstance = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 60 }); hlsInstance.loadSource(proxiedStreamUrl); hlsInstance.attachMedia(video);
             
             hlsInstance.on(Hls.Events.MANIFEST_PARSED, async function() {
                 buildSettingsMenus(hlsInstance, video);
-                
                 let storedTime = localStorage.getItem(`blazex_time_${userUid}_${animeId}_${currentEpNum}`);
                 if (db && userUid && userUid !== 'guest') {
                     try {
@@ -489,78 +444,44 @@ window.app.components.player = async () => {
                             if (data.settings) {
                                 currentSubSettings = { ...currentSubSettings, ...data.settings };
                                 updateSubCSSVars();
-                                
-                                // Update UI to reflect loaded settings
-                                if(currentSubSettings.shadow === false) {
-                                    borderToggle.setAttribute('data-active', 'false');
-                                    borderToggle.innerText = 'OFF';
-                                    borderToggle.className = 'text-[10px] px-3 py-1 bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition-colors';
-                                }
-                                document.querySelectorAll('.sub-size-btn').forEach(b => {
-                                    if(b.getAttribute('data-size') === currentSubSettings.size) {
-                                        b.classList.add('bg-[#F47521]', 'text-black', 'font-bold'); b.classList.remove('bg-white/5');
-                                    } else {
-                                        b.classList.remove('bg-[#F47521]', 'text-black', 'font-bold'); b.classList.add('bg-white/5');
-                                    }
-                                });
+                                if(currentSubSettings.shadow === false) { borderToggle.setAttribute('data-active', 'false'); borderToggle.innerText = 'OFF'; borderToggle.className = 'text-[10px] px-3 py-1 bg-red-500/20 text-red-300 rounded hover:bg-red-500/30 transition-colors'; }
+                                document.querySelectorAll('.sub-size-btn').forEach(b => { if(b.getAttribute('data-size') === currentSubSettings.size) { b.classList.add('bg-[#F47521]', 'text-black', 'font-bold'); b.classList.remove('bg-white/5'); } else { b.classList.remove('bg-[#F47521]', 'text-black', 'font-bold'); b.classList.add('bg-white/5'); } });
+                                document.querySelectorAll('.sub-font-btn').forEach(b => { if(b.getAttribute('data-font') === currentSubSettings.font) { b.classList.add('bg-[#F47521]', 'text-black'); b.classList.remove('bg-white/5'); } else { b.classList.remove('bg-[#F47521]', 'text-black'); b.classList.add('bg-white/5'); } });
+                                document.querySelectorAll('.sub-elev-btn').forEach(b => { if(b.getAttribute('data-elev') === currentSubSettings.elev) { b.classList.add('bg-[#F47521]', 'text-black', 'font-bold'); b.classList.remove('bg-white/5'); } else { b.classList.remove('bg-[#F47521]', 'text-black', 'font-bold'); b.classList.add('bg-white/5'); } });
                             }
                         }
                     } catch(e) { console.warn("Could not fetch remote progress."); }
                 }
-
                 if (storedTime && !isNaN(storedTime)) video.currentTime = parseFloat(storedTime);
                 video.play().catch(e => console.log("Autoplay blocked."));
             });
 
             hlsInstance.on(Hls.Events.ERROR, function (event, data) {
-                if (data.fatal) {
-                    if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hlsInstance.recoverMediaError();
-                    else { setBootStatus(`Stream Data Corrupted. Details: ${data.details}`, true); hlsInstance.destroy(); }
-                }
+                if (data.fatal) { if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hlsInstance.recoverMediaError(); else { setBootStatus(`Stream Data Corrupted. Details: ${data.details}`, true); hlsInstance.destroy(); } }
             });
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            video.src = proxiedStreamUrl;
-            video.addEventListener('loadedmetadata', () => {
-                video.play().catch(e=>e);
-                buildSettingsMenus(null, video);
-            });
+            video.src = proxiedStreamUrl; video.addEventListener('loadedmetadata', () => { video.play().catch(e=>e); buildSettingsMenus(null, video); });
         }
 
         const resetHideTimer = () => {
-            uiLayer.classList.remove('idle');
-            playerRoot.style.cursor = 'default';
-            clearTimeout(hideTimer);
-            if (!video.paused) {
-                hideTimer = setTimeout(() => {
-                    uiLayer.classList.add('idle');
-                    playerRoot.style.cursor = 'none';
-                    closeAllMenus();
-                }, 4000);
-            }
+            uiLayer.classList.remove('idle'); playerRoot.style.cursor = 'default'; clearTimeout(hideTimer);
+            if (!video.paused) { hideTimer = setTimeout(() => { uiLayer.classList.add('idle'); playerRoot.style.cursor = 'none'; closeAllMenus(); }, 4000); }
         };
 
-        playerRoot.addEventListener('mousemove', resetHideTimer);
-        playerRoot.addEventListener('touchstart', resetHideTimer, {passive: true});
+        playerRoot.addEventListener('mousemove', resetHideTimer); playerRoot.addEventListener('touchstart', resetHideTimer, {passive: true});
         playerRoot.addEventListener('mouseleave', () => { if(!video.paused) { uiLayer.classList.add('idle'); closeAllMenus(); } });
-        uiLayer.addEventListener('click', closeAllMenus); 
-
+        
         const togglePlay = () => { if (video.paused) video.play(); else video.pause(); };
 
         video.addEventListener('play', () => {
-            playIconBottom.className = 'fas fa-pause text-lg';
-            playIconCenter.className = 'fas fa-pause text-2xl ml-0';
-            playBtnCenter.classList.add('opacity-0', 'scale-150'); 
-            setTimeout(() => playBtnCenter.classList.add('hidden'), 300);
-            resetHideTimer();
+            playIconBottom.className = 'fas fa-pause text-lg'; playIconCenter.className = 'fas fa-pause text-2xl ml-0';
+            playBtnCenter.classList.add('opacity-0', 'scale-150'); setTimeout(() => playBtnCenter.classList.add('hidden'), 300); resetHideTimer();
         });
 
         video.addEventListener('pause', () => {
-            playIconBottom.className = 'fas fa-play text-lg';
-            playIconCenter.className = 'fas fa-play text-2xl ml-1';
-            playBtnCenter.classList.remove('hidden');
-            setTimeout(() => playBtnCenter.classList.remove('opacity-0', 'scale-150'), 10);
-            uiLayer.classList.remove('idle');
-            clearTimeout(hideTimer);
+            playIconBottom.className = 'fas fa-play text-lg'; playIconCenter.className = 'fas fa-play text-2xl ml-1';
+            playBtnCenter.classList.remove('hidden'); setTimeout(() => playBtnCenter.classList.remove('opacity-0', 'scale-150'), 10);
+            uiLayer.classList.remove('idle'); clearTimeout(hideTimer);
         });
 
         playBtnBottom.addEventListener('click', (e) => { e.stopPropagation(); togglePlay(); });
@@ -568,73 +489,55 @@ window.app.components.player = async () => {
 
         const formatTime = (sec) => {
             if (isNaN(sec) || !isFinite(sec)) return "00:00";
-            const h = Math.floor(sec / 3600);
-            const m = Math.floor((sec % 3600) / 60);
-            const s = Math.floor(sec % 60);
+            const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.floor(sec % 60);
             if (h > 0) return `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
             return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
         };
 
-        video.addEventListener('loadedmetadata', () => {
-            progressBar.max = video.duration;
-            timeDur.innerText = formatTime(video.duration);
-        });
-
+        video.addEventListener('loadedmetadata', () => { progressBar.max = video.duration; timeDur.innerText = formatTime(video.duration); });
         video.addEventListener('timeupdate', () => {
-            progressBar.value = video.currentTime;
-            timeCurr.innerText = formatTime(video.currentTime);
-            const pct = (video.currentTime / video.duration) * 100;
-            progressBar.style.background = `linear-gradient(to right, #F47521 ${pct}%, rgba(255,255,255,0.2) ${pct}%)`;
+            progressBar.value = video.currentTime; timeCurr.innerText = formatTime(video.currentTime);
+            const pct = (video.currentTime / video.duration) * 100; progressBar.style.background = `linear-gradient(to right, #F47521 ${pct}%, rgba(255,255,255,0.2) ${pct}%)`;
             if (Math.floor(video.currentTime) % 5 === 0) saveProgress(video.currentTime, video.duration);
         });
 
-        progressBar.addEventListener('input', (e) => {
-            video.currentTime = e.target.value;
-            const pct = (e.target.value / video.duration) * 100;
-            e.target.style.background = `linear-gradient(to right, #F47521 ${pct}%, rgba(255,255,255,0.2) ${pct}%)`;
-        });
+        progressBar.addEventListener('input', (e) => { video.currentTime = e.target.value; const pct = (e.target.value / video.duration) * 100; e.target.style.background = `linear-gradient(to right, #F47521 ${pct}%, rgba(255,255,255,0.2) ${pct}%)`; });
 
+        // --- GESTURES & POPUP DISMISSAL PRIORITY ---
         let lastTapTime = 0;
         let isLongPressing = false;
+        let menusWereOpenOnDown = false;
+
         const handleDoubleTap = (e) => {
-            const rect = overlay.getBoundingClientRect();
-            const clientX = e.clientX || (e.changedTouches && e.changedTouches[0].clientX);
+            const rect = overlay.getBoundingClientRect(); const clientX = e.clientX || (e.changedTouches && e.changedTouches[0].clientX);
             if ((clientX - rect.left) > rect.width / 2) {
-                video.currentTime = Math.min(video.duration, video.currentTime + 10);
-                const icon = document.getElementById('dt-right');
-                icon.classList.remove('opacity-0'); setTimeout(()=>icon.classList.add('opacity-0'), 500);
+                video.currentTime = Math.min(video.duration, video.currentTime + 10); const icon = document.getElementById('dt-right'); icon.classList.remove('opacity-0'); setTimeout(()=>icon.classList.add('opacity-0'), 500);
             } else {
-                video.currentTime = Math.max(0, video.currentTime - 10);
-                const icon = document.getElementById('dt-left');
-                icon.classList.remove('opacity-0'); setTimeout(()=>icon.classList.add('opacity-0'), 500);
+                video.currentTime = Math.max(0, video.currentTime - 10); const icon = document.getElementById('dt-left'); icon.classList.remove('opacity-0'); setTimeout(()=>icon.classList.add('opacity-0'), 500);
             }
         };
 
+        // When pointer goes down on empty space, close menus first.
         overlay.addEventListener('pointerdown', (e) => {
+            menusWereOpenOnDown = isAnyMenuOpen();
+            if (menusWereOpenOnDown) { closeAllMenus(); return; }
+            
             pressTimer = setTimeout(() => {
-                isLongPressing = true;
-                video.playbackRate = 2.0;
-                document.getElementById('speed-indicator').classList.remove('opacity-0');
+                isLongPressing = true; video.playbackRate = 2.0; document.getElementById('speed-indicator-text').innerText = '2x Speed'; document.getElementById('speed-indicator').classList.remove('opacity-0');
             }, 600);
         });
 
+        // When pointer goes up (click completed)
         overlay.addEventListener('pointerup', (e) => {
+            if (menusWereOpenOnDown) return; // Ignore click action if we just closed a menu
             clearTimeout(pressTimer);
-            if (isLongPressing) {
-                video.playbackRate = speeds[speedIdx]; 
-                document.getElementById('speed-indicator').classList.add('opacity-0');
-                isLongPressing = false;
-                return;
-            }
+            if (isLongPressing) { video.playbackRate = speeds[speedIdx]; document.getElementById('speed-indicator').classList.add('opacity-0'); isLongPressing = false; return; }
 
-            const currentTime = new Date().getTime();
-            const tapLength = currentTime - lastTapTime;
-            
+            const currentTime = new Date().getTime(); const tapLength = currentTime - lastTapTime;
             if (tapLength < 300 && tapLength > 0) {
-                clearTimeout(tapTimeout);
-                handleDoubleTap(e);
+                clearTimeout(tapTimeout); handleDoubleTap(e);
             } else {
-                tapTimeout = setTimeout(() => { togglePlay(); resetHideTimer(); }, 300);
+                tapTimeout = setTimeout(() => { togglePlay(); resetHideTimer(); }, 300); // Wait slightly to see if it's a double tap, otherwise it's a single tap (Play/Pause)
             }
             lastTapTime = currentTime;
         });
@@ -642,14 +545,10 @@ window.app.components.player = async () => {
         fsBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
             if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-                if (playerRoot.requestFullscreen) playerRoot.requestFullscreen();
-                else if (playerRoot.webkitRequestFullscreen) playerRoot.webkitRequestFullscreen();
-                fsIcon.className = 'fas fa-compress text-lg';
+                if (playerRoot.requestFullscreen) playerRoot.requestFullscreen(); else if (playerRoot.webkitRequestFullscreen) playerRoot.webkitRequestFullscreen(); fsIcon.className = 'fas fa-compress text-lg';
                 if (screen.orientation && screen.orientation.lock) { try { await screen.orientation.lock('landscape'); } catch (err) { } }
             } else {
-                if (document.exitFullscreen) document.exitFullscreen();
-                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-                fsIcon.className = 'fas fa-expand text-lg';
+                if (document.exitFullscreen) document.exitFullscreen(); else if (document.webkitExitFullscreen) document.webkitExitFullscreen(); fsIcon.className = 'fas fa-expand text-lg';
                 if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
             }
         });
@@ -659,46 +558,27 @@ window.app.components.player = async () => {
         qualityBtn.addEventListener('click', (e) => { e.stopPropagation(); const isH = qualityMenu.classList.contains('hidden'); closeAllMenus(); if(isH) qualityMenu.classList.remove('hidden'); resetHideTimer(); });
 
         function buildSettingsMenus(hls, vid) {
-            const qList = document.getElementById('quality-list');
-            const cList = document.getElementById('subs-list');
-            const aList = document.getElementById('audio-list');
-            
-            // Note on Quality: We can only display 144p if the M3U8 stream manifest actually provides it.
-            // If the provider doesn't encode a 144p layer, it will not appear here.
+            const qList = document.getElementById('quality-list'), cList = document.getElementById('subs-list'), aList = document.getElementById('audio-list');
             if (hls && hls.levels) {
                 qList.innerHTML = `<button class="text-left text-[10px] px-3 py-2 rounded bg-[#F47521] text-black font-bold mb-1 q-btn" data-level="-1">Auto</button>`;
-                
-                // Sort levels ascending to ensure neat display
                 const sortedLevels = hls.levels.map((l, i) => ({...l, index: i})).sort((a,b) => a.height - b.height);
-                
-                sortedLevels.forEach((l) => { 
-                    qList.innerHTML += `<button class="text-left text-[10px] px-3 py-2 rounded text-gray-300 hover:bg-white/10 transition-colors q-btn" data-level="${l.index}">${l.height}p</button>`; 
-                });
-                
+                sortedLevels.forEach((l) => { qList.innerHTML += `<button class="text-left text-[10px] px-3 py-2 rounded text-gray-300 hover:bg-white/10 transition-colors q-btn" data-level="${l.index}">${l.height}p</button>`; });
                 qList.onclick = (e) => {
-                    e.stopPropagation();
-                    const btn = e.target.closest('.q-btn'); if (!btn) return;
-                    const levelIndex = parseInt(btn.getAttribute('data-level'));
-                    hls.currentLevel = levelIndex;
+                    e.stopPropagation(); const btn = e.target.closest('.q-btn'); if (!btn) return; const levelIndex = parseInt(btn.getAttribute('data-level')); hls.currentLevel = levelIndex;
                     document.querySelectorAll('.q-btn').forEach(b => {
                         if (parseInt(b.getAttribute('data-level')) === levelIndex) b.className = 'text-left text-[10px] px-3 py-2 rounded bg-[#F47521] text-black font-bold mb-1 q-btn';
                         else b.className = 'text-left text-[10px] px-3 py-2 rounded text-gray-300 hover:bg-white/10 transition-colors mb-1 q-btn';
-                    });
-                    closeAllMenus();
+                    }); closeAllMenus();
                 };
             } else { qList.innerHTML = `<span class="text-[10px] text-gray-500 px-2">Auto (Native)</span>`; }
 
             if (vid.textTracks.length > 0) {
                 cList.innerHTML = `<button class="text-left text-[10px] px-3 py-2 rounded bg-white/10 text-white hover:bg-white/20 mb-1 c-btn" data-idx="-1">Off</button>`;
                 for (let i=0; i<vid.textTracks.length; i++) {
-                    const tk = vid.textTracks[i];
-                    cList.innerHTML += `<button class="text-left text-[10px] px-3 py-2 rounded ${tk.mode==='showing' ? 'bg-[#F47521] text-black font-bold' : 'text-gray-300 hover:bg-white/10'} mb-1 c-btn" data-idx="${i}">${tk.label || 'Lang '+i}</button>`;
+                    const tk = vid.textTracks[i]; cList.innerHTML += `<button class="text-left text-[10px] px-3 py-2 rounded ${tk.mode==='showing' ? 'bg-[#F47521] text-black font-bold' : 'text-gray-300 hover:bg-white/10'} mb-1 c-btn" data-idx="${i}">${tk.label || 'Lang '+i}</button>`;
                 }
-
                 cList.onclick = (e) => {
-                    e.stopPropagation();
-                    const btn = e.target.closest('.c-btn'); if (!btn) return;
-                    const idx = parseInt(btn.getAttribute('data-idx'));
+                    e.stopPropagation(); const btn = e.target.closest('.c-btn'); if (!btn) return; const idx = parseInt(btn.getAttribute('data-idx'));
                     for (let i=0; i<vid.textTracks.length; i++) { vid.textTracks[i].mode = (i === idx) ? 'showing' : 'hidden'; }
                     document.querySelectorAll('.c-btn').forEach(b => {
                         if (parseInt(b.getAttribute('data-idx')) === idx) b.className = 'text-left text-[10px] px-3 py-2 rounded bg-[#F47521] text-black font-bold mb-1 c-btn';
@@ -708,78 +588,43 @@ window.app.components.player = async () => {
             } else { cList.innerHTML = `<span class="text-[10px] text-gray-500 px-2">No Subtitles</span>`; }
 
             if (hls && hls.audioTracks && hls.audioTracks.length > 1) {
-                document.querySelector('.audio-container').classList.remove('hidden');
-                aList.innerHTML = '';
+                document.querySelector('.audio-container').classList.remove('hidden'); aList.innerHTML = '';
                 hls.audioTracks.forEach((t, i) => { aList.innerHTML += `<button class="text-left text-[10px] px-3 py-2 rounded ${hls.audioTrack === i ? 'bg-[#F47521] text-black font-bold' : 'text-gray-300 hover:bg-white/10'} mb-1 a-btn" data-idx="${i}">${t.name || 'Audio '+i}</button>`; });
-                
                 aList.onclick = (e) => {
-                    e.stopPropagation();
-                    const btn = e.target.closest('.a-btn'); if(!btn) return;
-                    const idx = parseInt(btn.getAttribute('data-idx'));
-                    hls.audioTrack = idx;
+                    e.stopPropagation(); const btn = e.target.closest('.a-btn'); if(!btn) return; const idx = parseInt(btn.getAttribute('data-idx')); hls.audioTrack = idx;
                     document.querySelectorAll('.a-btn').forEach(b => {
                         if (parseInt(b.getAttribute('data-idx')) === idx) b.className = 'text-left text-[10px] px-3 py-2 rounded bg-[#F47521] text-black font-bold mb-1 a-btn';
                         else b.className = 'text-left text-[10px] px-3 py-2 rounded text-gray-300 hover:bg-white/10 mb-1 a-btn';
-                    });
-                    closeAllMenus();
+                    }); closeAllMenus();
                 };
             }
         }
 
-        const skipIntroBtn = document.getElementById('skip-intro-btn');
-        const skipOutroBtn = document.getElementById('skip-outro-btn');
-
+        const skipIntroBtn = document.getElementById('skip-intro-btn'), skipOutroBtn = document.getElementById('skip-outro-btn');
         video.addEventListener('timeupdate', () => {
-            const t = video.currentTime;
-            const autoSkipIntro = localStorage.getItem('blazex_autoskip_intro') === 'true';
-            const autoSkipOutro = localStorage.getItem('blazex_autoskip_outro') === 'true';
-
-            if (introEnd > 0 && t >= introStart && t < introEnd) {
-                if (autoSkipIntro) { video.currentTime = introEnd; } 
-                else { skipIntroBtn.classList.remove('translate-x-[150%]', 'opacity-0'); }
-            } else { skipIntroBtn.classList.add('translate-x-[150%]', 'opacity-0'); }
-
+            const t = video.currentTime, autoSkipIntro = localStorage.getItem('blazex_autoskip_intro') === 'true', autoSkipOutro = localStorage.getItem('blazex_autoskip_outro') === 'true';
+            if (introEnd > 0 && t >= introStart && t < introEnd) { if (autoSkipIntro) { video.currentTime = introEnd; } else { skipIntroBtn.classList.remove('translate-x-[150%]', 'opacity-0'); } } else { skipIntroBtn.classList.add('translate-x-[150%]', 'opacity-0'); }
             if (outroEnd > 0 && t >= outroStart && t < outroEnd) {
-                if (autoSkipOutro) { if(hasNextEp) window.app.resolveEpisodeStreamAndRoute(nextEpSlug, currentEpNum + 1, animeId); } 
-                else { 
-                    skipOutroBtn.innerHTML = `Skip Outro <i class="fas fa-forward ml-1"></i>`;
-                    skipOutroBtn.classList.remove('translate-x-[150%]', 'opacity-0'); 
-                }
+                if (autoSkipOutro) { if(hasNextEp) window.app.resolveEpisodeStreamAndRoute(nextEpSlug, currentEpNum + 1, animeId); } else { skipOutroBtn.innerHTML = `Skip Outro <i class="fas fa-forward ml-1"></i>`; skipOutroBtn.classList.remove('translate-x-[150%]', 'opacity-0'); }
             } else if ((!outroStart || outroStart === 0) && video.duration > 0 && t >= video.duration - 10) {
-                if (hasNextEp) {
-                    skipOutroBtn.innerHTML = `Next Episode <i class="fas fa-step-forward ml-1"></i>`;
-                    skipOutroBtn.classList.remove('translate-x-[150%]', 'opacity-0');
-                }
-            } else { 
-                skipOutroBtn.classList.add('translate-x-[150%]', 'opacity-0'); 
-            }
+                if (hasNextEp) { skipOutroBtn.innerHTML = `Next Episode <i class="fas fa-step-forward ml-1"></i>`; skipOutroBtn.classList.remove('translate-x-[150%]', 'opacity-0'); }
+            } else { skipOutroBtn.classList.add('translate-x-[150%]', 'opacity-0'); }
         });
 
         skipIntroBtn.addEventListener('click', (e) => { e.stopPropagation(); video.currentTime = introEnd; });
-        skipOutroBtn.addEventListener('click', (e) => { 
-            e.stopPropagation(); 
-            if(hasNextEp && window.app?.resolveEpisodeStreamAndRoute) { window.app.resolveEpisodeStreamAndRoute(nextEpSlug, currentEpNum + 1, animeId); } 
-            else { video.currentTime = video.duration; }
-        });
+        skipOutroBtn.addEventListener('click', (e) => { e.stopPropagation(); if(hasNextEp && window.app?.resolveEpisodeStreamAndRoute) { window.app.resolveEpisodeStreamAndRoute(nextEpSlug, currentEpNum + 1, animeId); } else { video.currentTime = video.duration; } });
 
         function saveProgress(time, duration) {
-            if (!userUid || userUid === 'guest') {
-                localStorage.setItem(`blazex_time_guest_${animeId}_${currentEpNum}`, time);
-                return;
-            }
+            if (!userUid || userUid === 'guest') { localStorage.setItem(`blazex_time_guest_${animeId}_${currentEpNum}`, time); return; }
             const isCompleted = duration && time > (duration * 0.85);
             if (db) {
                 db.collection('users').doc(userUid).collection('episodes').doc(`${animeId}_${currentEpNum}`).set({
-                    progress: time,
-                    duration: duration,
-                    completed: isCompleted,
-                    lastUpdated: typeof firebase !== 'undefined' ? firebase.firestore.FieldValue.serverTimestamp() : new Date(),
+                    progress: time, duration: duration, completed: isCompleted, lastUpdated: typeof firebase !== 'undefined' ? firebase.firestore.FieldValue.serverTimestamp() : new Date(),
                 }, { merge: true }).catch(err => console.warn("Firebase progress sync failed", err));
             }
             localStorage.setItem(`blazex_time_${userUid}_${animeId}_${currentEpNum}`, time);
             const seriesKey = `blazex_series_${userUid}_${animeId}`;
-            let seriesData = JSON.parse(localStorage.getItem(seriesKey)) || { watchedEps: [], lastWatchedEp: currentEpNum };
-            seriesData.lastWatchedEp = currentEpNum;
+            let seriesData = JSON.parse(localStorage.getItem(seriesKey)) || { watchedEps: [], lastWatchedEp: currentEpNum }; seriesData.lastWatchedEp = currentEpNum;
             if (isCompleted && !seriesData.watchedEps.includes(currentEpNum)) { seriesData.watchedEps.push(currentEpNum); }
             localStorage.setItem(seriesKey, JSON.stringify(seriesData));
         }
@@ -789,9 +634,8 @@ window.app.components.player = async () => {
     window.app.components.player.destroy = () => {
         clearTimeout(hideTimer); clearTimeout(tapTimeout); clearTimeout(pressTimer);
         if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
-        const vid = document.getElementById('main-video-player');
-        if (vid) { vid.pause(); vid.removeAttribute('src'); vid.load(); }
+        const vid = document.getElementById('main-video-player'); if (vid) { vid.pause(); vid.removeAttribute('src'); vid.load(); }
         playerRoot.replaceWith(playerRoot.cloneNode(true));
-        console.log("Player teardown complete. Ready for next route.");
+        console.log("Player teardown complete.");
     };
 };
