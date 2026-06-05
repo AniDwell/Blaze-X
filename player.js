@@ -4,13 +4,11 @@ window.app.components.player = async () => {
     const playerRoot = document.getElementById('blazex-player-root');
     if (!playerRoot) return;
 
-    // Global timer references for teardown
     let hideTimer;
     let tapTimeout;
     let pressTimer;
     let hlsInstance = null;
 
-    // --- BOOT SEQUENCE LOGGER ---
     const setBootStatus = (msg, isError = false) => {
         if (isError) {
             playerRoot.innerHTML = `
@@ -51,11 +49,22 @@ window.app.components.player = async () => {
     const baseUrl = 'https://anikoto-api-xi.vercel.app';
     const customProxyUrl = 'https://icy-wave-30d8.prashant-yash69.workers.dev/proxy?url='; 
 
-    // Inject Player CSS safely - REMOVED ALL GLOWS
+    // Inject Player & Subtitle CSS (Custom Variables for Sub Colors)
     if (!document.getElementById('blazex-player-css')) {
         const style = document.createElement('style');
         style.id = 'blazex-player-css';
         style.innerHTML = `
+            :root {
+                --sub-color: #FFFFFF;
+                --sub-bg: rgba(0, 0, 0, 0.8);
+            }
+            ::cue {
+                color: var(--sub-color);
+                background-color: var(--sub-bg);
+                font-family: sans-serif;
+                text-shadow: 1px 1px 2px black;
+                font-weight: bold;
+            }
             input[type=range].blazex-slider { -webkit-appearance: none; width: 100%; background: transparent; cursor: pointer; height: 6px; outline: none; }
             input[type=range].blazex-slider::-webkit-slider-runnable-track { background: rgba(255,255,255,0.2); height: 4px; border-radius: 4px; }
             input[type=range].blazex-slider::-webkit-slider-thumb { -webkit-appearance: none; height: 12px; width: 12px; border-radius: 50%; background: #F47521; margin-top: -4px; transition: transform 0.1s; }
@@ -64,8 +73,7 @@ window.app.components.player = async () => {
             .player-ui-layer { transition: opacity 0.3s ease, background 0.3s ease; opacity: 1; }
             .player-ui-layer.idle { opacity: 0; cursor: none; }
             
-            #blazex-player-root:fullscreen { width: 100vw; height: 100vh; max-width: none; border-radius: 0; border: none; }
-            #blazex-player-root:-webkit-full-screen { width: 100vw; height: 100vh; max-width: none; border-radius: 0; border: none; }
+            #blazex-player-root:fullscreen, #blazex-player-root:-webkit-full-screen { width: 100vw; height: 100vh; max-width: none; border-radius: 0; border: none; }
         `;
         document.head.appendChild(style);
     }
@@ -90,7 +98,6 @@ window.app.components.player = async () => {
         setBootStatus(`Connecting to ${targetServer.toUpperCase()}...`);
         
         let streamData = null;
-        
         const fetchStream = async (srv) => {
             try {
                 const res = await fetch(`${baseUrl}/api/stream?id=${animeId}&ep=${currentEpNum}&server=${srv}&type=${audioType}`);
@@ -102,12 +109,9 @@ window.app.components.player = async () => {
 
         streamData = await fetchStream(targetServer);
         
-        // AUTO-SWITCH SERVER LOGIC
         if (!streamData && targetServer === 'hd-1') {
-            setBootStatus("HD-1 Offline. Auto-switching to HD-2...");
             targetServer = 'hd-2';
             streamData = await fetchStream(targetServer);
-            
             const newUrl = new URL(window.location);
             newUrl.searchParams.set('server', 'hd-2');
             window.history.replaceState({}, '', newUrl);
@@ -127,7 +131,6 @@ window.app.components.player = async () => {
 
         const proxiedStreamUrl = customProxyUrl + encodeURIComponent(streamUrl) + '&referer=' + encodeURIComponent(targetReferer);
 
-        // SMART NEXT EPISODE LOGIC
         const epsList = window.app.state?.currentEpisodesListProcessed || [];
         const hasNextEp = epsList.some(e => parseInt(e.num || e.episode_no) === currentEpNum + 1);
         let nextEpSlug = null;
@@ -155,18 +158,21 @@ window.app.components.player = async () => {
                     <span class="text-xs font-bold mt-1">10s</span>
                 </div>
 
-                <button id="skip-intro-btn" class="absolute bottom-20 right-4 bg-white/90 backdrop-blur-sm text-black font-black uppercase tracking-widest text-[10px] px-4 py-2 rounded-lg transition-all transform translate-x-[150%] opacity-0 hover:bg-[#F47521] hover:text-white z-40 border border-white/20">
+                <button id="skip-intro-btn" class="absolute bottom-24 right-4 bg-white/90 backdrop-blur-sm text-black font-black uppercase tracking-widest text-[10px] px-4 py-2 rounded-lg transition-all transform translate-x-[150%] opacity-0 hover:bg-[#F47521] hover:text-white z-40 border border-white/20">
                     Skip Intro <i class="fas fa-forward ml-1"></i>
                 </button>
-                <button id="skip-outro-btn" class="absolute bottom-20 right-4 bg-white/90 backdrop-blur-sm text-black font-black uppercase tracking-widest text-[10px] px-4 py-2 rounded-lg transition-all transform translate-x-[150%] opacity-0 hover:bg-[#F47521] hover:text-white z-40 border border-white/20">
-                    ${hasNextEp ? `Next Episode <i class="fas fa-step-forward ml-1"></i>` : `Skip Outro <i class="fas fa-forward ml-1"></i>`}
+                <button id="skip-outro-btn" class="absolute bottom-24 right-4 bg-white/90 backdrop-blur-sm text-black font-black uppercase tracking-widest text-[10px] px-4 py-2 rounded-lg transition-all transform translate-x-[150%] opacity-0 hover:bg-[#F47521] hover:text-white z-40 border border-white/20">
+                    Next Episode <i class="fas fa-step-forward ml-1"></i>
                 </button>
 
                 <div id="ui-layer" class="player-ui-layer absolute inset-0 z-30 flex flex-col justify-between bg-gradient-to-t from-black/90 via-transparent to-black/60 pointer-events-none">
                     
-                    <div class="w-full flex items-center justify-between p-4 pointer-events-auto">
-                        <h2 class="text-white text-xs md:text-sm font-bold tracking-wide truncate pr-4">Episode ${currentEpNum}</h2>
-                        ${targetServer === 'hd-2' ? '<span class="bg-[#F47521] text-black px-2 py-0.5 rounded text-[8px] font-black uppercase border border-black">HD-2</span>' : ''}
+                    <div class="w-full flex items-start justify-between p-4 pointer-events-auto">
+                        <div class="flex flex-col pr-4">
+                            <h2 class="text-white text-xs md:text-sm font-bold tracking-wide truncate">Episode ${currentEpNum}</h2>
+                            <p id="ep-desc" class="text-gray-400 text-[10px] line-clamp-2 max-w-lg mt-1 hidden">Loading metadata...</p>
+                        </div>
+                        ${targetServer === 'hd-2' ? '<span class="bg-[#F47521] text-black px-2 py-0.5 rounded text-[8px] font-black uppercase border border-black mt-1">HD-2</span>' : ''}
                     </div>
                     
                     <div class="flex items-center justify-center pointer-events-auto">
@@ -189,7 +195,9 @@ window.app.components.player = async () => {
                             </div>
                             
                             <div class="flex items-center gap-4 relative">
-                                <!-- Audio Tracks Menu -->
+                                
+                                <button id="speed-btn" class="text-white hover:text-[#F47521] transition-colors font-black text-[12px] w-6 text-center">1x</button>
+                                
                                 <div class="relative hidden group audio-container">
                                     <button id="audio-btn" class="text-white hover:text-[#F47521] transition-colors"><i class="fas fa-headphones text-lg"></i></button>
                                     <div id="audio-menu" class="hidden absolute bottom-full right-0 mb-4 w-40 bg-[#111]/95 backdrop-blur-md border border-white/10 rounded-xl p-2 flex flex-col gap-1 z-50">
@@ -198,18 +206,26 @@ window.app.components.player = async () => {
                                     </div>
                                 </div>
 
-                                <!-- Subtitles Menu -->
                                 <div class="relative group subs-container">
                                     <button id="subs-btn" class="text-white hover:text-[#F47521] transition-colors"><i class="fas fa-closed-captioning text-lg"></i></button>
-                                    <div id="subs-menu" class="hidden absolute bottom-full right-0 mb-4 w-40 bg-[#111]/95 backdrop-blur-md border border-white/10 rounded-xl p-2 flex flex-col gap-1 z-50">
+                                    <div id="subs-menu" class="hidden absolute bottom-full right-0 mb-4 w-48 bg-[#111]/95 backdrop-blur-md border border-white/10 rounded-xl p-2 flex flex-col gap-1 z-50">
                                         <div class="text-[9px] font-black uppercase text-gray-500 px-2 pt-1 pb-1">Subtitles</div>
-                                        <div id="subs-list" class="flex flex-col gap-1 max-h-32 overflow-y-auto hide-scrollbar"></div>
+                                        <div id="subs-list" class="flex flex-col gap-1 max-h-32 overflow-y-auto hide-scrollbar border-b border-white/10 pb-2 mb-1"></div>
+                                        
+                                        <div class="text-[9px] font-black uppercase text-gray-500 px-2 pt-1 pb-1 mt-1">Sub Color</div>
+                                        <div class="flex items-center gap-2 px-2 pb-1">
+                                            <button class="sub-color-btn w-5 h-5 rounded-full border border-white/20 bg-white hover:scale-110 transition-transform" data-color="#FFFFFF"></button>
+                                            <button class="sub-color-btn w-5 h-5 rounded-full border border-white/20 bg-[#F47521] hover:scale-110 transition-transform" data-color="#F47521"></button>
+                                            <button class="sub-color-btn w-5 h-5 rounded-full border border-white/20 bg-yellow-400 hover:scale-110 transition-transform" data-color="#FACC15"></button>
+                                            <button class="sub-color-btn w-5 h-5 rounded-full border border-white/20 bg-green-400 hover:scale-110 transition-transform" data-color="#4ADE80"></button>
+                                        </div>
                                     </div>
                                 </div>
 
-                                <!-- Video Quality Menu -->
+                                <button id="ar-btn" class="text-white hover:text-[#F47521] transition-colors"><i class="fas fa-tv text-md"></i></button>
+
                                 <div class="relative group quality-container">
-                                    <button id="quality-btn" class="text-white hover:text-[#F47521] transition-colors"><i class="fas fa-video text-lg"></i></button>
+                                    <button id="quality-btn" class="text-white hover:text-[#F47521] transition-colors"><i class="fas fa-cog text-lg"></i></button>
                                     <div id="quality-menu" class="hidden absolute bottom-full right-0 mb-4 w-40 bg-[#111]/95 backdrop-blur-md border border-white/10 rounded-xl p-2 flex flex-col gap-1 z-50">
                                         <div class="text-[9px] font-black uppercase text-gray-500 px-2 pt-1 pb-1">Quality</div>
                                         <div id="quality-list" class="flex flex-col gap-1 max-h-32 overflow-y-auto hide-scrollbar"></div>
@@ -236,23 +252,89 @@ window.app.components.player = async () => {
         const fsIcon = document.getElementById('fs-icon');
         const timeCurr = document.getElementById('time-current');
         const timeDur = document.getElementById('time-duration');
+        
+        // Settings Menus
+        const audioBtn = document.getElementById('audio-btn'), audioMenu = document.getElementById('audio-menu');
+        const subsBtn = document.getElementById('subs-btn'), subsMenu = document.getElementById('subs-menu');
+        const qualityBtn = document.getElementById('quality-btn'), qualityMenu = document.getElementById('quality-menu');
+        const speedBtn = document.getElementById('speed-btn');
+        const arBtn = document.getElementById('ar-btn');
 
-        // Menu Elements
-        const audioBtn = document.getElementById('audio-btn');
-        const audioMenu = document.getElementById('audio-menu');
-        const subsBtn = document.getElementById('subs-btn');
-        const subsMenu = document.getElementById('subs-menu');
-        const qualityBtn = document.getElementById('quality-btn');
-        const qualityMenu = document.getElementById('quality-menu');
+        // Fetch AniList / Metadata (Hybrid handling)
+        const fetchEpisodeMetadata = async () => {
+            try {
+                const epDescEl = document.getElementById('ep-desc');
+                const cleanSearch = animeId.replace(/-/g, ' ').replace(/[0-9a-z]{5}$/i, '').trim();
+                
+                const query = `
+                query ($search: String) {
+                    Media(search: $search, type: ANIME) {
+                        id
+                        title { romaji english }
+                        description(asHtml: false)
+                    }
+                }`;
+                
+                const res = await fetch('https://graphql.anilist.co', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query, variables: { search: cleanSearch } })
+                });
+                const data = await res.json();
+                
+                if (data.data?.Media) {
+                    epDescEl.classList.remove('hidden');
+                    // Natively, AniList's API rarely includes strict episode-by-episode descriptions.
+                    // We render the series description or a TMDb bridge fallback if applicable.
+                    epDescEl.innerText = data.data.Media.description 
+                        ? data.data.Media.description.replace(/<[^>]*>?/gm, '').substring(0, 150) + '...'
+                        : `${data.data.Media.title.english || data.data.Media.title.romaji} - Episode ${currentEpNum}`;
+                }
+            } catch (err) {
+                console.warn("Failed to fetch AniList metadata.");
+            }
+        };
+        fetchEpisodeMetadata();
 
-        // Helper to close all menus
         const closeAllMenus = () => {
             audioMenu.classList.add('hidden');
             subsMenu.classList.add('hidden');
             qualityMenu.classList.add('hidden');
         };
 
-        // SUBTITLES INJECTION
+        // Aspect Ratio Logic
+        const arModes = ['contain', 'cover', 'fill'];
+        let arIndex = 0;
+        arBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            arIndex = (arIndex + 1) % arModes.length;
+            video.style.objectFit = arModes[arIndex];
+        });
+
+        // Speed Logic
+        const speeds = [1, 1.25, 1.5, 2];
+        let speedIdx = 0;
+        speedBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            speedIdx = (speedIdx + 1) % speeds.length;
+            video.playbackRate = speeds[speedIdx];
+            speedBtn.innerText = speeds[speedIdx] + 'x';
+        });
+
+        // Subtitle Colors
+        document.querySelectorAll('.sub-color-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const color = btn.getAttribute('data-color');
+                document.documentElement.style.setProperty('--sub-color', color);
+                // Save setting locally or push to FB below
+                if(window.app.state?.activeProfile?.uid) {
+                    saveSettingsToFirebase({ subColor: color });
+                }
+            });
+        });
+
+        // Injects Subtitles
         tracks.forEach((track, index) => {
             if (track.kind === 'captions' || track.kind === 'subtitles') {
                 const trackEl = document.createElement('track');
@@ -265,20 +347,41 @@ window.app.components.player = async () => {
             }
         });
 
-        // HLS LOGIC & PROGRESS RESUME
+        // Initialize Firebase DB Reference
+        const db = window.db || (typeof firebase !== 'undefined' ? firebase.firestore() : null);
+        const userUid = window.app.state?.activeProfile?.uid;
+
+        // Firebase Setting Saver helper
+        async function saveSettingsToFirebase(settingsObj) {
+            if (!db || !userUid || userUid === 'guest') return;
+            try {
+                await db.collection('users').doc(userUid).collection('episodes').doc(`${animeId}_${currentEpNum}`).set({
+                    settings: settingsObj
+                }, { merge: true });
+            } catch(e) { console.warn("Firebase settings sync failed", e); }
+        }
+
         if (Hls.isSupported()) {
             hlsInstance = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 60 });
             hlsInstance.loadSource(proxiedStreamUrl);
             hlsInstance.attachMedia(video);
             
-            hlsInstance.on(Hls.Events.MANIFEST_PARSED, function() {
+            hlsInstance.on(Hls.Events.MANIFEST_PARSED, async function() {
                 buildSettingsMenus(hlsInstance, video);
                 
-                // Fetch Exact Episode Progress
-                const profile = window.app.state?.activeProfile || { uid: 'guest' };
-                const epKey = `blazex_time_${profile.uid}_${animeId}_${currentEpNum}`;
-                const storedTime = localStorage.getItem(epKey);
-                
+                // Fetch Time from Firebase (Fallback to local)
+                let storedTime = localStorage.getItem(`blazex_time_${userUid}_${animeId}_${currentEpNum}`);
+                if (db && userUid && userUid !== 'guest') {
+                    try {
+                        const docRef = await db.collection('users').doc(userUid).collection('episodes').doc(`${animeId}_${currentEpNum}`).get();
+                        if (docRef.exists) {
+                            const data = docRef.data();
+                            if (data.progress) storedTime = data.progress;
+                            if (data.settings?.subColor) document.documentElement.style.setProperty('--sub-color', data.settings.subColor);
+                        }
+                    } catch(e) { console.warn("Could not fetch remote progress."); }
+                }
+
                 if (storedTime && !isNaN(storedTime)) {
                     video.currentTime = parseFloat(storedTime);
                 }
@@ -288,12 +391,8 @@ window.app.components.player = async () => {
 
             hlsInstance.on(Hls.Events.ERROR, function (event, data) {
                 if (data.fatal) {
-                    if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-                        hlsInstance.recoverMediaError();
-                    } else {
-                        setBootStatus(`Stream Data Corrupted. Details: ${data.details}`, true);
-                        hlsInstance.destroy();
-                    }
+                    if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hlsInstance.recoverMediaError();
+                    else { setBootStatus(`Stream Data Corrupted. Details: ${data.details}`, true); hlsInstance.destroy(); }
                 }
             });
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -304,7 +403,6 @@ window.app.components.player = async () => {
             });
         }
 
-        // UI AUTO-HIDE LOGIC
         const resetHideTimer = () => {
             uiLayer.classList.remove('idle');
             playerRoot.style.cursor = 'default';
@@ -321,13 +419,9 @@ window.app.components.player = async () => {
         playerRoot.addEventListener('mousemove', resetHideTimer);
         playerRoot.addEventListener('touchstart', resetHideTimer, {passive: true});
         playerRoot.addEventListener('mouseleave', () => { if(!video.paused) { uiLayer.classList.add('idle'); closeAllMenus(); } });
-        uiLayer.addEventListener('click', closeAllMenus); // Clicking empty UI space closes menus
+        uiLayer.addEventListener('click', closeAllMenus); 
 
-        // PLAY/PAUSE LOGIC
-        const togglePlay = () => {
-            if (video.paused) video.play();
-            else video.pause();
-        };
+        const togglePlay = () => { if (video.paused) video.play(); else video.pause(); };
 
         video.addEventListener('play', () => {
             playIconBottom.className = 'fas fa-pause text-lg';
@@ -349,7 +443,6 @@ window.app.components.player = async () => {
         playBtnBottom.addEventListener('click', (e) => { e.stopPropagation(); togglePlay(); });
         playBtnCenter.addEventListener('click', (e) => { e.stopPropagation(); togglePlay(); });
 
-        // PROGRESS BAR LOGIC
         const formatTime = (sec) => {
             if (isNaN(sec) || !isFinite(sec)) return "00:00";
             const h = Math.floor(sec / 3600);
@@ -369,7 +462,7 @@ window.app.components.player = async () => {
             timeCurr.innerText = formatTime(video.currentTime);
             const pct = (video.currentTime / video.duration) * 100;
             progressBar.style.background = `linear-gradient(to right, #F47521 ${pct}%, rgba(255,255,255,0.2) ${pct}%)`;
-            if (Math.floor(video.currentTime) % 5 === 0) saveProgress(video.currentTime);
+            if (Math.floor(video.currentTime) % 5 === 0) saveProgress(video.currentTime, video.duration);
         });
 
         progressBar.addEventListener('input', (e) => {
@@ -378,16 +471,13 @@ window.app.components.player = async () => {
             e.target.style.background = `linear-gradient(to right, #F47521 ${pct}%, rgba(255,255,255,0.2) ${pct}%)`;
         });
 
-        // --- UNIFIED GESTURES: SINGLE CLICK / DOUBLE CLICK / LONG PRESS ---
         let lastTapTime = 0;
         let isLongPressing = false;
 
         const handleDoubleTap = (e) => {
             const rect = overlay.getBoundingClientRect();
             const clientX = e.clientX || (e.changedTouches && e.changedTouches[0].clientX);
-            const x = clientX - rect.left;
-            
-            if (x > rect.width / 2) {
+            if ((clientX - rect.left) > rect.width / 2) {
                 video.currentTime = Math.min(video.duration, video.currentTime + 10);
                 const icon = document.getElementById('dt-right');
                 icon.classList.remove('opacity-0'); setTimeout(()=>icon.classList.add('opacity-0'), 500);
@@ -409,7 +499,7 @@ window.app.components.player = async () => {
         overlay.addEventListener('pointerup', (e) => {
             clearTimeout(pressTimer);
             if (isLongPressing) {
-                video.playbackRate = 1.0;
+                video.playbackRate = speeds[speedIdx]; // Return to selected speed
                 document.getElementById('speed-indicator').classList.add('opacity-0');
                 isLongPressing = false;
                 return;
@@ -422,76 +512,42 @@ window.app.components.player = async () => {
                 clearTimeout(tapTimeout);
                 handleDoubleTap(e);
             } else {
-                tapTimeout = setTimeout(() => {
-                    togglePlay();
-                    resetHideTimer();
-                }, 300);
+                tapTimeout = setTimeout(() => { togglePlay(); resetHideTimer(); }, 300);
             }
             lastTapTime = currentTime;
         });
 
-        // --- FULLSCREEN & AUTO-ROTATE ---
         fsBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
             if (!document.fullscreenElement && !document.webkitFullscreenElement) {
                 if (playerRoot.requestFullscreen) playerRoot.requestFullscreen();
                 else if (playerRoot.webkitRequestFullscreen) playerRoot.webkitRequestFullscreen();
                 fsIcon.className = 'fas fa-compress text-lg';
-                
-                if (screen.orientation && screen.orientation.lock) {
-                    try { await screen.orientation.lock('landscape'); } catch (err) { }
-                }
+                if (screen.orientation && screen.orientation.lock) { try { await screen.orientation.lock('landscape'); } catch (err) { } }
             } else {
                 if (document.exitFullscreen) document.exitFullscreen();
                 else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
                 fsIcon.className = 'fas fa-expand text-lg';
-                
-                if (screen.orientation && screen.orientation.unlock) { screen.orientation.unlock(); }
+                if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
             }
         });
 
-        // --- SEPARATE MENU TOGGLES ---
-        audioBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const isHidden = audioMenu.classList.contains('hidden');
-            closeAllMenus();
-            if(isHidden) audioMenu.classList.remove('hidden');
-            resetHideTimer();
-        });
+        audioBtn.addEventListener('click', (e) => { e.stopPropagation(); const isH = audioMenu.classList.contains('hidden'); closeAllMenus(); if(isH) audioMenu.classList.remove('hidden'); resetHideTimer(); });
+        subsBtn.addEventListener('click', (e) => { e.stopPropagation(); const isH = subsMenu.classList.contains('hidden'); closeAllMenus(); if(isH) subsMenu.classList.remove('hidden'); resetHideTimer(); });
+        qualityBtn.addEventListener('click', (e) => { e.stopPropagation(); const isH = qualityMenu.classList.contains('hidden'); closeAllMenus(); if(isH) qualityMenu.classList.remove('hidden'); resetHideTimer(); });
 
-        subsBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const isHidden = subsMenu.classList.contains('hidden');
-            closeAllMenus();
-            if(isHidden) subsMenu.classList.remove('hidden');
-            resetHideTimer();
-        });
-
-        qualityBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const isHidden = qualityMenu.classList.contains('hidden');
-            closeAllMenus();
-            if(isHidden) qualityMenu.classList.remove('hidden');
-            resetHideTimer();
-        });
-
-        // --- BUILD POPUPS ---
         function buildSettingsMenus(hls, vid) {
             const qList = document.getElementById('quality-list');
             const cList = document.getElementById('subs-list');
             const aList = document.getElementById('audio-list');
             
-            // Quality (Video)
             if (hls && hls.levels) {
                 qList.innerHTML = `<button class="text-left text-[10px] px-3 py-2 rounded bg-[#F47521] text-black font-bold mb-1 q-btn" data-level="-1">Auto</button>`;
-                hls.levels.forEach((l, i) => {
-                    qList.innerHTML += `<button class="text-left text-[10px] px-3 py-2 rounded text-gray-300 hover:bg-white/10 transition-colors q-btn" data-level="${i}">${l.height}p</button>`;
-                });
+                hls.levels.forEach((l, i) => { qList.innerHTML += `<button class="text-left text-[10px] px-3 py-2 rounded text-gray-300 hover:bg-white/10 transition-colors q-btn" data-level="${i}">${l.height}p</button>`; });
                 
                 qList.onclick = (e) => {
                     e.stopPropagation();
-                    const btn = e.target.closest('.q-btn');
-                    if (!btn) return;
+                    const btn = e.target.closest('.q-btn'); if (!btn) return;
                     const levelIndex = parseInt(btn.getAttribute('data-level'));
                     hls.currentLevel = levelIndex;
                     document.querySelectorAll('.q-btn').forEach(b => {
@@ -500,11 +556,8 @@ window.app.components.player = async () => {
                     });
                     closeAllMenus();
                 };
-            } else {
-                qList.innerHTML = `<span class="text-[10px] text-gray-500 px-2">Auto (Native)</span>`;
-            }
+            } else { qList.innerHTML = `<span class="text-[10px] text-gray-500 px-2">Auto (Native)</span>`; }
 
-            // Subtitles
             if (vid.textTracks.length > 0) {
                 cList.innerHTML = `<button class="text-left text-[10px] px-3 py-2 rounded bg-white/10 text-white hover:bg-white/20 mb-1 c-btn" data-idx="-1">Off</button>`;
                 for (let i=0; i<vid.textTracks.length; i++) {
@@ -514,34 +567,25 @@ window.app.components.player = async () => {
 
                 cList.onclick = (e) => {
                     e.stopPropagation();
-                    const btn = e.target.closest('.c-btn');
-                    if (!btn) return;
+                    const btn = e.target.closest('.c-btn'); if (!btn) return;
                     const idx = parseInt(btn.getAttribute('data-idx'));
-                    for (let i=0; i<vid.textTracks.length; i++) {
-                        vid.textTracks[i].mode = (i === idx) ? 'showing' : 'hidden';
-                    }
+                    for (let i=0; i<vid.textTracks.length; i++) { vid.textTracks[i].mode = (i === idx) ? 'showing' : 'hidden'; }
                     document.querySelectorAll('.c-btn').forEach(b => {
                         if (parseInt(b.getAttribute('data-idx')) === idx) b.className = 'text-left text-[10px] px-3 py-2 rounded bg-[#F47521] text-black font-bold mb-1 c-btn';
                         else b.className = 'text-left text-[10px] px-3 py-2 rounded text-gray-300 hover:bg-white/10 mb-1 c-btn';
                     });
                     closeAllMenus();
                 };
-            } else {
-                cList.innerHTML = `<span class="text-[10px] text-gray-500 px-2">No Subtitles</span>`;
-            }
+            } else { cList.innerHTML = `<span class="text-[10px] text-gray-500 px-2">No Subtitles</span>`; }
 
-            // Audio Tracks (HLS Multi-Audio)
             if (hls && hls.audioTracks && hls.audioTracks.length > 1) {
                 document.querySelector('.audio-container').classList.remove('hidden');
                 aList.innerHTML = '';
-                hls.audioTracks.forEach((t, i) => {
-                    aList.innerHTML += `<button class="text-left text-[10px] px-3 py-2 rounded ${hls.audioTrack === i ? 'bg-[#F47521] text-black font-bold' : 'text-gray-300 hover:bg-white/10'} mb-1 a-btn" data-idx="${i}">${t.name || 'Audio '+i}</button>`;
-                });
+                hls.audioTracks.forEach((t, i) => { aList.innerHTML += `<button class="text-left text-[10px] px-3 py-2 rounded ${hls.audioTrack === i ? 'bg-[#F47521] text-black font-bold' : 'text-gray-300 hover:bg-white/10'} mb-1 a-btn" data-idx="${i}">${t.name || 'Audio '+i}</button>`; });
                 
                 aList.onclick = (e) => {
                     e.stopPropagation();
-                    const btn = e.target.closest('.a-btn');
-                    if(!btn) return;
+                    const btn = e.target.closest('.a-btn'); if(!btn) return;
                     const idx = parseInt(btn.getAttribute('data-idx'));
                     hls.audioTrack = idx;
                     document.querySelectorAll('.a-btn').forEach(b => {
@@ -553,7 +597,6 @@ window.app.components.player = async () => {
             }
         }
 
-        // --- AUTO-SKIP LOGIC ---
         const skipIntroBtn = document.getElementById('skip-intro-btn');
         const skipOutroBtn = document.getElementById('skip-outro-btn');
 
@@ -567,16 +610,26 @@ window.app.components.player = async () => {
                 else { skipIntroBtn.classList.remove('translate-x-[150%]', 'opacity-0'); }
             } else { skipIntroBtn.classList.add('translate-x-[150%]', 'opacity-0'); }
 
+            // Standard Outro Logic
             if (outroEnd > 0 && t >= outroStart && t < outroEnd) {
                 if (autoSkipOutro) { if(hasNextEp) window.app.resolveEpisodeStreamAndRoute(nextEpSlug, currentEpNum + 1, animeId); } 
-                else { skipOutroBtn.classList.remove('translate-x-[150%]', 'opacity-0'); }
-            } else { skipOutroBtn.classList.add('translate-x-[150%]', 'opacity-0'); }
+                else { 
+                    skipOutroBtn.innerHTML = `Skip Outro <i class="fas fa-forward ml-1"></i>`;
+                    skipOutroBtn.classList.remove('translate-x-[150%]', 'opacity-0'); 
+                }
+            } 
+            // 10-Second Fallback Logic (if no outro timestamps exist)
+            else if ((!outroStart || outroStart === 0) && video.duration > 0 && t >= video.duration - 10) {
+                if (hasNextEp) {
+                    skipOutroBtn.innerHTML = `Next Episode <i class="fas fa-step-forward ml-1"></i>`;
+                    skipOutroBtn.classList.remove('translate-x-[150%]', 'opacity-0');
+                }
+            } else { 
+                skipOutroBtn.classList.add('translate-x-[150%]', 'opacity-0'); 
+            }
         });
 
-        skipIntroBtn.addEventListener('click', (e) => { 
-            e.stopPropagation(); 
-            video.currentTime = introEnd; 
-        });
+        skipIntroBtn.addEventListener('click', (e) => { e.stopPropagation(); video.currentTime = introEnd; });
         
         skipOutroBtn.addEventListener('click', (e) => { 
             e.stopPropagation(); 
@@ -587,29 +640,33 @@ window.app.components.player = async () => {
             }
         });
 
-        // --- ISOLATED & GLOBAL PROGRESS TRACKER ---
-        function saveProgress(time) {
-            const profile = window.app.state?.activeProfile || { uid: 'guest' };
-            const uid = profile.uid;
-            
-            // 1. Save Exact Time for THIS specific episode
-            const epKey = `blazex_time_${uid}_${animeId}_${currentEpNum}`;
-            localStorage.setItem(epKey, time);
-            
-            // 2. Update Global Tracker for the Series (Currently on Ep X, Watched List)
-            const seriesKey = `blazex_series_${uid}_${animeId}`;
-            let seriesData = JSON.parse(localStorage.getItem(seriesKey)) || { watchedEps: [], lastWatchedEp: currentEpNum };
-            
-            // Always set current episode as the latest active
-            seriesData.lastWatchedEp = currentEpNum;
-            
-            // Mark episode as officially "Watched" if past 85% completion
-            if (video.duration && time > (video.duration * 0.85)) {
-                if (!seriesData.watchedEps.includes(currentEpNum)) {
-                    seriesData.watchedEps.push(currentEpNum);
-                }
+        // Save Exact Time to Firebase (Firestore) + LocalStorage Fallback
+        function saveProgress(time, duration) {
+            if (!userUid || userUid === 'guest') {
+                localStorage.setItem(`blazex_time_guest_${animeId}_${currentEpNum}`, time);
+                return;
             }
+
+            const isCompleted = duration && time > (duration * 0.85);
             
+            // Sync to Firestore
+            if (db) {
+                db.collection('users').doc(userUid).collection('episodes').doc(`${animeId}_${currentEpNum}`).set({
+                    progress: time,
+                    duration: duration,
+                    completed: isCompleted,
+                    lastUpdated: typeof firebase !== 'undefined' ? firebase.firestore.FieldValue.serverTimestamp() : new Date(),
+                }, { merge: true }).catch(err => console.warn("Firebase progress sync failed", err));
+            }
+
+            // Sync Local Tracker (for fast UI updates)
+            localStorage.setItem(`blazex_time_${userUid}_${animeId}_${currentEpNum}`, time);
+            const seriesKey = `blazex_series_${userUid}_${animeId}`;
+            let seriesData = JSON.parse(localStorage.getItem(seriesKey)) || { watchedEps: [], lastWatchedEp: currentEpNum };
+            seriesData.lastWatchedEp = currentEpNum;
+            if (isCompleted && !seriesData.watchedEps.includes(currentEpNum)) {
+                seriesData.watchedEps.push(currentEpNum);
+            }
             localStorage.setItem(seriesKey, JSON.stringify(seriesData));
         }
 
