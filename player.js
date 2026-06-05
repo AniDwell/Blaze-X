@@ -49,22 +49,30 @@ window.app.components.player = async () => {
     const baseUrl = 'https://anikoto-api-xi.vercel.app';
     const customProxyUrl = 'https://icy-wave-30d8.prashant-yash69.workers.dev/proxy?url='; 
 
-    // Inject Player & Subtitle CSS (Custom Variables for Sub Colors)
+    // Inject Player & Subtitle CSS (Custom Variables for Sub Engine)
     if (!document.getElementById('blazex-player-css')) {
         const style = document.createElement('style');
         style.id = 'blazex-player-css';
         style.innerHTML = `
             :root {
                 --sub-color: #FFFFFF;
-                --sub-bg: rgba(0, 0, 0, 0.8);
+                --sub-bg: transparent;
+                --sub-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 2px 4px rgba(0,0,0,0.8);
+                --sub-size: 1rem;
+                --sub-font: 'Arial', sans-serif;
             }
             ::cue {
                 color: var(--sub-color);
                 background-color: var(--sub-bg);
-                font-family: sans-serif;
-                text-shadow: 1px 1px 2px black;
-                font-weight: bold;
+                font-family: var(--sub-font);
+                font-size: var(--sub-size);
+                text-shadow: var(--sub-shadow);
+                font-weight: 800;
             }
+            
+            /* Hide Description when NOT in fullscreen */
+            #blazex-player-root:not(:fullscreen):not(:-webkit-full-screen) #ep-desc { display: none !important; }
+            
             input[type=range].blazex-slider { -webkit-appearance: none; width: 100%; background: transparent; cursor: pointer; height: 6px; outline: none; }
             input[type=range].blazex-slider::-webkit-slider-runnable-track { background: rgba(255,255,255,0.2); height: 4px; border-radius: 4px; }
             input[type=range].blazex-slider::-webkit-slider-thumb { -webkit-appearance: none; height: 12px; width: 12px; border-radius: 50%; background: #F47521; margin-top: -4px; transition: transform 0.1s; }
@@ -145,6 +153,10 @@ window.app.components.player = async () => {
                 
                 <div id="gesture-overlay" class="absolute inset-0 z-10"></div>
                 
+                <div id="buffer-spinner" class="absolute inset-0 z-20 flex items-center justify-center hidden pointer-events-none">
+                    <i class="fas fa-circle-notch fa-spin text-4xl text-[#F47521]"></i>
+                </div>
+                
                 <div id="speed-indicator" class="absolute top-6 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm text-white px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase transition-opacity duration-200 opacity-0 z-40 flex items-center gap-2 border border-white/10">
                     <span>2x Speed</span> <i class="fas fa-forward text-[#F47521]"></i>
                 </div>
@@ -170,7 +182,7 @@ window.app.components.player = async () => {
                     <div class="w-full flex items-start justify-between p-4 pointer-events-auto">
                         <div class="flex flex-col pr-4">
                             <h2 class="text-white text-xs md:text-sm font-bold tracking-wide truncate">Episode ${currentEpNum}</h2>
-                            <p id="ep-desc" class="text-gray-400 text-[10px] line-clamp-2 max-w-lg mt-1 hidden">Loading metadata...</p>
+                            <p id="ep-desc" class="text-gray-400 text-[10px] line-clamp-2 max-w-lg mt-1 hidden transition-all">Loading metadata...</p>
                         </div>
                         ${targetServer === 'hd-2' ? '<span class="bg-[#F47521] text-black px-2 py-0.5 rounded text-[8px] font-black uppercase border border-black mt-1">HD-2</span>' : ''}
                     </div>
@@ -208,21 +220,44 @@ window.app.components.player = async () => {
 
                                 <div class="relative group subs-container">
                                     <button id="subs-btn" class="text-white hover:text-[#F47521] transition-colors"><i class="fas fa-closed-captioning text-lg"></i></button>
-                                    <div id="subs-menu" class="hidden absolute bottom-full right-0 mb-4 w-48 bg-[#111]/95 backdrop-blur-md border border-white/10 rounded-xl p-2 flex flex-col gap-1 z-50">
-                                        <div class="text-[9px] font-black uppercase text-gray-500 px-2 pt-1 pb-1">Subtitles</div>
-                                        <div id="subs-list" class="flex flex-col gap-1 max-h-32 overflow-y-auto hide-scrollbar border-b border-white/10 pb-2 mb-1"></div>
+                                    <div id="subs-menu" class="hidden absolute bottom-full right-0 mb-4 w-56 bg-[#111]/95 backdrop-blur-md border border-white/10 rounded-xl p-2 flex flex-col gap-1 z-50 max-h-72 overflow-y-auto hide-scrollbar">
                                         
-                                        <div class="text-[9px] font-black uppercase text-gray-500 px-2 pt-1 pb-1 mt-1">Sub Color</div>
-                                        <div class="flex items-center gap-2 px-2 pb-1">
+                                        <div class="text-[9px] font-black uppercase text-gray-500 px-2 pt-1 pb-1">Subtitles</div>
+                                        <div id="subs-list" class="flex flex-col gap-1 border-b border-white/10 pb-2 mb-1"></div>
+                                        
+                                        <div class="text-[9px] font-black uppercase text-gray-500 px-2 pt-1 pb-1 mt-1">Font Family</div>
+                                        <div class="grid grid-cols-2 gap-1 px-1">
+                                            <button class="sub-font-btn text-[10px] py-1 rounded bg-white/10 hover:bg-white/20" data-font="'Arial', sans-serif" style="font-family: Arial;">Sans</button>
+                                            <button class="sub-font-btn text-[10px] py-1 rounded bg-white/10 hover:bg-white/20" data-font="'Times New Roman', serif" style="font-family: 'Times New Roman';">Serif</button>
+                                            <button class="sub-font-btn text-[10px] py-1 rounded bg-white/10 hover:bg-white/20" data-font="'Courier New', monospace" style="font-family: 'Courier New';">Mono</button>
+                                            <button class="sub-font-btn text-[10px] py-1 rounded bg-white/10 hover:bg-white/20" data-font="'Comic Sans MS', cursive" style="font-family: 'Comic Sans MS';">Casual</button>
+                                        </div>
+
+                                        <div class="text-[9px] font-black uppercase text-gray-500 px-2 pt-2 pb-1">Font Size & Border</div>
+                                        <div class="flex items-center justify-between px-1 gap-2">
+                                            <select id="sub-size-select" class="bg-[#222] text-white text-[10px] rounded px-2 py-1 outline-none border border-white/20 flex-1">
+                                                <option value="0.75rem">Small</option>
+                                                <option value="1rem" selected>Normal</option>
+                                                <option value="1.5rem">Large</option>
+                                                <option value="2rem">Extra Large</option>
+                                            </select>
+                                            <button id="sub-border-btn" class="text-[10px] bg-[#F47521] text-black font-bold px-3 py-1 rounded border border-white/20">Border: ON</button>
+                                        </div>
+
+                                        <div class="text-[9px] font-black uppercase text-gray-500 px-2 pt-2 pb-1">Color Palette</div>
+                                        <div class="flex flex-wrap items-center gap-2 px-2 pb-1">
                                             <button class="sub-color-btn w-5 h-5 rounded-full border border-white/20 bg-white hover:scale-110 transition-transform" data-color="#FFFFFF"></button>
                                             <button class="sub-color-btn w-5 h-5 rounded-full border border-white/20 bg-[#F47521] hover:scale-110 transition-transform" data-color="#F47521"></button>
                                             <button class="sub-color-btn w-5 h-5 rounded-full border border-white/20 bg-yellow-400 hover:scale-110 transition-transform" data-color="#FACC15"></button>
                                             <button class="sub-color-btn w-5 h-5 rounded-full border border-white/20 bg-green-400 hover:scale-110 transition-transform" data-color="#4ADE80"></button>
+                                            <button class="sub-color-btn w-5 h-5 rounded-full border border-white/20 bg-red-500 hover:scale-110 transition-transform" data-color="#EF4444"></button>
+                                            <button class="sub-color-btn w-5 h-5 rounded-full border border-white/20 bg-cyan-400 hover:scale-110 transition-transform" data-color="#22D3EE"></button>
+                                            <button class="sub-color-btn w-5 h-5 rounded-full border border-white/20 bg-fuchsia-400 hover:scale-110 transition-transform" data-color="#E879F9"></button>
                                         </div>
                                     </div>
                                 </div>
 
-                                <button id="ar-btn" class="text-white hover:text-[#F47521] transition-colors"><i class="fas fa-tv text-md"></i></button>
+                                <button id="ar-btn" class="text-white hover:text-[#F47521] transition-colors w-6 text-center"><i class="fas fa-compress text-md"></i></button>
 
                                 <div class="relative group quality-container">
                                     <button id="quality-btn" class="text-white hover:text-[#F47521] transition-colors"><i class="fas fa-cog text-lg"></i></button>
@@ -252,6 +287,7 @@ window.app.components.player = async () => {
         const fsIcon = document.getElementById('fs-icon');
         const timeCurr = document.getElementById('time-current');
         const timeDur = document.getElementById('time-duration');
+        const bufferSpinner = document.getElementById('buffer-spinner');
         
         // Settings Menus
         const audioBtn = document.getElementById('audio-btn'), audioMenu = document.getElementById('audio-menu');
@@ -260,7 +296,12 @@ window.app.components.player = async () => {
         const speedBtn = document.getElementById('speed-btn');
         const arBtn = document.getElementById('ar-btn');
 
-        // Fetch AniList / Metadata (Hybrid handling)
+        // Buffering Events
+        video.addEventListener('waiting', () => bufferSpinner.classList.remove('hidden'));
+        video.addEventListener('playing', () => bufferSpinner.classList.add('hidden'));
+        video.addEventListener('canplay', () => bufferSpinner.classList.add('hidden'));
+
+        // Fetch AniList / Metadata
         const fetchEpisodeMetadata = async () => {
             try {
                 const epDescEl = document.getElementById('ep-desc');
@@ -284,8 +325,6 @@ window.app.components.player = async () => {
                 
                 if (data.data?.Media) {
                     epDescEl.classList.remove('hidden');
-                    // Natively, AniList's API rarely includes strict episode-by-episode descriptions.
-                    // We render the series description or a TMDb bridge fallback if applicable.
                     epDescEl.innerText = data.data.Media.description 
                         ? data.data.Media.description.replace(/<[^>]*>?/gm, '').substring(0, 150) + '...'
                         : `${data.data.Media.title.english || data.data.Media.title.romaji} - Episode ${currentEpNum}`;
@@ -302,18 +341,23 @@ window.app.components.player = async () => {
             qualityMenu.classList.add('hidden');
         };
 
-        // Aspect Ratio Logic
-        const arModes = ['contain', 'cover', 'fill'];
+        // Dynamic Aspect Ratio Icons
+        const arModes = [
+            { mode: 'contain', icon: 'fas fa-compress' },
+            { mode: 'cover', icon: 'fas fa-expand-arrows-alt' },
+            { mode: 'fill', icon: 'fas fa-arrows-alt' }
+        ];
         let arIndex = 0;
         arBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             arIndex = (arIndex + 1) % arModes.length;
-            video.style.objectFit = arModes[arIndex];
+            video.style.objectFit = arModes[arIndex].mode;
+            arBtn.innerHTML = `<i class="${arModes[arIndex].icon} text-md"></i>`;
         });
 
-        // Speed Logic
-        const speeds = [1, 1.25, 1.5, 2];
-        let speedIdx = 0;
+        // Speed Logic (added 0.25x)
+        const speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2];
+        let speedIdx = 3; // Default to 1x
         speedBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             speedIdx = (speedIdx + 1) % speeds.length;
@@ -321,17 +365,38 @@ window.app.components.player = async () => {
             speedBtn.innerText = speeds[speedIdx] + 'x';
         });
 
-        // Subtitle Colors
+        // --- SUBTITLE ENGINE STYLING ---
+        let currentSubSettings = { color: '#FFFFFF', size: '1rem', font: "'Arial', sans-serif", border: true };
+        
+        const updateSubStyles = () => {
+            document.documentElement.style.setProperty('--sub-color', currentSubSettings.color);
+            document.documentElement.style.setProperty('--sub-size', currentSubSettings.size);
+            document.documentElement.style.setProperty('--sub-font', currentSubSettings.font);
+            document.documentElement.style.setProperty('--sub-shadow', currentSubSettings.border 
+                ? '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 2px 4px rgba(0,0,0,0.8)' 
+                : 'none');
+                
+            const bBtn = document.getElementById('sub-border-btn');
+            if (currentSubSettings.border) {
+                bBtn.innerText = "Border: ON"; bBtn.className = "text-[10px] bg-[#F47521] text-black font-bold px-3 py-1 rounded border border-white/20";
+            } else {
+                bBtn.innerText = "Border: OFF"; bBtn.className = "text-[10px] bg-white/10 text-white px-3 py-1 rounded hover:bg-white/20";
+            }
+            
+            if(window.app.state?.activeProfile?.uid) saveSettingsToFirebase(currentSubSettings);
+        };
+
         document.querySelectorAll('.sub-color-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const color = btn.getAttribute('data-color');
-                document.documentElement.style.setProperty('--sub-color', color);
-                // Save setting locally or push to FB below
-                if(window.app.state?.activeProfile?.uid) {
-                    saveSettingsToFirebase({ subColor: color });
-                }
-            });
+            btn.addEventListener('click', (e) => { e.stopPropagation(); currentSubSettings.color = btn.getAttribute('data-color'); updateSubStyles(); });
+        });
+        document.querySelectorAll('.sub-font-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => { e.stopPropagation(); currentSubSettings.font = btn.getAttribute('data-font'); updateSubStyles(); });
+        });
+        document.getElementById('sub-size-select').addEventListener('change', (e) => {
+            e.stopPropagation(); currentSubSettings.size = e.target.value; updateSubStyles();
+        });
+        document.getElementById('sub-border-btn').addEventListener('click', (e) => {
+            e.stopPropagation(); currentSubSettings.border = !currentSubSettings.border; updateSubStyles();
         });
 
         // Injects Subtitles
@@ -351,13 +416,10 @@ window.app.components.player = async () => {
         const db = window.db || (typeof firebase !== 'undefined' ? firebase.firestore() : null);
         const userUid = window.app.state?.activeProfile?.uid;
 
-        // Firebase Setting Saver helper
         async function saveSettingsToFirebase(settingsObj) {
             if (!db || !userUid || userUid === 'guest') return;
             try {
-                await db.collection('users').doc(userUid).collection('episodes').doc(`${animeId}_${currentEpNum}`).set({
-                    settings: settingsObj
-                }, { merge: true });
+                await db.collection('users').doc(userUid).collection('episodes').doc(`${animeId}_${currentEpNum}`).set({ settings: settingsObj }, { merge: true });
             } catch(e) { console.warn("Firebase settings sync failed", e); }
         }
 
@@ -369,7 +431,6 @@ window.app.components.player = async () => {
             hlsInstance.on(Hls.Events.MANIFEST_PARSED, async function() {
                 buildSettingsMenus(hlsInstance, video);
                 
-                // Fetch Time from Firebase (Fallback to local)
                 let storedTime = localStorage.getItem(`blazex_time_${userUid}_${animeId}_${currentEpNum}`);
                 if (db && userUid && userUid !== 'guest') {
                     try {
@@ -377,15 +438,16 @@ window.app.components.player = async () => {
                         if (docRef.exists) {
                             const data = docRef.data();
                             if (data.progress) storedTime = data.progress;
-                            if (data.settings?.subColor) document.documentElement.style.setProperty('--sub-color', data.settings.subColor);
+                            if (data.settings) {
+                                currentSubSettings = { ...currentSubSettings, ...data.settings };
+                                document.getElementById('sub-size-select').value = currentSubSettings.size;
+                                updateSubStyles();
+                            }
                         }
                     } catch(e) { console.warn("Could not fetch remote progress."); }
                 }
 
-                if (storedTime && !isNaN(storedTime)) {
-                    video.currentTime = parseFloat(storedTime);
-                }
-                
+                if (storedTime && !isNaN(storedTime)) video.currentTime = parseFloat(storedTime);
                 video.play().catch(e => console.log("Autoplay blocked."));
             });
 
@@ -499,7 +561,7 @@ window.app.components.player = async () => {
         overlay.addEventListener('pointerup', (e) => {
             clearTimeout(pressTimer);
             if (isLongPressing) {
-                video.playbackRate = speeds[speedIdx]; // Return to selected speed
+                video.playbackRate = speeds[speedIdx];
                 document.getElementById('speed-indicator').classList.add('opacity-0');
                 isLongPressing = false;
                 return;
@@ -535,6 +597,9 @@ window.app.components.player = async () => {
         audioBtn.addEventListener('click', (e) => { e.stopPropagation(); const isH = audioMenu.classList.contains('hidden'); closeAllMenus(); if(isH) audioMenu.classList.remove('hidden'); resetHideTimer(); });
         subsBtn.addEventListener('click', (e) => { e.stopPropagation(); const isH = subsMenu.classList.contains('hidden'); closeAllMenus(); if(isH) subsMenu.classList.remove('hidden'); resetHideTimer(); });
         qualityBtn.addEventListener('click', (e) => { e.stopPropagation(); const isH = qualityMenu.classList.contains('hidden'); closeAllMenus(); if(isH) qualityMenu.classList.remove('hidden'); resetHideTimer(); });
+        
+        // Prevent menu clicks from closing menu instantly
+        subsMenu.addEventListener('click', (e) => { e.stopPropagation(); resetHideTimer(); });
 
         function buildSettingsMenus(hls, vid) {
             const qList = document.getElementById('quality-list');
@@ -574,7 +639,6 @@ window.app.components.player = async () => {
                         if (parseInt(b.getAttribute('data-idx')) === idx) b.className = 'text-left text-[10px] px-3 py-2 rounded bg-[#F47521] text-black font-bold mb-1 c-btn';
                         else b.className = 'text-left text-[10px] px-3 py-2 rounded text-gray-300 hover:bg-white/10 mb-1 c-btn';
                     });
-                    closeAllMenus();
                 };
             } else { cList.innerHTML = `<span class="text-[10px] text-gray-500 px-2">No Subtitles</span>`; }
 
@@ -610,7 +674,6 @@ window.app.components.player = async () => {
                 else { skipIntroBtn.classList.remove('translate-x-[150%]', 'opacity-0'); }
             } else { skipIntroBtn.classList.add('translate-x-[150%]', 'opacity-0'); }
 
-            // Standard Outro Logic
             if (outroEnd > 0 && t >= outroStart && t < outroEnd) {
                 if (autoSkipOutro) { if(hasNextEp) window.app.resolveEpisodeStreamAndRoute(nextEpSlug, currentEpNum + 1, animeId); } 
                 else { 
@@ -618,7 +681,6 @@ window.app.components.player = async () => {
                     skipOutroBtn.classList.remove('translate-x-[150%]', 'opacity-0'); 
                 }
             } 
-            // 10-Second Fallback Logic (if no outro timestamps exist)
             else if ((!outroStart || outroStart === 0) && video.duration > 0 && t >= video.duration - 10) {
                 if (hasNextEp) {
                     skipOutroBtn.innerHTML = `Next Episode <i class="fas fa-step-forward ml-1"></i>`;
@@ -630,7 +692,6 @@ window.app.components.player = async () => {
         });
 
         skipIntroBtn.addEventListener('click', (e) => { e.stopPropagation(); video.currentTime = introEnd; });
-        
         skipOutroBtn.addEventListener('click', (e) => { 
             e.stopPropagation(); 
             if(hasNextEp && window.app?.resolveEpisodeStreamAndRoute) {
@@ -640,7 +701,6 @@ window.app.components.player = async () => {
             }
         });
 
-        // Save Exact Time to Firebase (Firestore) + LocalStorage Fallback
         function saveProgress(time, duration) {
             if (!userUid || userUid === 'guest') {
                 localStorage.setItem(`blazex_time_guest_${animeId}_${currentEpNum}`, time);
@@ -649,7 +709,6 @@ window.app.components.player = async () => {
 
             const isCompleted = duration && time > (duration * 0.85);
             
-            // Sync to Firestore
             if (db) {
                 db.collection('users').doc(userUid).collection('episodes').doc(`${animeId}_${currentEpNum}`).set({
                     progress: time,
@@ -659,7 +718,6 @@ window.app.components.player = async () => {
                 }, { merge: true }).catch(err => console.warn("Firebase progress sync failed", err));
             }
 
-            // Sync Local Tracker (for fast UI updates)
             localStorage.setItem(`blazex_time_${userUid}_${animeId}_${currentEpNum}`, time);
             const seriesKey = `blazex_series_${userUid}_${animeId}`;
             let seriesData = JSON.parse(localStorage.getItem(seriesKey)) || { watchedEps: [], lastWatchedEp: currentEpNum };
@@ -668,30 +726,3 @@ window.app.components.player = async () => {
                 seriesData.watchedEps.push(currentEpNum);
             }
             localStorage.setItem(seriesKey, JSON.stringify(seriesData));
-        }
-
-    } catch (error) {
-        setBootStatus(error.message, true);
-    }
-
-    window.app.components.player.destroy = () => {
-        clearTimeout(hideTimer);
-        clearTimeout(tapTimeout);
-        clearTimeout(pressTimer);
-        
-        if (hlsInstance) {
-            hlsInstance.destroy();
-            hlsInstance = null;
-        }
-
-        const vid = document.getElementById('main-video-player');
-        if (vid) {
-            vid.pause();
-            vid.removeAttribute('src');
-            vid.load();
-        }
-        
-        playerRoot.replaceWith(playerRoot.cloneNode(true));
-        console.log("Player teardown complete. Ready for next route.");
-    };
-};
