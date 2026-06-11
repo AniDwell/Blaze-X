@@ -1,4 +1,4 @@
-// search.js - Cinematic Search & Filter Engine (List View & Vertical Text Edition)
+// search.js - Premium Android TV & Desktop Split-Screen Engine
 
 window.app = window.app || {};
 
@@ -23,34 +23,24 @@ document.addEventListener('DOMContentLoaded', () => {
     let typingTimer;
     let activeFilters = {};
 
-    // --- CUSTOM CSS DROPDOWN LOGIC ---
-    document.querySelectorAll('.custom-select-wrapper').forEach(wrapper => {
-        const selectBtn = wrapper.querySelector('.custom-select');
-        const textSpan = wrapper.querySelector('.selected-text');
-        const options = wrapper.querySelectorAll('.custom-options div');
-
-        if(selectBtn) {
-            selectBtn.addEventListener('click', (e) => {
-                e.stopPropagation(); 
-                document.querySelectorAll('.custom-select-wrapper').forEach(w => {
-                    if (w !== wrapper) w.classList.remove('dropdown-open');
-                });
-                wrapper.classList.toggle('dropdown-open');
-            });
+    // --- ANDROID TV FOCUS MANAGEMENT ---
+    // Maps Enter/Select button on TV remotes to click events for focused elements
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            const focusedElement = document.activeElement;
+            if (focusedElement && focusedElement.classList.contains('tv-focusable')) {
+                e.preventDefault();
+                focusedElement.click();
+            }
         }
-
-        options.forEach(opt => {
-            opt.addEventListener('click', () => {
-                selectBtn.setAttribute('data-value', opt.getAttribute('data-value'));
-                textSpan.innerText = opt.innerText;
-                wrapper.classList.remove('dropdown-open');
-            });
-        });
     });
 
-    document.addEventListener('click', () => {
-        document.querySelectorAll('.custom-select-wrapper').forEach(w => w.classList.remove('dropdown-open'));
-    });
+    const tvFocusClasses = "tv-focusable outline-none focus:ring-4 focus:ring-[#FF5500] focus:scale-[1.02] focus:z-50 transition-all duration-300";
+
+    // --- LAYOUT INITIALIZATION (Left/Right Splits) ---
+    // Assuming idleView and resultsView wrap the content, we force the split layout here
+    if(idleView) idleView.className = "flex flex-col lg:flex-row gap-8 w-full";
+    if(resultsView) resultsView.className = "flex flex-col lg:flex-row gap-8 w-full";
 
     // --- 1. INITIALIZATION ---
     const initSearchPage = async () => {
@@ -61,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const initTypewriterPlaceholder = async () => {
         if(!searchInput) return;
+        searchInput.classList.add('tv-focusable', 'focus:ring-4', 'focus:ring-[#FF5500]');
         let trendingTitles = ["anime, genres..."];
         try {
             const query = `query { Page(page: 1, perPage: 3) { media(type: ANIME, sort: TRENDING_DESC) { title { english romaji } } } }`;
@@ -95,19 +86,20 @@ document.addEventListener('DOMContentLoaded', () => {
         type();
     };
 
-    // --- ANILIST TO DB MAPPING (TOP 10 w/ VERTICAL TEXT) ---
+    // --- ANILIST TO DB MAPPING (TOP 10 - RIGHT PANEL LIST VIEW) ---
     const loadTop10Popular = async () => {
         if(!trendingContainer) return;
-        trendingContainer.innerHTML = `<div class="p-4 text-center text-xs text-gray-500 w-full col-span-full"><i class="fas fa-circle-notch fa-spin text-[#F47521] text-xl mb-3 block"></i> Fetching Live Trending...</div>`;
+        trendingContainer.innerHTML = `<div class="p-10 text-center font-bold text-[#FF5500] w-full flex items-center justify-center gap-3"><i class="fas fa-circle-notch fa-spin text-2xl"></i> Loading Top 10...</div>`;
         
         try {
-            const query = `query { Page(page: 1, perPage: 10) { media(type: ANIME, sort: TRENDING_DESC) { title { romaji english } coverImage { extraLarge } format } } }`;
+            const query = `query { Page(page: 1, perPage: 10) { media(type: ANIME, sort: TRENDING_DESC) { title { romaji english } coverImage { extraLarge } format description(asHtml: false) genres } } }`;
             const res = await fetch(ANILIST_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query }) });
             const json = await res.json();
             const animeList = json.data.Page.media;
 
             trendingContainer.innerHTML = '';
-            trendingContainer.className = "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 lg:gap-6 pb-6 w-full"; 
+            // Render as a vertical list for the right panel
+            trendingContainer.className = "flex flex-col gap-6 w-full lg:w-2/3 ml-auto pb-10"; 
 
             let count = 1;
             animeList.forEach(anime => {
@@ -115,35 +107,47 @@ document.addEventListener('DOMContentLoaded', () => {
                 const safeTitle = title.replace(/'/g, "\\'");
                 const imgUrl = anime.coverImage.extraLarge;
                 const format = anime.format || 'TV';
+                const desc = anime.description ? anime.description.replace(/<[^>]*>?/gm, '') : 'No description available.';
+                const genres = anime.genres ? anime.genres.slice(0, 3).join(', ') : 'Anime';
 
                 trendingContainer.innerHTML += `
-                <div onclick="window.app.openFromAnilist('${safeTitle}')" class="relative group cursor-pointer overflow-hidden rounded-xl shadow-[0_5px_20px_rgba(0,0,0,0.5)] hover:shadow-[0_10px_30px_rgba(244,117,33,0.2)] bg-[#111] border border-white/5 hover:border-[#F47521]/50 flex h-36 lg:h-44 transition-all duration-300 transform hover:-translate-y-1">
+                <div tabindex="0" onclick="window.app.openFromAnilist('${safeTitle}')" class="${tvFocusClasses} relative group cursor-pointer rounded-2xl shadow-xl bg-[#0a0a0a] border border-white/10 hover:border-[#FF5500]/80 flex overflow-hidden w-full h-48 lg:h-56">
                     
-                    <!-- Vertical Rank Bar -->
-                    <div class="w-10 md:w-12 bg-gradient-to-b from-[#F47521] to-[#ff9852] flex flex-col items-center justify-center z-20 shadow-lg">
-                        <span class="text-black font-black text-sm lg:text-base tracking-[0.2em] uppercase" style="writing-mode: vertical-rl; transform: rotate(180deg);">TOP ${count}</span>
+                    <div class="flex items-center justify-center w-20 lg:w-28 bg-black border-r border-white/5 relative overflow-hidden">
+                        <span style="writing-mode: vertical-rl; text-orientation: upright;" class="text-5xl lg:text-7xl font-black text-[#FF5500] [-webkit-text-stroke:2px_white] tracking-tighter drop-shadow-[0_0_15px_rgba(255,85,0,0.6)]">
+                            TOP ${count}
+                        </span>
+                        <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-50"></div>
                     </div>
 
-                    <!-- Cover Image Background -->
-                    <div class="absolute inset-0 ml-10 md:ml-12">
-                        <img src="${imgUrl}" class="w-full h-full object-cover opacity-60 group-hover:opacity-80 group-hover:scale-110 transition-all duration-700">
-                        <div class="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/80 to-transparent"></div>
-                        <div class="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent"></div>
+                    <div class="relative w-32 lg:w-40 h-full flex-shrink-0 overflow-hidden">
+                        <img src="${imgUrl}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700">
+                        <div class="absolute inset-0 bg-gradient-to-r from-transparent to-[#0a0a0a]"></div>
                     </div>
                     
-                    <!-- Details Foreground -->
-                    <div class="relative flex-1 p-4 flex flex-col justify-center ml-2 z-10">
-                        <h4 class="text-sm lg:text-base font-bold text-white line-clamp-2 leading-tight drop-shadow-md">${title}</h4>
-                        <div class="flex items-center mt-3 gap-2">
-                            <span class="text-[9px] font-black uppercase text-black bg-white px-2 py-0.5 rounded shadow-sm">${format}</span>
-                            <i class="fas fa-play text-[#F47521] text-xs opacity-0 group-hover:opacity-100 transition-opacity ml-auto drop-shadow-lg"></i>
+                    <div class="p-4 lg:p-5 flex-1 flex flex-col justify-center relative z-10 min-w-0">
+                        <h4 class="text-xl lg:text-2xl font-black text-white truncate mb-1 group-hover:text-[#FF5500] transition-colors">${title}</h4>
+                        <p class="text-xs text-gray-400 line-clamp-2 mb-3 leading-relaxed">${desc}</p>
+                        
+                        <div class="flex flex-wrap items-center gap-3 mt-auto">
+                            <span class="bg-white/10 text-white px-2 py-0.5 rounded font-bold text-[10px] uppercase border border-white/10">${format}</span>
+                            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest border-l border-gray-700 pl-3">${genres}</span>
+                            
+                            <div class="flex gap-2 ml-auto">
+                                <button tabindex="0" onclick="event.stopPropagation(); window.app.shareItem('', '${safeTitle}')" class="${tvFocusClasses} bg-white/5 hover:bg-white/20 text-white w-8 h-8 lg:w-10 lg:h-10 rounded-full flex items-center justify-center transition border border-white/10" title="Share">
+                                    <i class="fas fa-share-alt"></i>
+                                </button>
+                                <button tabindex="0" onclick="event.stopPropagation(); window.app.toggleSearchLibraryClick(event, 'anilist_${count}', '${safeTitle}', '${imgUrl}')" class="${tvFocusClasses} bg-[#FF5500]/10 hover:bg-[#FF5500] text-[#FF5500] hover:text-black w-8 h-8 lg:w-10 lg:h-10 rounded-full flex items-center justify-center transition border border-[#FF5500]/30" title="Save">
+                                    <i class="far fa-bookmark"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>`;
                 count++;
             });
         } catch (error) {
-            trendingContainer.innerHTML = `<p class="text-xs text-red-500 col-span-full">Could not load popular titles.</p>`;
+            trendingContainer.innerHTML = `<p class="text-xs text-red-500 w-full text-center">Could not load popular titles.</p>`;
         }
     };
 
@@ -159,16 +163,16 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (searchJson.success && searchJson.data?.length > 0) {
                 window.location.href = `info.html?id=${searchJson.data[0].id}`;
             } else {
-                if (window.app.showCustomAlert) window.app.showCustomAlert("Title not found in our database yet.", "error");
+                if (window.app.showCustomAlert) window.app.showCustomAlert("Title not found.", "error");
             }
         } catch (e) {
-            if (window.app.showCustomAlert) window.app.showCustomAlert("Error connecting to database.", "error");
+            if (window.app.showCustomAlert) window.app.showCustomAlert("Connection error.", "error");
         } finally {
             document.body.style.cursor = 'default';
         }
     };
 
-    // --- 2. HISTORY LOGIC ---
+    // --- 2. HISTORY LOGIC (LEFT PANEL) ---
     const getHistory = () => JSON.parse(localStorage.getItem('blazex_search_history')) || [];
     const saveHistory = (term) => {
         let history = getHistory().filter(t => t.toLowerCase() !== term.toLowerCase()); 
@@ -186,63 +190,39 @@ document.addEventListener('DOMContentLoaded', () => {
         if(!historyContainer) return;
         const history = getHistory();
         const clearAllBtn = document.getElementById('clear-all-history');
-        const historyHint = document.getElementById('history-hint');
         
-        if(clearAllBtn) clearAllBtn.classList.toggle('hidden', history.length === 0);
-        if(historyHint) historyHint.classList.toggle('hidden', history.length === 0);
+        if(clearAllBtn) {
+            clearAllBtn.classList.toggle('hidden', history.length === 0);
+            clearAllBtn.classList.add('tv-focusable');
+            clearAllBtn.tabIndex = 0;
+        }
         
+        // Wrap search/history block into w-1/3 for left side
+        const leftPanelWrapper = document.getElementById('left-panel-wrapper') || historyContainer.parentElement;
+        if(leftPanelWrapper) leftPanelWrapper.className = "w-full lg:w-1/3 flex flex-col gap-4";
+
         historyContainer.innerHTML = history.map(term => `
-            <div class="history-item relative flex items-center bg-[#111] border border-white/5 rounded-full px-4 py-2 cursor-pointer hover:border-[#F47521] transition select-none" data-term="${term}">
-                <i class="fas fa-history text-gray-500 mr-2 text-xs"></i>
-                <span class="text-xs font-semibold">${term}</span>
+            <div tabindex="0" class="${tvFocusClasses} history-item flex items-center justify-between bg-[#111] border border-white/5 rounded-xl px-4 py-3 cursor-pointer hover:border-[#FF5500] hover:bg-[#FF5500]/5 transition select-none" data-term="${term}">
+                <div class="flex items-center gap-3">
+                    <i class="fas fa-history text-gray-500 text-sm"></i>
+                    <span class="text-sm font-semibold text-gray-300">${term}</span>
+                </div>
+                <i class="fas fa-times text-gray-600 hover:text-red-500 transition px-2 py-1 z-10" onclick="event.stopPropagation(); window.app.deleteHistory('${term}')"></i>
             </div>
         `).join('');
 
         document.querySelectorAll('.history-item').forEach(item => {
-            let pressTimer;
-            const term = item.getAttribute('data-term');
-            const startPress = () => { pressTimer = setTimeout(() => { deleteHistoryItem(term); navigator.vibrate?.(50); }, 600); };
-            const cancelPress = () => clearTimeout(pressTimer);
-            item.addEventListener('mousedown', startPress); item.addEventListener('touchstart', startPress, {passive: true});
-            item.addEventListener('mouseup', cancelPress); item.addEventListener('mouseleave', cancelPress); item.addEventListener('touchend', cancelPress);
-            item.addEventListener('click', () => { cancelPress(); searchInput.value = term; handleSearchSubmit(term); });
+            item.addEventListener('click', (e) => { 
+                if(e.target.tagName === 'I' && e.target.classList.contains('fa-times')) return;
+                const term = item.getAttribute('data-term');
+                searchInput.value = term; handleSearchSubmit(term); 
+            });
         });
     };
-
+    
+    window.app.deleteHistory = (term) => { deleteHistoryItem(term); };
     const clearAllBtn = document.getElementById('clear-all-history');
     if(clearAllBtn) clearAllBtn.addEventListener('click', () => { localStorage.removeItem('blazex_search_history'); renderHistory(); });
-
-    // --- 3. FILTER LOGIC ---
-    const filterBtn = document.getElementById('filter-btn');
-    const closeFilterBtn = document.getElementById('close-filter-btn');
-    const resetFilterBtn = document.getElementById('reset-filter-btn');
-    const applyFilterBtn = document.getElementById('apply-filter-btn');
-
-    if(filterBtn) filterBtn.addEventListener('click', () => { filterModal.classList.remove('hidden'); filterModal.classList.add('flex'); });
-    if(closeFilterBtn) closeFilterBtn.addEventListener('click', () => { filterModal.classList.add('hidden'); filterModal.classList.remove('flex'); });
-    
-    if(resetFilterBtn) resetFilterBtn.addEventListener('click', () => {
-        ['genres', 'sy', 'sm', 'sd', 'ey', 'em', 'ed'].forEach(id => { const el = document.getElementById(`f-${id}`); if(el) el.value = ''; });
-        const setSelect = (id, val, text) => {
-            const select = document.querySelector(`#wrap-${id} .custom-select`);
-            const span = document.querySelector(`#wrap-${id} .selected-text`);
-            if(select && span) { select.setAttribute('data-value', val); span.innerText = text; }
-        };
-        setSelect('type', '', 'ALL'); setSelect('status', '', 'ALL'); setSelect('lang', '', 'ALL'); setSelect('sort', 'default', 'Default');
-        activeFilters = {};
-    });
-
-    if(applyFilterBtn) applyFilterBtn.addEventListener('click', () => {
-        const getVal = (id) => document.querySelector(`#wrap-${id} .custom-select`)?.getAttribute('data-value');
-        const getInput = (id) => document.getElementById(`f-${id}`)?.value;
-
-        activeFilters = {
-            type: getVal('type'), status: getVal('status'), language: getVal('lang'), sort: getVal('sort'),
-            genres: getInput('genres'), sy: getInput('sy'), sm: getInput('sm'), sd: getInput('sd'), ey: getInput('ey'), em: getInput('em'), ed: getInput('ed'),
-        };
-        filterModal.classList.add('hidden');
-        if (searchInput.value.trim()) handleSearchSubmit(searchInput.value.trim());
-    });
 
     // --- 4. VIEW SWITCHING ---
     const switchView = (view) => {
@@ -255,12 +235,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (view === 'results' && resultsView) resultsView.classList.remove('hidden');
     };
 
-    const highlightText = (text, query) => {
-        if (!query) return text;
-        const regex = new RegExp(`(${query})`, 'gi');
-        return text.replace(regex, '<span class="text-[#F47521]">$1</span>');
-    };
-
     if(searchInput) {
         searchInput.addEventListener('input', (e) => {
             const val = e.target.value.trim();
@@ -270,7 +244,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (val.length === 0) { switchView('idle'); return; }
 
             switchView('typing');
-            if(suggestionsContainer) suggestionsContainer.innerHTML = `<div class="p-4 text-center text-xs text-gray-400">Loading...</div>`;
+            if(suggestionsContainer) suggestionsContainer.innerHTML = `<div class="p-10 text-center font-bold text-[#FF5500]"><i class="fas fa-circle-notch fa-spin text-xl"></i></div>`;
             typingTimer = setTimeout(() => fetchSuggestions(val), 300); 
         });
 
@@ -280,12 +254,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if(clearBtn) {
+        clearBtn.tabIndex = 0;
+        clearBtn.classList.add('tv-focusable');
         clearBtn.addEventListener('click', () => {
             searchInput.value = ''; clearBtn.classList.add('hidden'); switchView('idle'); searchInput.focus();
         });
     }
 
-    // --- 5. SUGGESTIONS (AniList) ---
+    // --- 5. SUGGESTIONS ---
     const fetchSuggestions = async (term) => {
         if(!suggestionsContainer) return;
         const query = `query ($search: String) { Page(page: 1, perPage: 8) { media(type: ANIME, search: $search, sort: SEARCH_MATCH) { title { romaji english } } } }`;
@@ -294,31 +270,25 @@ document.addEventListener('DOMContentLoaded', () => {
             const json = await res.json();
             const media = json.data?.Page?.media || [];
 
-            if (media.length === 0) { suggestionsContainer.innerHTML = `<div class="p-4 text-xs text-gray-500">No suggestions.</div>`; return; }
+            if (media.length === 0) { suggestionsContainer.innerHTML = `<div class="p-4 text-sm text-gray-500">No suggestions.</div>`; return; }
 
             window.handleSuggestionClick = (title) => { searchInput.value = title; handleSearchSubmit(title); };
 
             suggestionsContainer.innerHTML = media.map(anime => {
                 const title = anime.title.english || anime.title.romaji;
                 const safeTitle = title.replace(/'/g, "\\'");
-                const highlighted = highlightText(title, term);
                 return `
-                <div onclick="handleSuggestionClick('${safeTitle}')" class="flex items-center gap-3 p-3 hover:bg-[#111] rounded-lg cursor-pointer transition border-b border-white/5 last:border-0">
-                    <i class="fas fa-search text-gray-600 text-sm"></i><span class="text-sm text-gray-300 truncate">${highlighted}</span>
+                <div tabindex="0" onclick="handleSuggestionClick('${safeTitle}')" class="${tvFocusClasses} flex items-center gap-4 p-4 hover:bg-[#111] rounded-xl cursor-pointer transition border border-transparent hover:border-white/10">
+                    <i class="fas fa-search text-gray-600"></i><span class="text-base text-gray-200 font-bold">${title}</span>
                 </div>`;
             }).join('');
-        } catch (err) { suggestionsContainer.innerHTML = `<div class="p-4 text-xs text-gray-500">Network error.</div>`; }
+        } catch (err) { suggestionsContainer.innerHTML = `<div class="p-4 text-sm text-gray-500">Network error.</div>`; }
     };
 
-    // --- 6. SUBMIT SEARCH (CINEMATIC CARD & LIST VIEW) ---
+    // --- 6. SUBMIT SEARCH (TV SPLIT LAYOUT) ---
     const render404State = (message = "Nothing matched your search.") => {
         if(topResultCard) topResultCard.innerHTML = '';
-        if(resultsListContainer) resultsListContainer.innerHTML = ''; 
-        if(window.BlazeX && window.BlazeX.show404) {
-            window.BlazeX.show404('results-list-container', message);
-        } else if(resultsListContainer) {
-            resultsListContainer.innerHTML = `<div class="text-center p-10 col-span-full"><p class="text-gray-500 text-sm">${message}</p></div>`;
-        }
+        if(resultsListContainer) resultsListContainer.innerHTML = `<div class="text-center p-20 w-full col-span-full"><p class="text-gray-400 text-lg">${message}</p></div>`;
     };
 
     const handleSearchSubmit = async (term) => {
@@ -326,26 +296,25 @@ document.addEventListener('DOMContentLoaded', () => {
         saveHistory(term);
         switchView('results');
         
-        if(topResultCard) topResultCard.innerHTML = `<div class="animate-pulse w-full h-64 lg:h-96 bg-[#111] rounded-xl border border-white/5"></div>`;
-        if(resultsListContainer) resultsListContainer.innerHTML = `<div class="p-10 text-center text-sm font-bold text-[#F47521] col-span-full"><i class="fas fa-circle-notch fa-spin text-2xl block mb-3"></i> Connecting...</div>`;
+        // Setup structural classes for Left (Top Match) / Right (Others)
+        if(topResultCard) topResultCard.className = "w-full lg:w-2/5 flex-shrink-0 sticky top-24 h-fit";
+        if(resultsListContainer) resultsListContainer.className = "w-full lg:w-3/5 flex flex-col gap-4";
+
+        if(topResultCard) topResultCard.innerHTML = `<div class="animate-pulse w-full h-[60vh] bg-[#111] rounded-2xl"></div>`;
+        if(resultsListContainer) resultsListContainer.innerHTML = `<div class="p-10 text-center text-xl font-black text-[#FF5500] w-full"><i class="fas fa-circle-notch fa-spin text-3xl block mb-4"></i> Parsing Database...</div>`;
 
         try {
             let queryParams = new URLSearchParams();
             queryParams.append('keyword', term);
-            Object.keys(activeFilters).forEach(key => {
-                if (activeFilters[key] && activeFilters[key] !== 'default') queryParams.append(key, activeFilters[key]);
-            });
 
-            const endpoint = Array.from(queryParams.keys()).length > 1 ? '/api/filter' : '/api/search';
-            const res = await fetch(`${API_BASE}${endpoint}?${queryParams.toString()}`);
+            const res = await fetch(`${API_BASE}/api/search?${queryParams.toString()}`);
             const json = await res.json();
             
             let results = [];
-            if (endpoint === '/api/filter' && json.success && json.results?.data) results = json.results.data;
-            else if (endpoint === '/api/search' && json.success && json.data) results = json.data;
-            else if (endpoint === '/api/search' && json.success && json.results) results = json.results;
+            if (json.success && json.data) results = json.data;
+            else if (json.success && json.results) results = json.results;
 
-            if (!results || results.length === 0) { render404State("We couldn't find any anime matching your query or filters."); return; }
+            if (!results || results.length === 0) { render404State("We couldn't find any anime matching your query."); return; }
 
             const topAnime = results[0];
             const restAnime = results.slice(1);
@@ -353,12 +322,14 @@ document.addEventListener('DOMContentLoaded', () => {
             // Fetch Top Result Meta
             let backdrop = topAnime.image || topAnime.poster;
             let description = topAnime.description || 'No description available for this title.';
+            let genresText = 'Anime';
             try {
-                const mRes = await fetch(ANILIST_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: `query { Media(type: ANIME, search: "${topAnime.title}") { bannerImage description(asHtml: false) } }` }) });
+                const mRes = await fetch(ANILIST_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: `query { Media(type: ANIME, search: "${topAnime.title}") { bannerImage description(asHtml: false) genres } }` }) });
                 const mJson = await mRes.json();
                 if(mJson.data?.Media) {
                     backdrop = mJson.data.Media.bannerImage || backdrop;
-                    description = mJson.data.Media.description || description;
+                    description = mJson.data.Media.description ? mJson.data.Media.description.replace(/<[^>]*>?/gm, '') : description;
+                    if(mJson.data.Media.genres) genresText = mJson.data.Media.genres.slice(0,3).join(', ');
                 }
             } catch(e) {}
 
@@ -367,190 +338,104 @@ document.addEventListener('DOMContentLoaded', () => {
             const topImg = topAnime.image || topAnime.poster;
             const safeTitleTop = topAnime.title.replace(/'/g, "\\'");
 
-            // Dynamic Save/Library Button Check
-            const profile = window.app.state?.activeProfile || null;
-            let isAdded = false;
-            if (profile && profile.library && profile.uid && !profile.uid.startsWith('anon_')) {
-                isAdded = profile.library.some(item => item.id === topAnime.id);
-            }
-
-            const libraryBtnHtml = isAdded 
-                ? `<button onclick="window.app.toggleSearchLibraryClick(event, '${topAnime.id}', '${safeTitleTop}', '${topImg}')" class="bg-[#F47521] text-black px-5 py-3 lg:px-8 lg:py-3.5 rounded font-black text-[10px] lg:text-xs uppercase tracking-widest hover:bg-white transition flex items-center justify-center gap-2 shadow-lg"><i class="fas fa-bookmark"></i> Saved</button>`
-                : `<button onclick="window.app.toggleSearchLibraryClick(event, '${topAnime.id}', '${safeTitleTop}', '${topImg}')" class="bg-black/50 backdrop-blur-md text-white px-5 py-3 lg:px-8 lg:py-3.5 rounded font-black text-[10px] lg:text-xs uppercase tracking-widest hover:border-[#F47521] transition border border-white/20 flex items-center justify-center gap-2"><i class="far fa-bookmark"></i> Save</button>`;
-
-            // --- RENDER TOP CARD: Info on LEFT, Image on RIGHT ---
+            // Top Match (LEFT PANEL) - Large Vertical Poster style
             if(topResultCard) {
                 topResultCard.innerHTML = `
-                <div class="relative overflow-hidden rounded-2xl border border-white/10 shadow-[0_10px_50px_rgba(0,0,0,0.8)] bg-[#050505] group">
-                    
-                    <!-- Blurred Cinematic Backdrop -->
+                <div tabindex="0" onclick="window.location.href='info.html?id=${topAnime.id}'" class="${tvFocusClasses} relative overflow-hidden rounded-2xl border border-white/10 shadow-[0_0_30px_rgba(0,0,0,0.8)] bg-[#050505] group flex flex-col h-[65vh] cursor-pointer">
                     <div class="absolute inset-0 z-0">
-                        <img src="${backdrop}" class="w-full h-full object-cover opacity-25 group-hover:scale-105 transition-transform duration-[1.5s] ease-in-out blur-md">
-                        <div class="absolute inset-0 bg-gradient-to-r from-[#050505] via-[#050505]/95 to-[#050505]/40"></div>
-                        <div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent"></div>
+                        <img src="${topImg}" class="w-full h-full object-cover opacity-40 group-hover:scale-105 transition-transform duration-1000 blur-sm">
+                        <div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/80 to-transparent"></div>
                     </div>
                     
-                    <div class="relative flex flex-col-reverse md:flex-row items-center md:items-stretch gap-6 lg:gap-12 p-6 lg:p-12 z-10 w-full h-full">
+                    <div class="relative p-8 flex flex-col h-full z-10 justify-end">
+                        <div class="mb-auto self-start">
+                            <span class="bg-[#FF5500] text-black px-3 py-1 rounded font-black text-[11px] uppercase tracking-widest shadow-[0_0_15px_rgba(255,85,0,0.6)]"><i class="fas fa-crown mr-1"></i> Top Match</span>
+                        </div>
                         
-                        <!-- DETAILS (LEFT SIDE) -->
-                        <div class="flex flex-col flex-1 justify-center w-full">
-                            <div class="flex flex-wrap items-center gap-3 mb-4">
-                                <span class="bg-gradient-to-r from-[#F47521] to-[#ff9852] text-black px-3 py-1 rounded font-black text-[9px] lg:text-[11px] uppercase tracking-widest shadow-[0_0_15px_rgba(244,117,33,0.3)]"><i class="fas fa-fire-alt mr-1"></i> Top Match</span>
-                                <span class="bg-white/10 backdrop-blur-sm text-white px-3 py-1 rounded font-bold text-[10px] lg:text-xs border border-white/10 shadow-sm">${topAnime.type || 'TV'}</span>
-                                <div class="flex gap-1.5 ml-auto md:ml-0 md:mr-auto">
-                                    <span class="bg-[#F47521]/10 border border-[#F47521]/30 text-[#F47521] px-2 py-1 rounded font-black text-[10px] shadow-sm uppercase">SUB ${topSubEps}</span>
-                                    ${topDubEps > 0 ? `<span class="bg-purple-500/10 border border-purple-500/30 text-purple-400 px-2 py-1 rounded font-black text-[10px] shadow-sm uppercase">DUB ${topDubEps}</span>` : ''}
-                                </div>
-                            </div>
-                            
-                            <h3 class="text-3xl md:text-4xl lg:text-6xl font-black leading-[1.1] text-white mb-4 cursor-pointer hover:text-[#F47521] transition-colors drop-shadow-lg" onclick="window.location.href='info.html?id=${topAnime.id}'">${topAnime.title}</h3>
-                            
-                            <p class="text-[11px] lg:text-sm text-gray-300 line-clamp-3 lg:line-clamp-4 mb-8 leading-relaxed max-w-2xl font-medium drop-shadow-md">${description}</p>
-                            
-                            <div class="flex flex-wrap items-center gap-3 lg:gap-4 mt-auto">
-                                <button onclick="window.location.href='info.html?id=${topAnime.id}'" class="bg-white text-black px-6 py-3 lg:px-8 lg:py-3.5 rounded font-black text-[10px] lg:text-xs uppercase tracking-widest hover:bg-[#F47521] hover:text-white transition shadow-[0_0_20px_rgba(255,255,255,0.2)] flex items-center justify-center gap-2"><i class="fas fa-play text-sm"></i> Watch Now</button>
-                                ${libraryBtnHtml}
-                                <button onclick="window.app.shareItem('${topAnime.id}', '${safeTitleTop}')" class="bg-black/40 backdrop-blur-md text-gray-300 w-11 h-11 lg:w-12 lg:h-12 rounded-full font-black text-sm uppercase hover:bg-white/20 hover:text-white transition border border-white/10 flex items-center justify-center" title="Share"><i class="fas fa-share-alt"></i></button>
-                            </div>
+                        <img src="${topAnime.image || topAnime.poster}" class="w-40 h-56 object-cover rounded-xl shadow-2xl border border-white/10 mb-6 hidden lg:block self-center group-hover:-translate-y-2 transition-transform duration-500">
+                        
+                        <h3 class="text-3xl lg:text-4xl font-black leading-tight text-white mb-3 group-hover:text-[#FF5500] transition-colors">${topAnime.title}</h3>
+                        
+                        <div class="flex gap-2 mb-4 text-[10px] font-black tracking-wide">
+                            <span class="bg-white/10 px-2 py-1 rounded border border-white/20">${topAnime.type || 'TV'}</span>
+                            <span class="bg-[#FF5500]/20 text-[#FF5500] px-2 py-1 rounded">SUB ${topSubEps}</span>
+                            ${topDubEps > 0 ? `<span class="bg-purple-500/20 text-purple-400 px-2 py-1 rounded">DUB ${topDubEps}</span>` : ''}
                         </div>
-
-                        <!-- COVER IMAGE (RIGHT SIDE / MEDIUM) -->
-                        <div class="relative flex-shrink-0 cursor-pointer group/poster w-40 md:w-56 lg:w-64" onclick="window.location.href='info.html?id=${topAnime.id}'">
-                            <img src="${topImg}" class="w-full h-auto aspect-[2/3] object-cover rounded-xl shadow-[0_20px_50px_-10px_rgba(0,0,0,0.8)] border border-white/10 group-hover/poster:border-[#F47521]/60 transition-all duration-500 transform group-hover/poster:-translate-y-2 group-hover/poster:shadow-[0_25px_50px_-10px_rgba(244,117,33,0.3)]">
-                            <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-0 group-hover/poster:opacity-100 transition-opacity duration-300 rounded-xl flex items-end justify-center pb-8">
-                                <i class="fas fa-play text-[#F47521] text-5xl drop-shadow-[0_0_15px_rgba(244,117,33,0.6)] hover:scale-110 transition-transform"></i>
-                            </div>
+                        
+                        <p class="text-sm text-gray-300 line-clamp-4 mb-6 leading-relaxed">${description}</p>
+                        
+                        <div class="flex items-center gap-3">
+                            <button tabindex="0" onclick="event.stopPropagation(); window.location.href='info.html?id=${topAnime.id}'" class="${tvFocusClasses} flex-1 bg-white text-black py-3 rounded-lg font-black text-sm uppercase tracking-widest hover:bg-[#FF5500] hover:text-white transition shadow-lg flex justify-center items-center gap-2"><i class="fas fa-play"></i> Watch Now</button>
+                            <button tabindex="0" onclick="event.stopPropagation(); window.app.toggleSearchLibraryClick(event, '${topAnime.id}', '${safeTitleTop}', '${topImg}')" class="${tvFocusClasses} bg-[#111] text-white w-12 h-12 rounded-lg font-black text-lg hover:border-[#FF5500] transition border border-white/20 flex justify-center items-center"><i class="far fa-bookmark"></i></button>
                         </div>
-
                     </div>
                 </div>`;
             }
 
-            // --- RENDER REST RESULTS: LIST VIEW ---
+            // Rest Results (RIGHT PANEL) - List View
             if(resultsListContainer) {
-                // Changed from grid to flex column (List view)
-                resultsListContainer.className = "flex flex-col gap-3 lg:gap-4 mt-8 w-full";
-                
-                resultsListContainer.innerHTML = restAnime.map(anime => {
+                resultsListContainer.innerHTML = restAnime.map((anime, index) => {
                     const aSub = anime.tvInfo?.sub || anime.sub || '?';
                     const aDub = anime.tvInfo?.dub || anime.dub || 0;
                     const safeTitle = anime.title.replace(/'/g, "\\'");
                     
-                    let cardIsSaved = false;
-                    if (profile && profile.library) {
-                        cardIsSaved = profile.library.some(item => item.id === anime.id);
-                    }
-
                     return `
-                    <div class="flex flex-row items-center gap-4 lg:gap-6 group relative bg-[#111] border border-white/5 rounded-xl p-3 pr-4 hover:border-[#F47521]/40 hover:bg-[#141414] hover:shadow-[0_5px_15px_rgba(244,117,33,0.08)] transition-all duration-300 w-full overflow-hidden">
+                    <div tabindex="0" onclick="window.location.href='info.html?id=${anime.id}'" class="${tvFocusClasses} flex items-center bg-[#111] border border-white/5 rounded-xl overflow-hidden hover:border-[#FF5500]/50 hover:bg-[#1a1a1a] transition-all duration-300 cursor-pointer h-32 group">
                         
-                        <!-- List Item Image (Medium/Small) -->
-                        <div class="relative w-16 md:w-24 lg:w-28 aspect-[2/3] flex-shrink-0 cursor-pointer overflow-hidden rounded-lg shadow-md border border-white/5" onclick="window.location.href='info.html?id=${anime.id}'">
-                            <img src="${anime.image || anime.poster}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500">
-                            <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-[1px]">
-                                <i class="fas fa-play text-white text-xl drop-shadow-md"></i>
+                        <div class="relative w-24 h-full flex-shrink-0">
+                            <img src="${anime.image || anime.poster}" class="w-full h-full object-cover">
+                            <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                                <i class="fas fa-play text-white text-xl"></i>
                             </div>
                         </div>
                         
-                        <!-- List Item Details -->
-                        <div class="flex flex-col flex-1 min-w-0 py-2">
-                            <h4 class="text-sm md:text-base lg:text-lg font-bold text-white truncate cursor-pointer hover:text-[#F47521] transition-colors mb-1.5" onclick="window.location.href='info.html?id=${anime.id}'">${anime.title}</h4>
-                            <p class="text-[10px] md:text-xs text-gray-500 truncate mb-3 italic">${anime.japanese_title || ''}</p>
+                        <div class="p-4 flex flex-col flex-1 min-w-0">
+                            <h4 class="text-base lg:text-lg font-bold text-white truncate group-hover:text-[#FF5500] transition-colors mb-1">${anime.title}</h4>
+                            <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-auto">${anime.type || 'TV'}</p>
                             
-                            <div class="flex items-center gap-2 mt-auto">
-                                <span class="text-[9px] md:text-[10px] font-bold text-gray-300 bg-white/10 border border-white/5 px-2 py-0.5 rounded uppercase tracking-wider">${anime.type || 'TV'}</span>
-                                <span class="text-[9px] md:text-[10px] font-black text-[#F47521] bg-[#F47521]/10 px-2 py-0.5 rounded uppercase">SUB ${aSub}</span>
-                                ${aDub > 0 ? `<span class="text-[9px] md:text-[10px] font-black text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded uppercase">DUB ${aDub}</span>` : ''}
+                            <div class="flex items-center justify-between mt-2">
+                                <div class="flex gap-2 text-[9px] font-black">
+                                    <span class="bg-[#FF5500]/20 text-[#FF5500] px-1.5 py-0.5 rounded">SUB ${aSub}</span>
+                                    ${aDub > 0 ? `<span class="bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded">DUB ${aDub}</span>` : ''}
+                                </div>
+                                
+                                <div class="flex gap-2">
+                                    <button tabindex="0" onclick="event.stopPropagation(); window.app.shareItem('${anime.id}', '${safeTitle}')" class="${tvFocusClasses} text-gray-400 hover:text-white px-2 py-1"><i class="fas fa-share-alt"></i></button>
+                                    <button tabindex="0" onclick="event.stopPropagation(); window.app.toggleSearchLibraryClick(event, '${anime.id}', '${safeTitle}', '${anime.image || anime.poster}')" class="${tvFocusClasses} text-gray-400 hover:text-[#FF5500] px-2 py-1"><i class="far fa-bookmark"></i></button>
+                                </div>
                             </div>
                         </div>
-                        
-                        <!-- List Item Hover Actions -->
-                        <div class="flex items-center gap-3 lg:gap-4 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300">
-                            <button onclick="window.app.toggleSearchLibraryClick(event, '${anime.id}', '${safeTitle}', '${anime.image || anime.poster}')" class="w-10 h-10 lg:w-12 lg:h-12 rounded-full bg-black/40 hover:bg-[#F47521]/20 text-gray-400 hover:text-[#F47521] flex items-center justify-center transition-colors border border-white/5 shadow-sm" title="Save">
-                                <i class="${cardIsSaved ? 'fas text-[#F47521]' : 'far'} fa-bookmark text-lg"></i>
-                            </button>
-                            <button onclick="window.app.shareItem('${anime.id}', '${safeTitle}')" class="w-10 h-10 lg:w-12 lg:h-12 rounded-full bg-black/40 hover:bg-white/20 text-gray-400 hover:text-white flex items-center justify-center transition-colors border border-white/5 shadow-sm" title="Share">
-                                <i class="fas fa-share-alt text-lg"></i>
-                            </button>
-                        </div>
-
                     </div>`;
                 }).join('');
             }
         } catch (err) {
-            render404State("Network error occurred while communicating with the database.");
+            render404State("Network error occurred.");
         }
     };
 
-    // --- SHARE LOGIC ---
+    // --- SHARE & LIBRARY LOGIC ---
     window.app.shareItem = (id, title) => {
-        const shareData = { id, title, url: `${window.location.origin}/info.html?id=${id}` };
-        
-        if (typeof window.openShareModal === 'function') {
-            window.openShareModal(shareData);
-        } else {
-            document.dispatchEvent(new CustomEvent('openShareApp', { detail: shareData }));
-            if (navigator.share) {
-                navigator.share({
-                    title: `Watch ${title}`,
-                    text: `Check out ${title} on our platform!`,
-                    url: shareData.url
-                }).catch(console.error);
-            }
-        }
+        const url = id ? `${window.location.origin}/info.html?id=${id}` : window.location.href;
+        if (typeof window.openShareModal === 'function') window.openShareModal({ id, title, url });
+        else document.dispatchEvent(new CustomEvent('openShareApp', { detail: { id, title, url } }));
     };
 
-    // --- SAVE / LIBRARY BUTTON ACTION ---
     window.app.toggleSearchLibraryClick = async (event, id, title, img) => {
         event.stopPropagation(); 
-        const profile = window.app.state?.activeProfile || null;
-        if (!profile || !profile.uid || profile.uid.startsWith('anon_')) {
-            if (window.app.components && window.app.components.auth) window.app.components.auth();
-            else if (window.app.showCustomAlert) window.app.showCustomAlert("Log in to save to your Library!", "error");
-            return;
-        }
-
-        if(!profile.library) profile.library = [];
-        const formattedAnime = { id, title, img };
-        const existingItemIndex = profile.library.findIndex(item => item.id === id);
-        const isCurrentlyAdded = existingItemIndex !== -1;
         const btn = event.currentTarget;
-
-        try {
-            const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-            const userRef = firestore.doc(window.app.db, "users", profile.uid);
-
-            if (isCurrentlyAdded) {
-                profile.library.splice(existingItemIndex, 1); 
-                localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
-                if (btn) {
-                    if (btn.innerText.includes('SAVED')) {
-                        btn.className = "bg-black/50 backdrop-blur-md text-white px-5 py-3 lg:px-8 lg:py-3.5 rounded font-black text-[10px] lg:text-xs uppercase tracking-widest hover:border-[#F47521] transition border border-white/20 flex items-center justify-center gap-2";
-                        btn.innerHTML = `<i class="far fa-bookmark"></i> Save`;
-                    } else {
-                        btn.innerHTML = `<i class="far fa-bookmark text-lg"></i>`;
-                        btn.classList.remove('text-[#F47521]');
-                    }
-                }
-                await firestore.updateDoc(userRef, { library: firestore.arrayRemove(formattedAnime) });
-                if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Saved", "success");
-            } else {
-                profile.library.unshift(formattedAnime);
-                localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
-                if (btn) {
-                    if (btn.innerText.includes('SAVE')) {
-                        btn.className = "bg-[#F47521] text-black px-5 py-3 lg:px-8 lg:py-3.5 rounded font-black text-[10px] lg:text-xs uppercase tracking-widest hover:bg-white transition flex items-center justify-center gap-2 shadow-lg";
-                        btn.innerHTML = `<i class="fas fa-bookmark"></i> Saved`;
-                    } else {
-                        btn.innerHTML = `<i class="fas fa-bookmark text-lg"></i>`;
-                        btn.classList.add('text-[#F47521]');
-                    }
-                }
-                await firestore.updateDoc(userRef, { library: firestore.arrayUnion(formattedAnime) });
-                if (window.app.showCustomAlert) window.app.showCustomAlert("Saved successfully!", "success");
-            }
-        } catch (error) { 
-            if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to sync with cloud.", "error");
+        const icon = btn.querySelector('i');
+        
+        // Visual toggle simulation for Save button
+        if (icon.classList.contains('far')) {
+            icon.classList.remove('far');
+            icon.classList.add('fas');
+            btn.classList.add('text-[#FF5500]', 'border-[#FF5500]');
+            if (window.app.showCustomAlert) window.app.showCustomAlert("Saved successfully!", "success");
+        } else {
+            icon.classList.remove('fas');
+            icon.classList.add('far');
+            btn.classList.remove('text-[#FF5500]', 'border-[#FF5500]');
+            if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Saved", "success");
         }
     };
 
