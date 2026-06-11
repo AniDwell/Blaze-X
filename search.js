@@ -1,4 +1,4 @@
-// search.js - Full Featured Search & Filter Engine
+// search.js - Full Featured Search & Filter Engine (Premium Responsive UI)
 
 window.app = window.app || {};
 
@@ -98,53 +98,78 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- ANILIST TO DB MAPPING (TOP 10) ---
     const loadTop10Popular = async () => {
         if(!trendingContainer) return;
-        trendingContainer.innerHTML = `<div class="p-4 text-center text-xs text-gray-500 w-full"><i class="fas fa-circle-notch fa-spin text-[#F47521] text-lg mb-2 block"></i> Loading Trending...</div>`;
+        trendingContainer.innerHTML = `<div class="p-4 text-center text-xs text-gray-500 w-full col-span-full"><i class="fas fa-circle-notch fa-spin text-[#F47521] text-lg mb-2 block"></i> Loading Trending...</div>`;
         
         try {
-            const query = `query { Page(page: 1, perPage: 10) { media(type: ANIME, sort: TRENDING_DESC) { title { romaji english } coverImage { extraLarge } } } }`;
+            const query = `query { Page(page: 1, perPage: 10) { media(type: ANIME, sort: TRENDING_DESC) { title { romaji english } coverImage { extraLarge } format } } }`;
             const res = await fetch(ANILIST_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query }) });
             const json = await res.json();
             const animeList = json.data.Page.media;
 
             trendingContainer.innerHTML = '';
-            trendingContainer.className = "flex flex-col gap-3 pb-4"; 
+            // Premium Responsive Grid for big screens
+            trendingContainer.className = "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 lg:gap-6 pb-6 w-full"; 
 
             let count = 1;
-            for (const anime of animeList) {
+            animeList.forEach(anime => {
                 const title = anime.title.english || anime.title.romaji;
-                try {
-                    const searchRes = await fetch(`${API_BASE}/api/search?keyword=${encodeURIComponent(title)}`);
-                    const searchJson = await searchRes.json();
-                    
-                    if (searchJson.success && searchJson.results?.length > 0) {
-                        const match = searchJson.results[0];
-                        const imgUrl = match.image || match.poster || anime.coverImage.extraLarge;
-                        const aSub = match.tvInfo?.sub || match.sub || '?';
-                        const aDub = match.tvInfo?.dub || match.dub || 0;
+                const safeTitle = title.replace(/'/g, "\\'");
+                const imgUrl = anime.coverImage.extraLarge;
+                const format = anime.format || 'TV';
 
-                        trendingContainer.innerHTML += `
-                        <div onclick="window.location.href='info.html?id=${match.id}'" class="flex gap-4 items-center bg-[#111] p-2 rounded-xl cursor-pointer hover:border-[#F47521] border border-transparent transition relative overflow-hidden group shadow-md">
-                            <div class="absolute top-0 left-0 bg-[#F47521] text-black font-black text-[10px] px-2.5 py-1 rounded-br-xl z-10">TOP ${count}</div>
-                            <img src="${imgUrl}" class="w-16 h-24 object-cover rounded-lg shadow-lg">
-                            <div class="flex flex-col flex-1 min-w-0 py-1 pr-2">
-                                <h4 class="text-sm font-bold text-white truncate">${match.title}</h4>
-                                <p class="text-[10px] text-gray-500 mt-0.5 truncate italic">${match.japanese_title || ''}</p>
-                                <div class="flex gap-2 mt-auto items-center text-[9px] font-black uppercase tracking-wider">
-                                    <span class="text-gray-400 border border-gray-600 px-1 py-0.5 rounded bg-black/50">${match.type || 'TV'}</span>
-                                    <div class="flex gap-1 ml-auto">
-                                        <span class="bg-gray-800 text-gray-300 px-1.5 py-0.5 rounded">SUB <span class="text-white">${aSub}</span></span>
-                                        ${aDub > 0 ? `<span class="bg-gray-800 text-gray-300 px-1.5 py-0.5 rounded">DUB <span class="text-white">${aDub}</span></span>` : ''}
-                                    </div>
-                                </div>
+                trendingContainer.innerHTML += `
+                <div onclick="window.app.openFromAnilist('${safeTitle}')" class="relative group cursor-pointer overflow-hidden rounded-xl shadow-lg hover:shadow-[#F47521]/20 transition-all duration-300 transform hover:-translate-y-1 bg-[#111] border border-white/5 hover:border-[#F47521]/50 flex flex-col h-full">
+                    <div class="absolute top-2 left-2 bg-gradient-to-r from-[#F47521] to-[#ff9852] text-black font-black text-[11px] px-3 py-1 rounded-md z-10 shadow-md">
+                        #${count}
+                    </div>
+                    <div class="relative w-full aspect-[2/3] overflow-hidden">
+                        <img src="${imgUrl}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500">
+                        <div class="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent opacity-90"></div>
+                        
+                        <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/40 backdrop-blur-[2px]">
+                            <div class="w-12 h-12 rounded-full bg-[#F47521] text-black flex items-center justify-center shadow-[0_0_15px_rgba(244,117,33,0.5)]">
+                                <i class="fas fa-play ml-1"></i>
                             </div>
-                        </div>`;
-                        count++;
-                    }
-                } catch(e) {}
-            }
-            if(trendingContainer.innerHTML === '') trendingContainer.innerHTML = `<div class="p-4 text-center text-xs text-gray-500">Failed to map trending titles.</div>`;
+                        </div>
+                    </div>
+                    <div class="p-3 flex-1 flex flex-col justify-end">
+                        <h4 class="text-sm lg:text-base font-bold text-white line-clamp-2 leading-tight">${title}</h4>
+                        <div class="flex gap-2 mt-2 items-center text-[10px] font-black uppercase tracking-wider text-gray-400">
+                            <span class="border border-white/10 bg-white/5 px-2 py-0.5 rounded">${format}</span>
+                            <span class="ml-auto text-[#F47521] group-hover:text-white transition-colors">Find <i class="fas fa-arrow-right text-[9px]"></i></span>
+                        </div>
+                    </div>
+                </div>`;
+                count++;
+            });
         } catch (error) {
-            trendingContainer.innerHTML = `<p class="text-xs text-red-500">Could not load popular titles.</p>`;
+            trendingContainer.innerHTML = `<p class="text-xs text-red-500 col-span-full">Could not load popular titles.</p>`;
+        }
+    };
+
+    // ON CLICK API FETCH
+    window.app.openFromAnilist = async (title) => {
+        // Optional: You can create a full-screen loading overlay here
+        document.body.style.cursor = 'wait';
+        try {
+            const searchRes = await fetch(`${API_BASE}/api/search?keyword=${encodeURIComponent(title)}`);
+            const searchJson = await searchRes.json();
+            
+            if (searchJson.success && searchJson.results?.length > 0) {
+                const matchId = searchJson.results[0].id;
+                window.location.href = `info.html?id=${matchId}`;
+            } else if (searchJson.success && searchJson.data?.length > 0) {
+                const matchId = searchJson.data[0].id;
+                window.location.href = `info.html?id=${matchId}`;
+            } else {
+                if (window.app.showCustomAlert) window.app.showCustomAlert("Title not found in our database yet.", "error");
+                else alert("Title not found in our database yet.");
+            }
+        } catch (e) {
+            console.error(e);
+            if (window.app.showCustomAlert) window.app.showCustomAlert("Error connecting to database.", "error");
+        } finally {
+            document.body.style.cursor = 'default';
         }
     };
 
@@ -290,14 +315,14 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) { suggestionsContainer.innerHTML = `<div class="p-4 text-xs text-gray-500">Network error.</div>`; }
     };
 
-    // --- 6. SUBMIT SEARCH ---
+    // --- 6. SUBMIT SEARCH & PREMIUM RENDER ---
     const render404State = (message = "Nothing matched your search.") => {
         if(topResultCard) topResultCard.innerHTML = '';
         if(resultsListContainer) resultsListContainer.innerHTML = ''; 
         if(window.BlazeX && window.BlazeX.show404) {
             window.BlazeX.show404('results-list-container', message);
         } else if(resultsListContainer) {
-            resultsListContainer.innerHTML = `<div class="text-center p-10"><p class="text-gray-500 text-sm">${message}</p></div>`;
+            resultsListContainer.innerHTML = `<div class="text-center p-10 col-span-full"><p class="text-gray-500 text-sm">${message}</p></div>`;
         }
     };
 
@@ -306,8 +331,8 @@ document.addEventListener('DOMContentLoaded', () => {
         saveHistory(term);
         switchView('results');
         
-        if(topResultCard) topResultCard.innerHTML = `<div class="animate-pulse w-full h-56 bg-[#111] rounded-xl"></div>`;
-        if(resultsListContainer) resultsListContainer.innerHTML = `<div class="p-4 text-center text-xs text-[#F47521]"><i class="fas fa-circle-notch fa-spin text-lg"></i> Parsing Database...</div>`;
+        if(topResultCard) topResultCard.innerHTML = `<div class="animate-pulse w-full h-64 lg:h-80 bg-[#111] rounded-xl"></div>`;
+        if(resultsListContainer) resultsListContainer.innerHTML = `<div class="p-10 text-center text-sm font-bold text-[#F47521] col-span-full"><i class="fas fa-circle-notch fa-spin text-2xl block mb-3"></i> Connecting to DB...</div>`;
 
         try {
             let queryParams = new URLSearchParams();
@@ -323,8 +348,9 @@ document.addEventListener('DOMContentLoaded', () => {
             let results = [];
             if (endpoint === '/api/filter' && json.success && json.results?.data) results = json.results.data;
             else if (endpoint === '/api/search' && json.success && json.data) results = json.data;
+            else if (endpoint === '/api/search' && json.success && json.results) results = json.results; // Fallback for alternative API structure
 
-            if (results.length === 0) { render404State("We couldn't find any anime matching your query or filters."); return; }
+            if (!results || results.length === 0) { render404State("We couldn't find any anime matching your query or filters."); return; }
 
             const topAnime = results[0];
             const restAnime = results.slice(1);
@@ -344,8 +370,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const topSubEps = topAnime.tvInfo?.sub || topAnime.sub || '?';
             const topDubEps = topAnime.tvInfo?.dub || topAnime.dub || 0;
             const topImg = topAnime.image || topAnime.poster;
+            const safeTitleTop = topAnime.title.replace(/'/g, "\\'");
 
-            // Library Button state
+            // Dynamic Save/Library Button Check
             const profile = window.app.state?.activeProfile || null;
             let isAdded = false;
             if (profile && profile.library && profile.uid && !profile.uid.startsWith('anon_')) {
@@ -353,29 +380,44 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const libraryBtnHtml = isAdded 
-                ? `<button onclick="window.app.toggleSearchLibraryClick(event, '${topAnime.id}', '${topAnime.title.replace(/'/g, "\\'")}', '${topImg}')" class="bg-[#F47521] text-black px-3 py-2 rounded font-black text-[10px] uppercase hover:bg-white transition border border-[#F47521] flex items-center gap-2"><i class="fas fa-check"></i> Added</button>`
-                : `<button onclick="window.app.toggleSearchLibraryClick(event, '${topAnime.id}', '${topAnime.title.replace(/'/g, "\\'")}', '${topImg}')" class="bg-[#111] text-white px-3 py-2 rounded font-black text-[10px] uppercase hover:border-[#F47521] transition border border-white/10 flex items-center gap-2"><i class="fas fa-plus"></i> Library</button>`;
+                ? `<button onclick="window.app.toggleSearchLibraryClick(event, '${topAnime.id}', '${safeTitleTop}', '${topImg}')" class="bg-[#F47521] text-black px-4 py-2 lg:px-6 lg:py-3 rounded font-black text-[10px] lg:text-xs uppercase tracking-widest hover:bg-white transition flex items-center gap-2 shadow-lg"><i class="fas fa-bookmark"></i> Saved</button>`
+                : `<button onclick="window.app.toggleSearchLibraryClick(event, '${topAnime.id}', '${safeTitleTop}', '${topImg}')" class="bg-[#111]/80 backdrop-blur-sm text-white px-4 py-2 lg:px-6 lg:py-3 rounded font-black text-[10px] lg:text-xs uppercase tracking-widest hover:border-[#F47521] transition border border-white/20 flex items-center gap-2"><i class="far fa-bookmark"></i> Save</button>`;
 
+            // Render Top Card (Premium Wide Layout for Big Screens)
             if(topResultCard) {
                 topResultCard.innerHTML = `
-                <div onclick="window.location.href='info.html?id=${topAnime.id}'" class="relative overflow-hidden rounded-xl border border-white/10 cursor-pointer hover:border-[#F47521] transition group shadow-lg bg-black">
-                    <div class="absolute inset-0">
-                        <img src="${backdrop}" class="w-full h-full object-cover opacity-20 group-hover:scale-105 transition-transform duration-700 blur-[2px]">
-                        <div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/90 to-transparent"></div>
+                <div class="relative overflow-hidden rounded-2xl border border-white/10 shadow-2xl bg-[#050505] group">
+                    <div class="absolute inset-0 z-0">
+                        <img src="${backdrop}" class="w-full h-full object-cover opacity-30 group-hover:scale-105 transition-transform duration-1000 blur-[3px]">
+                        <div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/80 to-[#050505]/20"></div>
+                        <div class="absolute inset-0 bg-gradient-to-r from-[#050505] via-[#050505]/90 to-transparent md:block hidden"></div>
                     </div>
-                    <div class="relative flex flex-col md:flex-row gap-4 p-4 z-10">
-                        <img src="${topImg}" class="w-28 md:w-36 h-40 md:h-52 object-cover rounded-lg shadow-2xl border border-white/5">
-                        <div class="flex flex-col flex-1">
-                            <span class="text-[9px] font-black uppercase tracking-widest text-[#F47521] mb-1"><i class="fas fa-star mr-1"></i> Top Result</span>
-                            <h3 class="text-base md:text-xl font-black leading-tight text-white mb-2">${topAnime.title}</h3>
-                            <p class="text-[10px] text-gray-400 line-clamp-4 mb-4 leading-relaxed">${description}</p>
-                            <div class="flex items-center gap-2 mt-auto">
-                                <button onclick="event.stopPropagation(); window.location.href='info.html?id=${topAnime.id}'" class="bg-white text-black px-4 py-2 rounded font-black text-[10px] uppercase tracking-widest hover:bg-[#F47521] hover:text-white transition"><i class="fas fa-play mr-1"></i> Play</button>
+                    
+                    <div class="relative flex flex-col md:flex-row gap-6 lg:gap-8 p-6 lg:p-10 z-10">
+                        <div class="relative flex-shrink-0 cursor-pointer" onclick="window.location.href='info.html?id=${topAnime.id}'">
+                            <img src="${topImg}" class="w-32 md:w-48 lg:w-56 h-auto object-cover rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.8)] border border-white/10 group-hover:border-[#F47521]/50 transition-colors">
+                            <div class="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl backdrop-blur-[2px]">
+                                <i class="fas fa-play text-white text-3xl md:text-5xl drop-shadow-lg"></i>
+                            </div>
+                        </div>
+                        
+                        <div class="flex flex-col flex-1 justify-center">
+                            <div class="flex items-center gap-3 mb-2">
+                                <span class="bg-[#F47521] text-black px-2 py-0.5 rounded font-black text-[9px] lg:text-[11px] uppercase tracking-widest shadow-[0_0_10px_rgba(244,117,33,0.4)]"><i class="fas fa-crown mr-1"></i> Top Match</span>
+                                <span class="bg-white/10 text-white px-2 py-0.5 rounded font-bold text-[9px] border border-white/10">${topAnime.type || 'TV'}</span>
+                            </div>
+                            
+                            <h3 class="text-2xl md:text-3xl lg:text-4xl font-black leading-tight text-white mb-3 cursor-pointer hover:text-[#F47521] transition-colors" onclick="window.location.href='info.html?id=${topAnime.id}'">${topAnime.title}</h3>
+                            <p class="text-[11px] lg:text-sm text-gray-300 line-clamp-3 lg:line-clamp-4 mb-6 leading-relaxed max-w-3xl">${description}</p>
+                            
+                            <div class="flex flex-wrap items-center gap-3 mt-auto">
+                                <button onclick="window.location.href='info.html?id=${topAnime.id}'" class="bg-white text-black px-5 py-2 lg:px-8 lg:py-3 rounded font-black text-[10px] lg:text-xs uppercase tracking-widest hover:bg-[#F47521] hover:text-white transition shadow-lg flex items-center gap-2"><i class="fas fa-play"></i> Watch Now</button>
                                 ${libraryBtnHtml}
-                                <div class="flex gap-1 ml-auto text-[9px] font-bold">
-                                    <span class="bg-[#111] text-white px-1.5 py-0.5 rounded border border-white/10">${topAnime.type || 'TV'}</span>
-                                    <span class="bg-[#F47521]/10 border border-[#F47521]/30 text-[#F47521] px-1.5 py-0.5 rounded">SUB ${topSubEps}</span>
-                                    ${topDubEps > 0 ? `<span class="bg-purple-500/10 border border-purple-500/30 text-purple-400 px-1.5 py-0.5 rounded">DUB ${topDubEps}</span>` : ''}
+                                <button onclick="window.app.shareItem('${topAnime.id}', '${safeTitleTop}')" class="bg-[#111]/80 backdrop-blur-sm text-white px-3 py-2 lg:px-4 lg:py-3 rounded font-black text-[10px] lg:text-xs uppercase hover:bg-white/20 transition border border-white/20 flex items-center gap-2"><i class="fas fa-share-alt"></i> Share</button>
+                                
+                                <div class="flex gap-2 ml-auto text-[10px] font-black tracking-wide">
+                                    <span class="bg-[#F47521]/10 border border-[#F47521]/30 text-[#F47521] px-2 py-1 rounded shadow-sm">SUB ${topSubEps}</span>
+                                    ${topDubEps > 0 ? `<span class="bg-purple-500/10 border border-purple-500/30 text-purple-400 px-2 py-1 rounded shadow-sm">DUB ${topDubEps}</span>` : ''}
                                 </div>
                             </div>
                         </div>
@@ -383,20 +425,50 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>`;
             }
 
+            // Render Rest Results (Responsive Grid)
             if(resultsListContainer) {
+                resultsListContainer.className = "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 lg:gap-6 mt-8";
+                
                 resultsListContainer.innerHTML = restAnime.map(anime => {
                     const aSub = anime.tvInfo?.sub || anime.sub || '?';
                     const aDub = anime.tvInfo?.dub || anime.dub || 0;
+                    const safeTitle = anime.title.replace(/'/g, "\\'");
+                    
+                    let cardIsSaved = false;
+                    if (profile && profile.library) {
+                        cardIsSaved = profile.library.some(item => item.id === anime.id);
+                    }
+
                     return `
-                    <div onclick="window.location.href='info.html?id=${anime.id}'" class="flex gap-3 items-center bg-[#111] p-2 rounded-xl cursor-pointer hover:border-[#F47521] transition border border-transparent shadow-sm group">
-                        <img src="${anime.image || anime.poster}" class="w-14 h-20 object-cover rounded-lg">
-                        <div class="flex-1 min-w-0 pr-2">
-                            <h4 class="text-sm font-bold text-white truncate">${anime.title}</h4>
-                            <div class="flex gap-2 mt-2 items-center text-[9px] font-black uppercase tracking-wider">
-                                <span class="text-gray-400 border border-gray-600 px-1.5 py-0.5 rounded">${anime.type || 'TV'}</span>
-                                <div class="flex gap-1 ml-auto">
-                                    <span class="text-gray-300">SUB <span class="text-white">${aSub}</span></span>
-                                    ${aDub > 0 ? `<span class="text-gray-300 ml-1">DUB <span class="text-white">${aDub}</span></span>` : ''}
+                    <div class="flex flex-col group relative bg-[#111] border border-white/5 rounded-xl overflow-hidden hover:border-[#F47521]/50 hover:shadow-[0_0_15px_rgba(244,117,33,0.15)] transition-all duration-300">
+                        <div class="relative w-full aspect-[2/3] cursor-pointer overflow-hidden" onclick="window.location.href='info.html?id=${anime.id}'">
+                            <img src="${anime.image || anime.poster}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                            
+                            <div class="absolute top-2 left-2 flex flex-col gap-1 z-10">
+                                <span class="bg-[#F47521] text-black font-black text-[9px] px-1.5 py-0.5 rounded shadow-sm">SUB ${aSub}</span>
+                                ${aDub > 0 ? `<span class="bg-purple-500 text-white font-black text-[9px] px-1.5 py-0.5 rounded shadow-sm">DUB ${aDub}</span>` : ''}
+                            </div>
+                            
+                            <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-3 backdrop-blur-[2px]">
+                                <div class="w-10 h-10 rounded-full bg-[#F47521] text-black flex items-center justify-center hover:scale-110 transition-transform shadow-lg">
+                                    <i class="fas fa-play ml-0.5"></i>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="p-3 flex flex-col flex-1 z-20 bg-[#111]">
+                            <h4 class="text-xs lg:text-sm font-bold text-white line-clamp-2 cursor-pointer hover:text-[#F47521] transition-colors flex-1" onclick="window.location.href='info.html?id=${anime.id}'">${anime.title}</h4>
+                            
+                            <div class="flex items-center justify-between mt-3 pt-3 border-t border-white/10">
+                                <span class="text-[9px] font-bold text-gray-500 bg-black/50 px-2 py-0.5 rounded uppercase">${anime.type || 'TV'}</span>
+                                
+                                <div class="flex gap-2">
+                                    <button onclick="window.app.toggleSearchLibraryClick(event, '${anime.id}', '${safeTitle}', '${anime.image || anime.poster}')" class="text-gray-400 hover:text-[#F47521] transition-colors" title="Save">
+                                        <i class="${cardIsSaved ? 'fas text-[#F47521]' : 'far'} fa-bookmark"></i>
+                                    </button>
+                                    <button onclick="window.app.shareItem('${anime.id}', '${safeTitle}')" class="text-gray-400 hover:text-white transition-colors" title="Share">
+                                        <i class="fas fa-share-alt"></i>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -408,7 +480,32 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // --- LIBRARY BUTTON ACTION ---
+    // --- SHARE LOGIC ---
+    window.app.shareItem = (id, title) => {
+        // Dispatching a custom event that share.js can listen to.
+        const shareData = { id, title, url: `${window.location.origin}/info.html?id=${id}` };
+        
+        // If there's a global function mapped from share.js
+        if (typeof window.openShareModal === 'function') {
+            window.openShareModal(shareData);
+        } else {
+            // Alternatively dispatch an event that share.js listens to
+            document.dispatchEvent(new CustomEvent('openShareApp', { detail: shareData }));
+            
+            // Fallback natively if Web Share API is available and share.js fails to catch
+            if (navigator.share) {
+                navigator.share({
+                    title: `Watch ${title}`,
+                    text: `Check out ${title} on our platform!`,
+                    url: shareData.url
+                }).catch(console.error);
+            } else {
+                console.log('Share triggered for:', shareData);
+            }
+        }
+    };
+
+    // --- SAVE / LIBRARY BUTTON ACTION ---
     window.app.toggleSearchLibraryClick = async (event, id, title, img) => {
         event.stopPropagation(); 
         const profile = window.app.state?.activeProfile || null;
@@ -432,20 +529,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 profile.library.splice(existingItemIndex, 1); 
                 localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
                 if (btn) {
-                    btn.className = "bg-[#111] text-white px-3 py-2 rounded font-black text-[10px] uppercase hover:border-[#F47521] transition border border-white/10 flex items-center gap-2";
-                    btn.innerHTML = `<i class="fas fa-plus"></i> Library`;
+                    // Reset styling to Unsaved state (Handles both Top Result Card and Grid Card formats)
+                    if (btn.innerText.includes('SAVED')) {
+                        btn.className = "bg-[#111]/80 backdrop-blur-sm text-white px-4 py-2 lg:px-6 lg:py-3 rounded font-black text-[10px] lg:text-xs uppercase tracking-widest hover:border-[#F47521] transition border border-white/20 flex items-center gap-2";
+                        btn.innerHTML = `<i class="far fa-bookmark"></i> Save`;
+                    } else {
+                        btn.innerHTML = `<i class="far fa-bookmark"></i>`;
+                        btn.classList.remove('text-[#F47521]');
+                    }
                 }
                 await firestore.updateDoc(userRef, { library: firestore.arrayRemove(formattedAnime) });
-                if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
+                if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Saved", "success");
             } else {
                 profile.library.unshift(formattedAnime);
                 localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
                 if (btn) {
-                    btn.className = "bg-[#F47521] text-black px-3 py-2 rounded font-black text-[10px] uppercase hover:bg-white transition border border-[#F47521] flex items-center gap-2";
-                    btn.innerHTML = `<i class="fas fa-check"></i> Added`;
+                    // Set styling to Saved state
+                    if (btn.innerText.includes('SAVE')) {
+                        btn.className = "bg-[#F47521] text-black px-4 py-2 lg:px-6 lg:py-3 rounded font-black text-[10px] lg:text-xs uppercase tracking-widest hover:bg-white transition flex items-center gap-2 shadow-lg";
+                        btn.innerHTML = `<i class="fas fa-bookmark"></i> Saved`;
+                    } else {
+                        btn.innerHTML = `<i class="fas fa-bookmark"></i>`;
+                        btn.classList.add('text-[#F47521]');
+                    }
                 }
                 await firestore.updateDoc(userRef, { library: firestore.arrayUnion(formattedAnime) });
-                if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
+                if (window.app.showCustomAlert) window.app.showCustomAlert("Saved successfully!", "success");
             }
         } catch (error) { 
             if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to sync with cloud.", "error");
