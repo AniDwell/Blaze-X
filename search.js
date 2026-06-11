@@ -1,4 +1,4 @@
-// search.js - Full Featured Search & Filter Engine (Premium Responsive UI)
+// search.js - Cinematic Search & Filter Engine (List View & Vertical Text Edition)
 
 window.app = window.app || {};
 
@@ -95,10 +95,10 @@ document.addEventListener('DOMContentLoaded', () => {
         type();
     };
 
-    // --- ANILIST TO DB MAPPING (TOP 10) ---
+    // --- ANILIST TO DB MAPPING (TOP 10 w/ VERTICAL TEXT) ---
     const loadTop10Popular = async () => {
         if(!trendingContainer) return;
-        trendingContainer.innerHTML = `<div class="p-4 text-center text-xs text-gray-500 w-full col-span-full"><i class="fas fa-circle-notch fa-spin text-[#F47521] text-lg mb-2 block"></i> Loading Trending...</div>`;
+        trendingContainer.innerHTML = `<div class="p-4 text-center text-xs text-gray-500 w-full col-span-full"><i class="fas fa-circle-notch fa-spin text-[#F47521] text-xl mb-3 block"></i> Fetching Live Trending...</div>`;
         
         try {
             const query = `query { Page(page: 1, perPage: 10) { media(type: ANIME, sort: TRENDING_DESC) { title { romaji english } coverImage { extraLarge } format } } }`;
@@ -107,8 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const animeList = json.data.Page.media;
 
             trendingContainer.innerHTML = '';
-            // Premium Responsive Grid for big screens
-            trendingContainer.className = "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 lg:gap-6 pb-6 w-full"; 
+            trendingContainer.className = "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 lg:gap-6 pb-6 w-full"; 
 
             let count = 1;
             animeList.forEach(anime => {
@@ -118,25 +117,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 const format = anime.format || 'TV';
 
                 trendingContainer.innerHTML += `
-                <div onclick="window.app.openFromAnilist('${safeTitle}')" class="relative group cursor-pointer overflow-hidden rounded-xl shadow-lg hover:shadow-[#F47521]/20 transition-all duration-300 transform hover:-translate-y-1 bg-[#111] border border-white/5 hover:border-[#F47521]/50 flex flex-col h-full">
-                    <div class="absolute top-2 left-2 bg-gradient-to-r from-[#F47521] to-[#ff9852] text-black font-black text-[11px] px-3 py-1 rounded-md z-10 shadow-md">
-                        #${count}
+                <div onclick="window.app.openFromAnilist('${safeTitle}')" class="relative group cursor-pointer overflow-hidden rounded-xl shadow-[0_5px_20px_rgba(0,0,0,0.5)] hover:shadow-[0_10px_30px_rgba(244,117,33,0.2)] bg-[#111] border border-white/5 hover:border-[#F47521]/50 flex h-36 lg:h-44 transition-all duration-300 transform hover:-translate-y-1">
+                    
+                    <!-- Vertical Rank Bar -->
+                    <div class="w-10 md:w-12 bg-gradient-to-b from-[#F47521] to-[#ff9852] flex flex-col items-center justify-center z-20 shadow-lg">
+                        <span class="text-black font-black text-sm lg:text-base tracking-[0.2em] uppercase" style="writing-mode: vertical-rl; transform: rotate(180deg);">TOP ${count}</span>
                     </div>
-                    <div class="relative w-full aspect-[2/3] overflow-hidden">
-                        <img src="${imgUrl}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500">
-                        <div class="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent opacity-90"></div>
-                        
-                        <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/40 backdrop-blur-[2px]">
-                            <div class="w-12 h-12 rounded-full bg-[#F47521] text-black flex items-center justify-center shadow-[0_0_15px_rgba(244,117,33,0.5)]">
-                                <i class="fas fa-play ml-1"></i>
-                            </div>
-                        </div>
+
+                    <!-- Cover Image Background -->
+                    <div class="absolute inset-0 ml-10 md:ml-12">
+                        <img src="${imgUrl}" class="w-full h-full object-cover opacity-60 group-hover:opacity-80 group-hover:scale-110 transition-all duration-700">
+                        <div class="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/80 to-transparent"></div>
+                        <div class="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent"></div>
                     </div>
-                    <div class="p-3 flex-1 flex flex-col justify-end">
-                        <h4 class="text-sm lg:text-base font-bold text-white line-clamp-2 leading-tight">${title}</h4>
-                        <div class="flex gap-2 mt-2 items-center text-[10px] font-black uppercase tracking-wider text-gray-400">
-                            <span class="border border-white/10 bg-white/5 px-2 py-0.5 rounded">${format}</span>
-                            <span class="ml-auto text-[#F47521] group-hover:text-white transition-colors">Find <i class="fas fa-arrow-right text-[9px]"></i></span>
+                    
+                    <!-- Details Foreground -->
+                    <div class="relative flex-1 p-4 flex flex-col justify-center ml-2 z-10">
+                        <h4 class="text-sm lg:text-base font-bold text-white line-clamp-2 leading-tight drop-shadow-md">${title}</h4>
+                        <div class="flex items-center mt-3 gap-2">
+                            <span class="text-[9px] font-black uppercase text-black bg-white px-2 py-0.5 rounded shadow-sm">${format}</span>
+                            <i class="fas fa-play text-[#F47521] text-xs opacity-0 group-hover:opacity-100 transition-opacity ml-auto drop-shadow-lg"></i>
                         </div>
                     </div>
                 </div>`;
@@ -149,24 +149,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ON CLICK API FETCH
     window.app.openFromAnilist = async (title) => {
-        // Optional: You can create a full-screen loading overlay here
         document.body.style.cursor = 'wait';
         try {
             const searchRes = await fetch(`${API_BASE}/api/search?keyword=${encodeURIComponent(title)}`);
             const searchJson = await searchRes.json();
             
             if (searchJson.success && searchJson.results?.length > 0) {
-                const matchId = searchJson.results[0].id;
-                window.location.href = `info.html?id=${matchId}`;
+                window.location.href = `info.html?id=${searchJson.results[0].id}`;
             } else if (searchJson.success && searchJson.data?.length > 0) {
-                const matchId = searchJson.data[0].id;
-                window.location.href = `info.html?id=${matchId}`;
+                window.location.href = `info.html?id=${searchJson.data[0].id}`;
             } else {
                 if (window.app.showCustomAlert) window.app.showCustomAlert("Title not found in our database yet.", "error");
-                else alert("Title not found in our database yet.");
             }
         } catch (e) {
-            console.error(e);
             if (window.app.showCustomAlert) window.app.showCustomAlert("Error connecting to database.", "error");
         } finally {
             document.body.style.cursor = 'default';
@@ -315,7 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) { suggestionsContainer.innerHTML = `<div class="p-4 text-xs text-gray-500">Network error.</div>`; }
     };
 
-    // --- 6. SUBMIT SEARCH & PREMIUM RENDER ---
+    // --- 6. SUBMIT SEARCH (CINEMATIC CARD & LIST VIEW) ---
     const render404State = (message = "Nothing matched your search.") => {
         if(topResultCard) topResultCard.innerHTML = '';
         if(resultsListContainer) resultsListContainer.innerHTML = ''; 
@@ -331,8 +326,8 @@ document.addEventListener('DOMContentLoaded', () => {
         saveHistory(term);
         switchView('results');
         
-        if(topResultCard) topResultCard.innerHTML = `<div class="animate-pulse w-full h-64 lg:h-80 bg-[#111] rounded-xl"></div>`;
-        if(resultsListContainer) resultsListContainer.innerHTML = `<div class="p-10 text-center text-sm font-bold text-[#F47521] col-span-full"><i class="fas fa-circle-notch fa-spin text-2xl block mb-3"></i> Connecting to DB...</div>`;
+        if(topResultCard) topResultCard.innerHTML = `<div class="animate-pulse w-full h-64 lg:h-96 bg-[#111] rounded-xl border border-white/5"></div>`;
+        if(resultsListContainer) resultsListContainer.innerHTML = `<div class="p-10 text-center text-sm font-bold text-[#F47521] col-span-full"><i class="fas fa-circle-notch fa-spin text-2xl block mb-3"></i> Connecting...</div>`;
 
         try {
             let queryParams = new URLSearchParams();
@@ -348,7 +343,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let results = [];
             if (endpoint === '/api/filter' && json.success && json.results?.data) results = json.results.data;
             else if (endpoint === '/api/search' && json.success && json.data) results = json.data;
-            else if (endpoint === '/api/search' && json.success && json.results) results = json.results; // Fallback for alternative API structure
+            else if (endpoint === '/api/search' && json.success && json.results) results = json.results;
 
             if (!results || results.length === 0) { render404State("We couldn't find any anime matching your query or filters."); return; }
 
@@ -380,54 +375,61 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const libraryBtnHtml = isAdded 
-                ? `<button onclick="window.app.toggleSearchLibraryClick(event, '${topAnime.id}', '${safeTitleTop}', '${topImg}')" class="bg-[#F47521] text-black px-4 py-2 lg:px-6 lg:py-3 rounded font-black text-[10px] lg:text-xs uppercase tracking-widest hover:bg-white transition flex items-center gap-2 shadow-lg"><i class="fas fa-bookmark"></i> Saved</button>`
-                : `<button onclick="window.app.toggleSearchLibraryClick(event, '${topAnime.id}', '${safeTitleTop}', '${topImg}')" class="bg-[#111]/80 backdrop-blur-sm text-white px-4 py-2 lg:px-6 lg:py-3 rounded font-black text-[10px] lg:text-xs uppercase tracking-widest hover:border-[#F47521] transition border border-white/20 flex items-center gap-2"><i class="far fa-bookmark"></i> Save</button>`;
+                ? `<button onclick="window.app.toggleSearchLibraryClick(event, '${topAnime.id}', '${safeTitleTop}', '${topImg}')" class="bg-[#F47521] text-black px-5 py-3 lg:px-8 lg:py-3.5 rounded font-black text-[10px] lg:text-xs uppercase tracking-widest hover:bg-white transition flex items-center justify-center gap-2 shadow-lg"><i class="fas fa-bookmark"></i> Saved</button>`
+                : `<button onclick="window.app.toggleSearchLibraryClick(event, '${topAnime.id}', '${safeTitleTop}', '${topImg}')" class="bg-black/50 backdrop-blur-md text-white px-5 py-3 lg:px-8 lg:py-3.5 rounded font-black text-[10px] lg:text-xs uppercase tracking-widest hover:border-[#F47521] transition border border-white/20 flex items-center justify-center gap-2"><i class="far fa-bookmark"></i> Save</button>`;
 
-            // Render Top Card (Premium Wide Layout for Big Screens)
+            // --- RENDER TOP CARD: Info on LEFT, Image on RIGHT ---
             if(topResultCard) {
                 topResultCard.innerHTML = `
-                <div class="relative overflow-hidden rounded-2xl border border-white/10 shadow-2xl bg-[#050505] group">
+                <div class="relative overflow-hidden rounded-2xl border border-white/10 shadow-[0_10px_50px_rgba(0,0,0,0.8)] bg-[#050505] group">
+                    
+                    <!-- Blurred Cinematic Backdrop -->
                     <div class="absolute inset-0 z-0">
-                        <img src="${backdrop}" class="w-full h-full object-cover opacity-30 group-hover:scale-105 transition-transform duration-1000 blur-[3px]">
-                        <div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/80 to-[#050505]/20"></div>
-                        <div class="absolute inset-0 bg-gradient-to-r from-[#050505] via-[#050505]/90 to-transparent md:block hidden"></div>
+                        <img src="${backdrop}" class="w-full h-full object-cover opacity-25 group-hover:scale-105 transition-transform duration-[1.5s] ease-in-out blur-md">
+                        <div class="absolute inset-0 bg-gradient-to-r from-[#050505] via-[#050505]/95 to-[#050505]/40"></div>
+                        <div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent"></div>
                     </div>
                     
-                    <div class="relative flex flex-col md:flex-row gap-6 lg:gap-8 p-6 lg:p-10 z-10">
-                        <div class="relative flex-shrink-0 cursor-pointer" onclick="window.location.href='info.html?id=${topAnime.id}'">
-                            <img src="${topImg}" class="w-32 md:w-48 lg:w-56 h-auto object-cover rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.8)] border border-white/10 group-hover:border-[#F47521]/50 transition-colors">
-                            <div class="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl backdrop-blur-[2px]">
-                                <i class="fas fa-play text-white text-3xl md:text-5xl drop-shadow-lg"></i>
-                            </div>
-                        </div>
+                    <div class="relative flex flex-col-reverse md:flex-row items-center md:items-stretch gap-6 lg:gap-12 p-6 lg:p-12 z-10 w-full h-full">
                         
-                        <div class="flex flex-col flex-1 justify-center">
-                            <div class="flex items-center gap-3 mb-2">
-                                <span class="bg-[#F47521] text-black px-2 py-0.5 rounded font-black text-[9px] lg:text-[11px] uppercase tracking-widest shadow-[0_0_10px_rgba(244,117,33,0.4)]"><i class="fas fa-crown mr-1"></i> Top Match</span>
-                                <span class="bg-white/10 text-white px-2 py-0.5 rounded font-bold text-[9px] border border-white/10">${topAnime.type || 'TV'}</span>
-                            </div>
-                            
-                            <h3 class="text-2xl md:text-3xl lg:text-4xl font-black leading-tight text-white mb-3 cursor-pointer hover:text-[#F47521] transition-colors" onclick="window.location.href='info.html?id=${topAnime.id}'">${topAnime.title}</h3>
-                            <p class="text-[11px] lg:text-sm text-gray-300 line-clamp-3 lg:line-clamp-4 mb-6 leading-relaxed max-w-3xl">${description}</p>
-                            
-                            <div class="flex flex-wrap items-center gap-3 mt-auto">
-                                <button onclick="window.location.href='info.html?id=${topAnime.id}'" class="bg-white text-black px-5 py-2 lg:px-8 lg:py-3 rounded font-black text-[10px] lg:text-xs uppercase tracking-widest hover:bg-[#F47521] hover:text-white transition shadow-lg flex items-center gap-2"><i class="fas fa-play"></i> Watch Now</button>
-                                ${libraryBtnHtml}
-                                <button onclick="window.app.shareItem('${topAnime.id}', '${safeTitleTop}')" class="bg-[#111]/80 backdrop-blur-sm text-white px-3 py-2 lg:px-4 lg:py-3 rounded font-black text-[10px] lg:text-xs uppercase hover:bg-white/20 transition border border-white/20 flex items-center gap-2"><i class="fas fa-share-alt"></i> Share</button>
-                                
-                                <div class="flex gap-2 ml-auto text-[10px] font-black tracking-wide">
-                                    <span class="bg-[#F47521]/10 border border-[#F47521]/30 text-[#F47521] px-2 py-1 rounded shadow-sm">SUB ${topSubEps}</span>
-                                    ${topDubEps > 0 ? `<span class="bg-purple-500/10 border border-purple-500/30 text-purple-400 px-2 py-1 rounded shadow-sm">DUB ${topDubEps}</span>` : ''}
+                        <!-- DETAILS (LEFT SIDE) -->
+                        <div class="flex flex-col flex-1 justify-center w-full">
+                            <div class="flex flex-wrap items-center gap-3 mb-4">
+                                <span class="bg-gradient-to-r from-[#F47521] to-[#ff9852] text-black px-3 py-1 rounded font-black text-[9px] lg:text-[11px] uppercase tracking-widest shadow-[0_0_15px_rgba(244,117,33,0.3)]"><i class="fas fa-fire-alt mr-1"></i> Top Match</span>
+                                <span class="bg-white/10 backdrop-blur-sm text-white px-3 py-1 rounded font-bold text-[10px] lg:text-xs border border-white/10 shadow-sm">${topAnime.type || 'TV'}</span>
+                                <div class="flex gap-1.5 ml-auto md:ml-0 md:mr-auto">
+                                    <span class="bg-[#F47521]/10 border border-[#F47521]/30 text-[#F47521] px-2 py-1 rounded font-black text-[10px] shadow-sm uppercase">SUB ${topSubEps}</span>
+                                    ${topDubEps > 0 ? `<span class="bg-purple-500/10 border border-purple-500/30 text-purple-400 px-2 py-1 rounded font-black text-[10px] shadow-sm uppercase">DUB ${topDubEps}</span>` : ''}
                                 </div>
                             </div>
+                            
+                            <h3 class="text-3xl md:text-4xl lg:text-6xl font-black leading-[1.1] text-white mb-4 cursor-pointer hover:text-[#F47521] transition-colors drop-shadow-lg" onclick="window.location.href='info.html?id=${topAnime.id}'">${topAnime.title}</h3>
+                            
+                            <p class="text-[11px] lg:text-sm text-gray-300 line-clamp-3 lg:line-clamp-4 mb-8 leading-relaxed max-w-2xl font-medium drop-shadow-md">${description}</p>
+                            
+                            <div class="flex flex-wrap items-center gap-3 lg:gap-4 mt-auto">
+                                <button onclick="window.location.href='info.html?id=${topAnime.id}'" class="bg-white text-black px-6 py-3 lg:px-8 lg:py-3.5 rounded font-black text-[10px] lg:text-xs uppercase tracking-widest hover:bg-[#F47521] hover:text-white transition shadow-[0_0_20px_rgba(255,255,255,0.2)] flex items-center justify-center gap-2"><i class="fas fa-play text-sm"></i> Watch Now</button>
+                                ${libraryBtnHtml}
+                                <button onclick="window.app.shareItem('${topAnime.id}', '${safeTitleTop}')" class="bg-black/40 backdrop-blur-md text-gray-300 w-11 h-11 lg:w-12 lg:h-12 rounded-full font-black text-sm uppercase hover:bg-white/20 hover:text-white transition border border-white/10 flex items-center justify-center" title="Share"><i class="fas fa-share-alt"></i></button>
+                            </div>
                         </div>
+
+                        <!-- COVER IMAGE (RIGHT SIDE / MEDIUM) -->
+                        <div class="relative flex-shrink-0 cursor-pointer group/poster w-40 md:w-56 lg:w-64" onclick="window.location.href='info.html?id=${topAnime.id}'">
+                            <img src="${topImg}" class="w-full h-auto aspect-[2/3] object-cover rounded-xl shadow-[0_20px_50px_-10px_rgba(0,0,0,0.8)] border border-white/10 group-hover/poster:border-[#F47521]/60 transition-all duration-500 transform group-hover/poster:-translate-y-2 group-hover/poster:shadow-[0_25px_50px_-10px_rgba(244,117,33,0.3)]">
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-0 group-hover/poster:opacity-100 transition-opacity duration-300 rounded-xl flex items-end justify-center pb-8">
+                                <i class="fas fa-play text-[#F47521] text-5xl drop-shadow-[0_0_15px_rgba(244,117,33,0.6)] hover:scale-110 transition-transform"></i>
+                            </div>
+                        </div>
+
                     </div>
                 </div>`;
             }
 
-            // Render Rest Results (Responsive Grid)
+            // --- RENDER REST RESULTS: LIST VIEW ---
             if(resultsListContainer) {
-                resultsListContainer.className = "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 lg:gap-6 mt-8";
+                // Changed from grid to flex column (List view)
+                resultsListContainer.className = "flex flex-col gap-3 lg:gap-4 mt-8 w-full";
                 
                 resultsListContainer.innerHTML = restAnime.map(anime => {
                     const aSub = anime.tvInfo?.sub || anime.sub || '?';
@@ -440,38 +442,38 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     return `
-                    <div class="flex flex-col group relative bg-[#111] border border-white/5 rounded-xl overflow-hidden hover:border-[#F47521]/50 hover:shadow-[0_0_15px_rgba(244,117,33,0.15)] transition-all duration-300">
-                        <div class="relative w-full aspect-[2/3] cursor-pointer overflow-hidden" onclick="window.location.href='info.html?id=${anime.id}'">
-                            <img src="${anime.image || anime.poster}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
-                            
-                            <div class="absolute top-2 left-2 flex flex-col gap-1 z-10">
-                                <span class="bg-[#F47521] text-black font-black text-[9px] px-1.5 py-0.5 rounded shadow-sm">SUB ${aSub}</span>
-                                ${aDub > 0 ? `<span class="bg-purple-500 text-white font-black text-[9px] px-1.5 py-0.5 rounded shadow-sm">DUB ${aDub}</span>` : ''}
-                            </div>
-                            
-                            <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-3 backdrop-blur-[2px]">
-                                <div class="w-10 h-10 rounded-full bg-[#F47521] text-black flex items-center justify-center hover:scale-110 transition-transform shadow-lg">
-                                    <i class="fas fa-play ml-0.5"></i>
-                                </div>
+                    <div class="flex flex-row items-center gap-4 lg:gap-6 group relative bg-[#111] border border-white/5 rounded-xl p-3 pr-4 hover:border-[#F47521]/40 hover:bg-[#141414] hover:shadow-[0_5px_15px_rgba(244,117,33,0.08)] transition-all duration-300 w-full overflow-hidden">
+                        
+                        <!-- List Item Image (Medium/Small) -->
+                        <div class="relative w-16 md:w-24 lg:w-28 aspect-[2/3] flex-shrink-0 cursor-pointer overflow-hidden rounded-lg shadow-md border border-white/5" onclick="window.location.href='info.html?id=${anime.id}'">
+                            <img src="${anime.image || anime.poster}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500">
+                            <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-[1px]">
+                                <i class="fas fa-play text-white text-xl drop-shadow-md"></i>
                             </div>
                         </div>
                         
-                        <div class="p-3 flex flex-col flex-1 z-20 bg-[#111]">
-                            <h4 class="text-xs lg:text-sm font-bold text-white line-clamp-2 cursor-pointer hover:text-[#F47521] transition-colors flex-1" onclick="window.location.href='info.html?id=${anime.id}'">${anime.title}</h4>
+                        <!-- List Item Details -->
+                        <div class="flex flex-col flex-1 min-w-0 py-2">
+                            <h4 class="text-sm md:text-base lg:text-lg font-bold text-white truncate cursor-pointer hover:text-[#F47521] transition-colors mb-1.5" onclick="window.location.href='info.html?id=${anime.id}'">${anime.title}</h4>
+                            <p class="text-[10px] md:text-xs text-gray-500 truncate mb-3 italic">${anime.japanese_title || ''}</p>
                             
-                            <div class="flex items-center justify-between mt-3 pt-3 border-t border-white/10">
-                                <span class="text-[9px] font-bold text-gray-500 bg-black/50 px-2 py-0.5 rounded uppercase">${anime.type || 'TV'}</span>
-                                
-                                <div class="flex gap-2">
-                                    <button onclick="window.app.toggleSearchLibraryClick(event, '${anime.id}', '${safeTitle}', '${anime.image || anime.poster}')" class="text-gray-400 hover:text-[#F47521] transition-colors" title="Save">
-                                        <i class="${cardIsSaved ? 'fas text-[#F47521]' : 'far'} fa-bookmark"></i>
-                                    </button>
-                                    <button onclick="window.app.shareItem('${anime.id}', '${safeTitle}')" class="text-gray-400 hover:text-white transition-colors" title="Share">
-                                        <i class="fas fa-share-alt"></i>
-                                    </button>
-                                </div>
+                            <div class="flex items-center gap-2 mt-auto">
+                                <span class="text-[9px] md:text-[10px] font-bold text-gray-300 bg-white/10 border border-white/5 px-2 py-0.5 rounded uppercase tracking-wider">${anime.type || 'TV'}</span>
+                                <span class="text-[9px] md:text-[10px] font-black text-[#F47521] bg-[#F47521]/10 px-2 py-0.5 rounded uppercase">SUB ${aSub}</span>
+                                ${aDub > 0 ? `<span class="text-[9px] md:text-[10px] font-black text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded uppercase">DUB ${aDub}</span>` : ''}
                             </div>
                         </div>
+                        
+                        <!-- List Item Hover Actions -->
+                        <div class="flex items-center gap-3 lg:gap-4 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300">
+                            <button onclick="window.app.toggleSearchLibraryClick(event, '${anime.id}', '${safeTitle}', '${anime.image || anime.poster}')" class="w-10 h-10 lg:w-12 lg:h-12 rounded-full bg-black/40 hover:bg-[#F47521]/20 text-gray-400 hover:text-[#F47521] flex items-center justify-center transition-colors border border-white/5 shadow-sm" title="Save">
+                                <i class="${cardIsSaved ? 'fas text-[#F47521]' : 'far'} fa-bookmark text-lg"></i>
+                            </button>
+                            <button onclick="window.app.shareItem('${anime.id}', '${safeTitle}')" class="w-10 h-10 lg:w-12 lg:h-12 rounded-full bg-black/40 hover:bg-white/20 text-gray-400 hover:text-white flex items-center justify-center transition-colors border border-white/5 shadow-sm" title="Share">
+                                <i class="fas fa-share-alt text-lg"></i>
+                            </button>
+                        </div>
+
                     </div>`;
                 }).join('');
             }
@@ -482,25 +484,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- SHARE LOGIC ---
     window.app.shareItem = (id, title) => {
-        // Dispatching a custom event that share.js can listen to.
         const shareData = { id, title, url: `${window.location.origin}/info.html?id=${id}` };
         
-        // If there's a global function mapped from share.js
         if (typeof window.openShareModal === 'function') {
             window.openShareModal(shareData);
         } else {
-            // Alternatively dispatch an event that share.js listens to
             document.dispatchEvent(new CustomEvent('openShareApp', { detail: shareData }));
-            
-            // Fallback natively if Web Share API is available and share.js fails to catch
             if (navigator.share) {
                 navigator.share({
                     title: `Watch ${title}`,
                     text: `Check out ${title} on our platform!`,
                     url: shareData.url
                 }).catch(console.error);
-            } else {
-                console.log('Share triggered for:', shareData);
             }
         }
     };
@@ -529,12 +524,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 profile.library.splice(existingItemIndex, 1); 
                 localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
                 if (btn) {
-                    // Reset styling to Unsaved state (Handles both Top Result Card and Grid Card formats)
                     if (btn.innerText.includes('SAVED')) {
-                        btn.className = "bg-[#111]/80 backdrop-blur-sm text-white px-4 py-2 lg:px-6 lg:py-3 rounded font-black text-[10px] lg:text-xs uppercase tracking-widest hover:border-[#F47521] transition border border-white/20 flex items-center gap-2";
+                        btn.className = "bg-black/50 backdrop-blur-md text-white px-5 py-3 lg:px-8 lg:py-3.5 rounded font-black text-[10px] lg:text-xs uppercase tracking-widest hover:border-[#F47521] transition border border-white/20 flex items-center justify-center gap-2";
                         btn.innerHTML = `<i class="far fa-bookmark"></i> Save`;
                     } else {
-                        btn.innerHTML = `<i class="far fa-bookmark"></i>`;
+                        btn.innerHTML = `<i class="far fa-bookmark text-lg"></i>`;
                         btn.classList.remove('text-[#F47521]');
                     }
                 }
@@ -544,12 +538,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 profile.library.unshift(formattedAnime);
                 localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
                 if (btn) {
-                    // Set styling to Saved state
                     if (btn.innerText.includes('SAVE')) {
-                        btn.className = "bg-[#F47521] text-black px-4 py-2 lg:px-6 lg:py-3 rounded font-black text-[10px] lg:text-xs uppercase tracking-widest hover:bg-white transition flex items-center gap-2 shadow-lg";
+                        btn.className = "bg-[#F47521] text-black px-5 py-3 lg:px-8 lg:py-3.5 rounded font-black text-[10px] lg:text-xs uppercase tracking-widest hover:bg-white transition flex items-center justify-center gap-2 shadow-lg";
                         btn.innerHTML = `<i class="fas fa-bookmark"></i> Saved`;
                     } else {
-                        btn.innerHTML = `<i class="fas fa-bookmark"></i>`;
+                        btn.innerHTML = `<i class="fas fa-bookmark text-lg"></i>`;
                         btn.classList.add('text-[#F47521]');
                     }
                 }
