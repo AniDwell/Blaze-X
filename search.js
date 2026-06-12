@@ -1,4 +1,4 @@
-// search.js - Full Featured Search & History Engine (Firestore Subcollection Edition)
+// search.js - Full Featured Search & History Engine (Firestore Subcollection Fix)
 
 window.app = window.app || {};
 
@@ -55,11 +55,10 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem('blazex_clicked_anime', JSON.stringify(cloudClicked.slice(0, 15)));
             localStorage.setItem('blazex_search_history', JSON.stringify(cloudSearches.slice(0, 10)));
 
-            // Re-render to reflect cloud truth
             renderClickedHistory();
             renderSearchTextHistory();
         } catch (error) {
-            console.error("Cloud sync failed, using local cache:", error);
+            console.error("Cloud sync failed (Check Firebase Rules):", error);
         }
     };
 
@@ -94,10 +93,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- 1. INITIALIZATION ---
     const initSearchPage = async () => {
-        renderSearchTextHistory(); // Loads from local instantly
-        renderClickedHistory();    // Loads from local instantly
+        renderSearchTextHistory(); 
+        renderClickedHistory();    
         initTypewriterPlaceholder();
-        syncWithCloud();           // Fetches from DB in background
+        syncWithCloud();           
     };
 
     const initTypewriterPlaceholder = async () => {
@@ -140,9 +139,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     window.saveAndGo = async (id, title, image, type, sub, dub) => {
         let history = JSON.parse(localStorage.getItem('blazex_clicked_anime')) || [];
-        history = history.filter(item => item.id !== id);
+        history = history.filter(item => String(item.id) !== String(id));
         
-        const animeData = { historyType: 'anime', id, title, image, type, sub, dub, timestamp: Date.now() };
+        const animeData = { historyType: 'anime', id: String(id), title, image, type, sub, dub, timestamp: Date.now() };
         history.unshift(animeData);
         if (history.length > 15) history.pop(); 
         
@@ -155,7 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
                 const docRef = firestore.doc(window.app.db, "users", profile.uid, "history", `anime_${id}`);
                 await firestore.setDoc(docRef, animeData, { merge: true });
-            } catch (e) { console.warn("Failed to write history to cloud", e); }
+            } catch (e) { console.error("Firebase History Write Error:", e); }
         }
 
         window.location.href = `info.html?id=${id}`;
@@ -164,7 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.deleteClickedHistory = async (event, id) => {
         event.stopPropagation(); 
         let history = JSON.parse(localStorage.getItem('blazex_clicked_anime')) || [];
-        history = history.filter(item => item.id !== id);
+        history = history.filter(item => String(item.id) !== String(id));
         localStorage.setItem('blazex_clicked_anime', JSON.stringify(history));
         renderClickedHistory();
 
@@ -175,7 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
                 const docRef = firestore.doc(window.app.db, "users", profile.uid, "history", `anime_${id}`);
                 await firestore.deleteDoc(docRef);
-            } catch (e) {}
+            } catch (e) { console.error("Firebase History Delete Error:", e); }
         }
     };
 
@@ -238,10 +237,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (profile && profile.uid && !profile.uid.startsWith('anon_')) {
             try {
                 const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-                const docId = `search_${btoa(unescape(encodeURIComponent(term))).replace(/[/+=]/g, '_')}`; // Safe ID
+                const docId = `search_${btoa(unescape(encodeURIComponent(term))).replace(/[/+=]/g, '_')}`; 
                 const docRef = firestore.doc(window.app.db, "users", profile.uid, "history", docId);
-                firestore.setDoc(docRef, { historyType: 'search', term: term, timestamp: Date.now() }, { merge: true });
-            } catch (e) {}
+                await firestore.setDoc(docRef, { historyType: 'search', term: term, timestamp: Date.now() }, { merge: true });
+            } catch (e) { console.error("Firebase Search Term Save Error:", e); }
         }
     };
 
@@ -256,8 +255,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
                 const docId = `search_${btoa(unescape(encodeURIComponent(term))).replace(/[/+=]/g, '_')}`;
                 const docRef = firestore.doc(window.app.db, "users", profile.uid, "history", docId);
-                firestore.deleteDoc(docRef);
-            } catch (e) {}
+                await firestore.deleteDoc(docRef);
+            } catch (e) { console.error("Firebase Search Term Delete Error:", e); }
         }
     };
 
@@ -294,7 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderSearchTextHistory(); 
     });
 
-    // --- 4. FILTER LOGIC & UI (Untouched) ---
+    // --- 4. FILTER LOGIC ---
     const filterBtn = document.getElementById('filter-btn');
     const closeFilterBtn = document.getElementById('close-filter-btn');
     const resetFilterBtn = document.getElementById('reset-filter-btn');
@@ -470,7 +469,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const checkLibraryStatus = (animeId) => {
                 const profile = window.app.state?.activeProfile || null;
                 if (profile && profile.library && profile.uid && !profile.uid.startsWith('anon_')) {
-                    return profile.library.some(item => item.id === animeId);
+                    // Make sure we're doing a string comparison
+                    return profile.library.some(item => String(item.id) === String(animeId));
                 }
                 return false;
             };
@@ -580,14 +580,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if(!profile.library) profile.library = [];
-        const formattedAnime = { id, title, img, timestamp: Date.now() };
-        const existingItemIndex = profile.library.findIndex(item => item.id === id);
+        
+        // Ensure ID is completely cast to a String everywhere
+        const docIdStr = String(id);
+        const formattedAnime = { id: docIdStr, title, img, timestamp: Date.now() };
+        
+        const existingItemIndex = profile.library.findIndex(item => String(item.id) === docIdStr);
         const isCurrentlyAdded = existingItemIndex !== -1;
         const btn = event.currentTarget;
 
         try {
             const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-            const libDocRef = firestore.doc(window.app.db, "users", profile.uid, "library", id);
+            // This docRef will crash if docIdStr is not explicitly a string
+            const libDocRef = firestore.doc(window.app.db, "users", profile.uid, "library", docIdStr);
 
             if (isCurrentlyAdded) {
                 // Delete from DB and Local Cache
@@ -627,6 +632,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
             }
         } catch (error) { 
+            console.error("Firebase Library Sync Error:", error);
             if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to sync with cloud.", "error");
         }
     };
