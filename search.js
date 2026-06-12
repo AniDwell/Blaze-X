@@ -1,4 +1,4 @@
-// search.js - Full Featured Search & History Engine (Firestore Only - No LocalStorage)
+// search.js - Full Featured Search & History Engine (Firestore Only - Fixed Sync & Load States)
 
 window.app = window.app || {};
 
@@ -8,6 +8,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     let inMemoryLibrary = [];
     let inMemoryClickedHistory = [];
     let inMemorySearchHistory = [];
+
+    // --- DOM ELEMENTS ---
+    const searchInput = document.getElementById('search-input');
+    const clearBtn = document.getElementById('clear-search-btn');
+    const idleView = document.getElementById('idle-view');
+    const typingView = document.getElementById('typing-view');
+    const resultsView = document.getElementById('results-view');
+    
+    const historyContainer = document.getElementById('history-container');
+    const trendingContainer = document.getElementById('trending-container'); 
+    const suggestionsContainer = document.getElementById('suggestions-container');
+    const topResultCard = document.getElementById('top-result-card');
+    const resultsListContainer = document.getElementById('results-list-container');
+    
+    const filterModal = document.getElementById('filter-modal');
+    
+    const API_BASE = 'https://anikoto-api-xi.vercel.app';
+    const ANILIST_URL = 'https://graphql.anilist.co';
+    let typingTimer;
+    let activeFilters = {};
+
+    // --- INITIAL LOADING STATE ---
+    if(historyContainer) historyContainer.innerHTML = `<div class="text-[10px] text-gray-500 animate-pulse italic"><i class="fas fa-spinner fa-spin mr-1"></i> Syncing history...</div>`;
+    if(trendingContainer) trendingContainer.innerHTML = `<div class="p-10 text-center w-full flex flex-col items-center justify-center opacity-60 animate-pulse"><i class="fas fa-spinner fa-spin text-3xl text-gray-600 mb-3 block"></i><p class="text-sm text-gray-400">Loading recent anime...</p></div>`;
 
     // --- FIREBASE INITIALIZATION ---
     try {
@@ -35,43 +59,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                 syncWithCloud();
             } else {
                 currentUserId = null;
-                // If not logged in, show empty states
                 inMemoryLibrary = [];
                 inMemoryClickedHistory = [];
                 inMemorySearchHistory = [];
-                renderClickedHistory();
-                renderSearchTextHistory();
                 
-                // Trigger auth UI if needed
-                if (window.app.components && window.app.components.auth) {
-                    window.app.components.auth();
-                }
+                // Show logged out state
+                if(historyContainer) historyContainer.innerHTML = `<div class="text-[10px] text-gray-600 italic">Log in to view search history.</div>`;
+                if(trendingContainer) trendingContainer.innerHTML = `<div class="p-10 text-center w-full flex flex-col items-center justify-center opacity-60"><i class="fas fa-history text-3xl text-gray-600 mb-3 block"></i><p class="text-sm text-gray-400">Log in to view recently clicked anime.</p></div>`;
             }
         });
 
     } catch (error) {
         console.error("Failed to initialize Firebase:", error);
+        if(historyContainer) historyContainer.innerHTML = `<div class="text-[10px] text-red-500 italic">Failed to connect to database.</div>`;
     }
-
-    // --- DOM ELEMENTS ---
-    const searchInput = document.getElementById('search-input');
-    const clearBtn = document.getElementById('clear-search-btn');
-    const idleView = document.getElementById('idle-view');
-    const typingView = document.getElementById('typing-view');
-    const resultsView = document.getElementById('results-view');
-    
-    const historyContainer = document.getElementById('history-container');
-    const trendingContainer = document.getElementById('trending-container'); 
-    const suggestionsContainer = document.getElementById('suggestions-container');
-    const topResultCard = document.getElementById('top-result-card');
-    const resultsListContainer = document.getElementById('results-list-container');
-    
-    const filterModal = document.getElementById('filter-modal');
-    
-    const API_BASE = 'https://anikoto-api-xi.vercel.app';
-    const ANILIST_URL = 'https://graphql.anilist.co';
-    let typingTimer;
-    let activeFilters = {};
 
     // --- FIREBASE CLOUD SYNC LOGIC ---
     const syncWithCloud = async () => {
@@ -100,7 +101,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 else if (data.historyType === 'search') inMemorySearchHistory.push(data.term);
             });
 
-            // Keep array limits in memory
             inMemoryClickedHistory = inMemoryClickedHistory.slice(0, 15);
             inMemorySearchHistory = inMemorySearchHistory.slice(0, 10);
 
@@ -109,6 +109,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderSearchTextHistory();
         } catch (error) {
             console.error("Cloud sync failed (Check Firebase Rules):", error);
+            if(historyContainer) historyContainer.innerHTML = `<div class="text-[10px] text-red-500 italic">Sync failed. Check connection.</div>`;
         }
     };
 
@@ -187,12 +188,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const docIdStr = String(id); 
         const animeData = { historyType: 'anime', id: docIdStr, title, image, type, sub, dub, timestamp: Date.now() };
         
-        // Update Memory Array
         inMemoryClickedHistory = inMemoryClickedHistory.filter(item => String(item.id) !== docIdStr);
         inMemoryClickedHistory.unshift(animeData);
         if (inMemoryClickedHistory.length > 15) inMemoryClickedHistory.pop(); 
 
-        // Write directly to Firestore
         if (currentUserId) {
             try {
                 const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
@@ -207,11 +206,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.deleteClickedHistory = async (event, id) => {
         event.stopPropagation(); 
         
-        // Update Memory Array
         inMemoryClickedHistory = inMemoryClickedHistory.filter(item => String(item.id) !== String(id));
         renderClickedHistory();
 
-        // Delete directly from Firestore
         if (currentUserId) {
             try {
                 const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
@@ -265,13 +262,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- 3. SEARCH TEXT HISTORY LOGIC ---
     const saveSearchHistory = async (term) => {
-        // Update Memory Array
         inMemorySearchHistory = inMemorySearchHistory.filter(t => t.toLowerCase() !== term.toLowerCase()); 
         inMemorySearchHistory.unshift(term);
         if (inMemorySearchHistory.length > 10) inMemorySearchHistory.pop();
         renderSearchTextHistory();
 
-        // Write directly to Firestore
         if (currentUserId) {
             try {
                 const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
@@ -284,11 +279,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     const deleteSearchHistoryItem = async (term) => {
-        // Update Memory Array
         inMemorySearchHistory = inMemorySearchHistory.filter(t => t !== term);
         renderSearchTextHistory();
 
-        // Delete directly from Firestore
         if (currentUserId) {
             try {
                 const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
@@ -308,6 +301,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         if(clearAllBtn) clearAllBtn.classList.toggle('hidden', inMemorySearchHistory.length === 0);
         if(historyHint) historyHint.classList.toggle('hidden', inMemorySearchHistory.length === 0);
         
+        // Handle Empty State Visually
+        if (inMemorySearchHistory.length === 0 && currentUserId) {
+            historyContainer.innerHTML = `<div class="text-[10px] text-gray-600 italic">No recent searches found.</div>`;
+            return;
+        }
+
         historyContainer.innerHTML = inMemorySearchHistory.map(term => `
             <div class="history-item relative flex items-center bg-[#111] border border-white/5 rounded-full px-4 py-2 cursor-pointer hover:border-[#F47521] transition select-none shadow-sm" data-term="${term}">
                 <i class="fas fa-history text-gray-500 mr-2 text-xs"></i>
@@ -326,7 +325,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     };
 
-    // Delete all text search history from Firestore
     const clearAllBtn = document.getElementById('clear-all-history');
     if(clearAllBtn) clearAllBtn.addEventListener('click', async () => { 
         if (currentUserId) {
@@ -381,7 +379,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         if(typingView) typingView.classList.add('hidden');
         if(resultsView) resultsView.classList.add('hidden');
         
-        if (view === 'idle' && idleView) { idleView.classList.remove('hidden'); renderClickedHistory(); }
+        // EXPLICIT RENDER TRIGGER FOR IDLE VIEW
+        if (view === 'idle' && idleView) { 
+            idleView.classList.remove('hidden'); 
+            renderClickedHistory(); 
+            renderSearchTextHistory(); 
+        }
         if (view === 'typing' && typingView) typingView.classList.remove('hidden');
         if (view === 'results' && resultsView) resultsView.classList.remove('hidden');
     };
