@@ -153,6 +153,9 @@ window.app.components.play = async () => {
                         <i class="fas fa-comment-alt group-hover:scale-110 transition-transform"></i> 
                         <span id="comment-count-display">Discuss</span>
                     </button>
+                    <button onclick="window.app.shareAnime('${animeId}', document.getElementById('current-anime-title').innerText)" class="flex items-center justify-center gap-2 bg-white/10 text-white hover:bg-blue-500 border border-white/10 px-4 py-2 rounded-lg transition-colors text-xs font-black uppercase tracking-wider shadow-sm group">
+                        <i class="fas fa-share-nodes group-hover:scale-110 transition-transform"></i>
+                    </button>
                 </div>
             </div>
 
@@ -322,6 +325,23 @@ window.app.components.play = async () => {
 
     } catch (err) {
         console.error("Failed to compile player environment:", err);
+    }
+};
+
+window.app.shareAnime = (id, title) => {
+    if(window.openShareModal) {
+        window.openShareModal(id, title);
+    } else {
+        if (navigator.share) {
+            navigator.share({
+                title: `Watch ${title}`,
+                text: `Check out ${title} on AniKoto!`,
+                url: `${window.location.origin}/info.html?id=${id}`
+            }).catch(console.error);
+        } else {
+            navigator.clipboard.writeText(`${window.location.origin}/info.html?id=${id}`);
+            if(window.app.showCustomAlert) window.app.showCustomAlert("Link copied to clipboard!", "success");
+        }
     }
 };
 
