@@ -1,4 +1,8 @@
-// carousel.js - WITH DYNAMIC ADD/REMOVE LIBRARY FEATURE
+// carousel.js - WITH DYNAMIC ADD/REMOVE LIBRARY FEATURE (Firestore Subcollections Only)
+
+window.app = window.app || {};
+window.app.components = window.app.components || {};
+window.app.state = window.app.state || {};
 
 window.app.components.carousel = async () => {
     const container = document.getElementById('carousel-container');
@@ -135,12 +139,13 @@ window.app.updateCarouselUI = (index) => {
     const data = window.app.state.carouselItems[index];
     if (!data) return;
 
+    // Use centralized in-memory profile state
     const profile = window.app.state.activeProfile;
     
     // Check if the anime is already in the user's library
     let isAdded = false;
     if (profile && profile.library && profile.uid && !profile.uid.startsWith('anon_')) {
-        isAdded = profile.library.some(item => item.id === data.exactId);
+        isAdded = profile.library.some(item => String(item.id) === String(data.exactId));
     }
 
     const ratingHtml = data.finalRating ? `<span class="flex items-center gap-1"><i class="fas fa-star"></i> ${data.finalRating}% SCORE</span>` : '';
@@ -242,7 +247,7 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
     
     // Auth Check
     if (!profile || !profile.uid || profile.uid.startsWith('anon_')) {
-        if (window.app.components.auth) window.app.components.auth();
+        if (window.app.components && window.app.components.auth) window.app.components.auth();
         else if (window.app.showCustomAlert) window.app.showCustomAlert("Please log in to save to your Library!", "error");
         return;
     }
@@ -252,25 +257,26 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
     
     if(!profile.library) profile.library = [];
     
+    const docIdStr = String(rawData.exactId);
     const formattedAnime = { 
-        id: rawData.exactId, 
+        id: docIdStr, 
         title: rawData.title, 
-        img: rawData.finalImage 
+        img: rawData.finalImage,
+        timestamp: Date.now()
     };
 
-    const existingItemIndex = profile.library.findIndex(item => item.id === formattedAnime.id);
+    const existingItemIndex = profile.library.findIndex(item => String(item.id) === docIdStr);
     const isCurrentlyAdded = existingItemIndex !== -1;
     const btn = event.currentTarget || event.target.closest('button');
 
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-        const userRef = firestore.doc(window.app.db, "users", profile.uid);
+        // Aligning with search.js: Using a subcollection
+        const libDocRef = firestore.doc(window.app.db, "users", profile.uid, "library", docIdStr);
 
         if (isCurrentlyAdded) {
             // --- REMOVE FROM LIBRARY ---
-            const itemToRemove = profile.library[existingItemIndex];
             profile.library.splice(existingItemIndex, 1); 
-            localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
 
             // Instant UI Update to 'Not Added' State
             if (btn) {
@@ -279,13 +285,12 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
             }
 
             // Sync with Firestore
-            await firestore.updateDoc(userRef, { library: firestore.arrayRemove(itemToRemove) });
+            await firestore.deleteDoc(libDocRef);
             if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
 
         } else {
             // --- ADD TO LIBRARY ---
             profile.library.unshift(formattedAnime);
-            localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
 
             // Instant UI Update to 'Added' State
             if (btn) {
@@ -294,7 +299,7 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
             }
 
             // Sync with Firestore
-            await firestore.updateDoc(userRef, { library: firestore.arrayUnion(formattedAnime) });
+            await firestore.setDoc(libDocRef, formattedAnime);
             if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
         }
     } catch (error) { 
