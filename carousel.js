@@ -1,10 +1,10 @@
-// carousel.js - Firestore Subcollections Native, No LocalStorage
+// carousel.js - Firestore Subcollections Native, Fixed Sync & Auth Listeners
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
 window.app.state = window.app.state || {};
 
-// In-memory set to instantly check if a carousel item is in the library (Saves Firestore reads)
+// In-memory set to instantly check if a carousel item is in the library
 window.app.state.carouselLibrarySet = new Set();
 
 window.app.components.carousel = async () => {
@@ -21,41 +21,43 @@ window.app.components.carousel = async () => {
         </div>
     `;
 
+    // --- FIREBASE SYNC: Listen for Auth & Fetch Library ---
     try {
-        // --- FIREBASE SYNC: Fetch Library before rendering ---
-        try {
-            const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js');
-            const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
-            const { getFirestore, collection, getDocs } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        const { getAuth, onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+        const { collection, getDocs, getFirestore } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
 
-            if (!getApps().length) {
-                initializeApp({
-                    apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
-                    authDomain: "blaze-x-db2f5.firebaseapp.com",
-                    projectId: "blaze-x-db2f5",
-                    storageBucket: "blaze-x-db2f5.firebasestorage.app",
-                    messagingSenderId: "770812306638",
-                    appId: "1:770812306638:web:eaf5ded647861f32c25c9f"
-                });
+        const auth = getAuth();
+        window.app.db = window.app.db || getFirestore();
+
+        // Listen for auth state changes so the carousel updates even if it loads fast
+        onAuthStateChanged(auth, async (user) => {
+            if (user && !user.isAnonymous) {
+                try {
+                    const libRef = collection(window.app.db, "users", user.uid, "library");
+                    const snapshot = await getDocs(libRef);
+                    
+                    window.app.state.carouselLibrarySet.clear();
+                    snapshot.forEach(doc => {
+                        window.app.state.carouselLibrarySet.add(String(doc.id));
+                    });
+
+                    // If carousel is already on screen, re-render the current slide's buttons
+                    if (document.getElementById('carousel-ui-layer')) {
+                        window.app.updateCarouselUI(window.app.state.carouselCurrentIndex);
+                    }
+                } catch (e) {
+                    console.error("Failed to sync library for carousel:", e);
+                }
+            } else {
+                window.app.state.carouselLibrarySet.clear();
             }
+        });
+    } catch (fbError) {
+        console.error("Firebase Auth listener failed in Carousel:", fbError);
+    }
 
-            const auth = getAuth();
-            window.app.state.carouselLibrarySet.clear(); // Reset set
-            
-            // If logged in, fetch current library IDs
-            if (auth.currentUser && !auth.currentUser.isAnonymous) {
-                const db = getFirestore();
-                const libRef = collection(db, "users", auth.currentUser.uid, "library");
-                const snapshot = await getDocs(libRef);
-                snapshot.forEach(doc => {
-                    window.app.state.carouselLibrarySet.add(String(doc.id));
-                });
-            }
-        } catch (fbError) {
-            console.error("Firebase Init in Carousel failed:", fbError);
-        }
-        // -----------------------------------------------------
-
+    // --- FETCH CAROUSEL DATA ---
+    try {
         const baseUrl = 'https://anikoto-api-xi.vercel.app';
         const rawResponse = await fetch(`${baseUrl}/api/latest-episodes`);
         const response = await rawResponse.json();
@@ -181,10 +183,10 @@ window.app.updateCarouselUI = (index) => {
 
     // Dynamic Button State
     const libraryBtnHtml = isAdded 
-        ? `<button id="carousel-lib-btn" onclick="window.app.handleCarouselLibraryClick(event, ${index})" data-added="true" class="bg-white text-black px-5 py-2 md:px-6 md:py-3 rounded font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors border border-white flex items-center gap-2">
+        ? `<button id="carousel-lib-btn" onclick="window.app.handleCarouselLibraryClick(event, ${index})" data-added="true" class="bg-white text-black px-5 py-2 md:px-6 md:py-3 rounded font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors border border-white flex items-center gap-2 shadow-lg">
                <i class="fas fa-check text-green-500"></i> Added
            </button>`
-        : `<button id="carousel-lib-btn" onclick="window.app.handleCarouselLibraryClick(event, ${index})" data-added="false" class="bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2">
+        : `<button id="carousel-lib-btn" onclick="window.app.handleCarouselLibraryClick(event, ${index})" data-added="false" class="bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2 shadow-lg">
                <i class="fas fa-plus"></i> Library
            </button>`;
 
@@ -208,7 +210,7 @@ window.app.updateCarouselUI = (index) => {
                 
                 ${libraryBtnHtml}
                 
-                <button onclick="event.stopPropagation(); window.app.shareAnime('${data.exactId}', '${safeTitle}')" class="bg-white/10 backdrop-blur-md text-white px-4 py-2 md:px-5 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-blue-500 transition-colors border border-white/10 flex items-center gap-2">
+                <button onclick="event.stopPropagation(); window.app.shareAnime('${data.exactId}', '${safeTitle}')" class="bg-white/10 backdrop-blur-md text-white px-4 py-2 md:px-5 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-blue-500 transition-colors border border-white/10 flex items-center gap-2 shadow-lg">
                     <i class="fas fa-share-nodes"></i>
                 </button>
             </div>
@@ -300,20 +302,21 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
         };
 
         const btn = event.currentTarget;
-        const isAdded = btn.dataset.added === "true"; // Check current button state
+        const isAdded = btn.dataset.added === "true"; 
 
         const { getFirestore, doc, setDoc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-        const db = getFirestore();
+        // Fallback to getting a new instance if window.app.db was somehow lost
+        const db = window.app.db || getFirestore();
         const libDocRef = doc(db, "users", auth.currentUser.uid, "library", docIdStr);
 
         if (isAdded) {
             // --- UI OPTIMISTIC REMOVE ---
             window.app.state.carouselLibrarySet.delete(docIdStr);
             btn.dataset.added = "false";
-            btn.className = "bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2";
+            btn.className = "bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2 shadow-lg";
             btn.innerHTML = `<i class="fas fa-plus"></i> Library`;
 
-            // Sync with Firestore
+            // Sync with Firestore Subcollection
             await deleteDoc(libDocRef);
             if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
 
@@ -321,10 +324,10 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
             // --- UI OPTIMISTIC ADD ---
             window.app.state.carouselLibrarySet.add(docIdStr);
             btn.dataset.added = "true";
-            btn.className = "bg-white text-black px-5 py-2 md:px-6 md:py-3 rounded font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors border border-white flex items-center gap-2";
+            btn.className = "bg-white text-black px-5 py-2 md:px-6 md:py-3 rounded font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors border border-white flex items-center gap-2 shadow-lg";
             btn.innerHTML = `<i class="fas fa-check text-green-500"></i> Added`;
 
-            // Sync with Firestore
+            // Sync with Firestore Subcollection
             await setDoc(libDocRef, formattedAnime);
             if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
         }
