@@ -1,4 +1,4 @@
-// search.js - Full Featured Search & History Engine (Firestore Subcollection Fix)
+// search.js - Full Featured Search & History Engine (Clean Text Firestore IDs)
 
 window.app = window.app || {};
 
@@ -136,12 +136,12 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- 2. RECENTLY VIEWED (CLICKED) HISTORY ---
-    
     window.saveAndGo = async (id, title, image, type, sub, dub) => {
         let history = JSON.parse(localStorage.getItem('blazex_clicked_anime')) || [];
         history = history.filter(item => String(item.id) !== String(id));
         
-        const animeData = { historyType: 'anime', id: String(id), title, image, type, sub, dub, timestamp: Date.now() };
+        const docIdStr = String(id); // Handles string IDs like "dr-stone-science-future..."
+        const animeData = { historyType: 'anime', id: docIdStr, title, image, type, sub, dub, timestamp: Date.now() };
         history.unshift(animeData);
         if (history.length > 15) history.pop(); 
         
@@ -152,7 +152,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (profile && profile.uid && !profile.uid.startsWith('anon_')) {
             try {
                 const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-                const docRef = firestore.doc(window.app.db, "users", profile.uid, "history", `anime_${id}`);
+                // Uses clean string ID: anime_dr-stone-science-future-part-3-6d6cc
+                const docRef = firestore.doc(window.app.db, "users", profile.uid, "history", `anime_${docIdStr}`);
                 await firestore.setDoc(docRef, animeData, { merge: true });
             } catch (e) { console.error("Firebase History Write Error:", e); }
         }
@@ -237,7 +238,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (profile && profile.uid && !profile.uid.startsWith('anon_')) {
             try {
                 const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-                const docId = `search_${btoa(unescape(encodeURIComponent(term))).replace(/[/+=]/g, '_')}`; 
+                // Clean the term so Firebase doesn't crash if they search for symbols like "/"
+                const safeTerm = term.trim().replace(/[\/\\.#$\[\]]/g, '_');
+                const docId = `search_${safeTerm}`; 
                 const docRef = firestore.doc(window.app.db, "users", profile.uid, "history", docId);
                 await firestore.setDoc(docRef, { historyType: 'search', term: term, timestamp: Date.now() }, { merge: true });
             } catch (e) { console.error("Firebase Search Term Save Error:", e); }
@@ -253,7 +256,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (profile && profile.uid && !profile.uid.startsWith('anon_')) {
             try {
                 const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-                const docId = `search_${btoa(unescape(encodeURIComponent(term))).replace(/[/+=]/g, '_')}`;
+                const safeTerm = term.trim().replace(/[\/\\.#$\[\]]/g, '_');
+                const docId = `search_${safeTerm}`;
                 const docRef = firestore.doc(window.app.db, "users", profile.uid, "history", docId);
                 await firestore.deleteDoc(docRef);
             } catch (e) { console.error("Firebase Search Term Delete Error:", e); }
@@ -469,7 +473,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const checkLibraryStatus = (animeId) => {
                 const profile = window.app.state?.activeProfile || null;
                 if (profile && profile.library && profile.uid && !profile.uid.startsWith('anon_')) {
-                    // Make sure we're doing a string comparison
                     return profile.library.some(item => String(item.id) === String(animeId));
                 }
                 return false;
@@ -581,7 +584,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if(!profile.library) profile.library = [];
         
-        // Ensure ID is completely cast to a String everywhere
         const docIdStr = String(id);
         const formattedAnime = { id: docIdStr, title, img, timestamp: Date.now() };
         
@@ -591,11 +593,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-            // This docRef will crash if docIdStr is not explicitly a string
+            // Clean ID string format applied perfectly for Firestore Library
             const libDocRef = firestore.doc(window.app.db, "users", profile.uid, "library", docIdStr);
 
             if (isCurrentlyAdded) {
-                // Delete from DB and Local Cache
                 profile.library.splice(existingItemIndex, 1); 
                 localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
                 
@@ -614,7 +615,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 await firestore.deleteDoc(libDocRef);
                 if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
             } else {
-                // Add to DB and Local Cache
                 profile.library.unshift(formattedAnime);
                 localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
                 
