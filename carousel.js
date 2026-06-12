@@ -7,6 +7,43 @@ window.app.state = window.app.state || {};
 // In-memory set to instantly check if a carousel item is in the library
 window.app.state.carouselLibrarySet = new Set();
 
+// --- GLOBAL FIREBASE INITIALIZATION ---
+let app, auth, db;
+let firebaseInitialized = false;
+
+const initFirebase = async () => {
+    if (firebaseInitialized) return;
+    try {
+        const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js');
+        const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+        const { getFirestore } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
+            authDomain: "blaze-x-db2f5.firebaseapp.com",
+            projectId: "blaze-x-db2f5",
+            storageBucket: "blaze-x-db2f5.firebasestorage.app",
+            messagingSenderId: "770812306638",
+            appId: "1:770812306638:web:eaf5ded647861f32c25c9f"
+        };
+
+        // Initialize Firebase
+        if (!getApps().length) {
+            app = initializeApp(firebaseConfig);
+        } else {
+            app = getApps()[0];
+        }
+        
+        auth = getAuth(app);
+        db = getFirestore(app);
+        window.app.db = db; 
+        firebaseInitialized = true;
+    } catch (err) {
+        console.error("Firebase Init Error:", err);
+    }
+};
+
 window.app.components.carousel = async () => {
     const container = document.getElementById('carousel-container');
     if (!container) return;
@@ -23,17 +60,15 @@ window.app.components.carousel = async () => {
 
     // --- FIREBASE SYNC: Listen for Auth & Fetch Library ---
     try {
-        const { getAuth, onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
-        const { collection, getDocs, getFirestore } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-
-        const auth = getAuth();
-        window.app.db = window.app.db || getFirestore();
+        await initFirebase();
+        const { onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+        const { collection, getDocs } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
 
         // Listen for auth state changes so the carousel updates even if it loads fast
         onAuthStateChanged(auth, async (user) => {
             if (user && !user.isAnonymous) {
                 try {
-                    const libRef = collection(window.app.db, "users", user.uid, "library");
+                    const libRef = collection(db, "users", user.uid, "library");
                     const snapshot = await getDocs(libRef);
                     
                     window.app.state.carouselLibrarySet.clear();
@@ -280,8 +315,7 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
     event.stopPropagation(); 
     
     try {
-        const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
-        const auth = getAuth();
+        await initFirebase(); // Ensure firebase is initialized before grabbing auth/db
         
         // Auth Check
         if (!auth.currentUser || auth.currentUser.isAnonymous) {
@@ -304,9 +338,7 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
         const btn = event.currentTarget;
         const isAdded = btn.dataset.added === "true"; 
 
-        const { getFirestore, doc, setDoc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-        // Fallback to getting a new instance if window.app.db was somehow lost
-        const db = window.app.db || getFirestore();
+        const { doc, setDoc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const libDocRef = doc(db, "users", auth.currentUser.uid, "library", docIdStr);
 
         if (isAdded) {
