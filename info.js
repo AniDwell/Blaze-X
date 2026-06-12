@@ -183,7 +183,7 @@ window.app.components.info = async () => {
             if (window.BlazeX && window.BlazeX.show404) {
                 window.BlazeX.show404('info-container', 'A critical error occurred while loading this series.');
             } else {
-                container.innerHTML = `<div class="w-full h-screen flex flex-col items-center justify-center -mt-10"><i class="fas fa-exclamation-triangle text-5xl text-[#F47521] mb-4"></i><h2 class="text-2xl font-black text-white mb-2">Oops! Something went wrong.</h2><p class="text-gray-400 text-sm mb-6">${error.message}</p><button onclick="window.location.reload()" class="bg-white/10 px-6 py-2 rounded font-bold text-sm tracking-wide">Try Again</button></div>`;
+                container.innerHTML = `<div class="w-full h-screen flex flex-col items-center justify-center -mt-10"><i class="fas fa-exclamation-triangle text-5xl text-[#F47521] mb-4"></i><h2 class="[...]
             }
         }
     };
@@ -205,7 +205,7 @@ function renderAnimeInfoShell() {
     const isUpcoming = (raw?.status && raw.status.toString().toLowerCase().includes('upcoming')) || 
                        (ani?.status && ani.status.toString().toLowerCase().includes('not_yet_released'));
 
-    const upcomingBadge = isUpcoming ? `<span class="bg-red-500 text-white text-[10px] font-black px-2.5 py-0.5 rounded shadow-sm uppercase tracking-wider animate-pulse"><i class="fas fa-clock mr-1"></i> Upcoming</span>` : '';
+    const upcomingBadge = isUpcoming ? `<span class="bg-red-500 text-white text-[10px] font-black px-2.5 py-0.5 rounded shadow-sm uppercase tracking-wider animate-pulse"><i class="fas fa-clock mr-1"><[...]
     const trendingBadge = ani && ani.trending ? `<span class="bg-[#F47521]/10 border border-[#F47521]/30 px-2 py-0.5 rounded backdrop-blur-sm">#${ani.trending} Trending</span>` : '';
     
     const scoreVal = (ani && ani.averageScore) ? `${ani.averageScore}%` : (raw && raw.mal ? `${raw.mal}/10` : null);
@@ -233,10 +233,10 @@ function renderAnimeInfoShell() {
     }
 
     const libraryBtnHtml = isAdded 
-        ? `<button onclick="window.app.toggleLibrary(event, '${data.id}', '${data.title.replace(/'/g, "\\'")}', '${data.poster}')" class="bg-white text-black px-6 py-3.5 rounded-lg shadow-md font-black text-xs md:text-sm uppercase tracking-wider hover:bg-gray-200 transition-colors border border-white flex items-center gap-2">
+        ? `<button onclick="window.app.toggleLibrary(event, '${data.id}', '${data.title.replace(/'/g, "\\'")}', '${data.poster}')" class="bg-white text-black px-6 py-3.5 rounded-lg shadow-md font-blac[...]
                <i class="fas fa-check text-green-500"></i> Added
            </button>`
-        : `<button onclick="window.app.toggleLibrary(event, '${data.id}', '${data.title.replace(/'/g, "\\'")}', '${data.poster}')" class="bg-white/10 backdrop-blur-md text-white px-6 py-3.5 rounded-lg shadow-md font-bold text-xs md:text-sm uppercase tracking-wider hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2">
+        : `<button onclick="window.app.toggleLibrary(event, '${data.id}', '${data.title.replace(/'/g, "\\'")}', '${data.poster}')" class="bg-white/10 backdrop-blur-md text-white px-6 py-3.5 rounded-lg[...]
                <i class="fas fa-plus"></i> Library
            </button>`;
 
@@ -256,7 +256,7 @@ function renderAnimeInfoShell() {
                     </div>
 
                     <div class="flex-1 flex flex-col items-center md:items-start text-center md:text-left w-full pt-2">
-                        <div class="flex flex-wrap items-center justify-center md:justify-start gap-3 text-[#F47521] text-[10px] md:text-xs font-black tracking-widest drop-shadow-md mb-2 md:mb-3 uppercase w-full">
+                        <div class="flex flex-wrap items-center justify-center md:justify-start gap-3 text-[#F47521] text-[10px] md:text-xs font-black tracking-widest drop-shadow-md mb-2 md:mb-3 upper[...]
                             ${upcomingBadge}
                             ${trendingBadge}
                             ${scoreBadge}
@@ -268,7 +268,7 @@ function renderAnimeInfoShell() {
                         
                         <div class="flex flex-wrap justify-center md:justify-start gap-3 md:gap-4 mb-8 w-full">
                             ${!isUpcoming ? `
-                            <button onclick="window.app.resolveEpisodeStreamAndRoute('${data.smartPlayAction}', ${data.smartPlayNumber}, '${data.id}')" class="bg-[#F47521] text-white px-8 py-3.5 rounded-lg shadow-md font-black text-xs md:text-sm uppercase tracking-wider hover:bg-white hover:text-black transition-colors flex items-center gap-2">
+                            <button onclick="window.app.resolveEpisodeStreamAndRoute('${data.smartPlayAction}', ${data.smartPlayNumber}, '${data.id}')" class="bg-[#F47521] text-white px-8 py-3.5 round[...]
                                 <i class="fas fa-play"></i> ${data.smartPlayText}
                             </button>` : ''}
                             
@@ -277,7 +277,7 @@ function renderAnimeInfoShell() {
 
                         <div class="relative w-full max-w-3xl transition-all duration-300">
                             <p id="info-desc" class="text-xs md:text-sm text-gray-300 line-clamp-3 leading-relaxed drop-shadow-md">${cleanDesc}</p>
-                            ${cleanDesc.length > 130 ? `<button onclick="window.app.togglePageDesc()" id="read-more-btn" class="text-[#F47521] text-[10px] md:text-xs font-bold uppercase tracking-wider mt-3 hover:text-white transition-colors">See More <i class="fas fa-chevron-down ml-1"></i></button>` : ''}
+                            ${cleanDesc.length > 130 ? `<button onclick="window.app.togglePageDesc()" id="read-more-btn" class="text-[#F47521] text-[10px] md:text-xs font-bold uppercase tracking-wider[...]
                         </div>
                     </div>
                 </div>
@@ -291,15 +291,15 @@ function renderAnimeInfoShell() {
                 </div>
 
                 <div class="flex items-center justify-center w-full max-w-2xl border-b border-white/10 text-xs md:text-sm font-bold uppercase tracking-widest pt-2">
-                    <button onclick="window.app.switchInfoTab('episodes')" id="tab-episodes" class="flex-1 text-center pb-3 transition-colors ${window.app.state.activeInfoTab === 'episodes' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white'}">Episodes</button>
-                    <button onclick="window.app.switchInfoTab('information')" id="tab-information" class="flex-1 text-center pb-3 transition-colors ${window.app.state.activeInfoTab === 'information' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white'}">Information</button>
+                    <button onclick="window.app.switchInfoTab('episodes')" id="tab-episodes" class="flex-1 text-center pb-3 transition-colors ${window.app.state.activeInfoTab === 'episodes' ? 'text-wh[...]
+                    <button onclick="window.app.switchInfoTab('information')" id="tab-information" class="flex-1 text-center pb-3 transition-colors ${window.app.state.activeInfoTab === 'information' ?[...]
                 </div>
                 
                 <div id="dynamic-tab-content-area" class="py-2"></div>
 
                 ${recommendationsHtml !== '' ? `
                 <div class="w-full border-t border-white/5 pt-8 mt-4">
-                    <h3 class="text-white text-sm md:text-base font-black uppercase tracking-widest text-gray-300 mb-4"><i class="fas fa-heart text-[#F47521] mr-1.5"></i> If You Liked This, Watch These</h3>
+                    <h3 class="text-white text-sm md:text-base font-black uppercase tracking-widest text-gray-300 mb-4"><i class="fas fa-heart text-[#F47521] mr-1.5"></i> If You Liked This, Watch Thes[...]
                     <div class="w-full flex gap-3.5 overflow-x-auto pb-4 hide-scrollbar snap-x pointer-events-auto">
                         ${recommendationsHtml}
                     </div>
@@ -343,11 +343,13 @@ window.app.toggleLibrary = async (event, id, title, img) => {
             localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
 
             if (btn) {
-                btn.className = "bg-white/10 backdrop-blur-md text-white px-6 py-3.5 rounded-lg shadow-md font-bold text-xs md:text-sm uppercase tracking-wider hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2";
+                btn.className = "bg-white/10 backdrop-blur-md text-white px-6 py-3.5 rounded-lg shadow-md font-bold text-xs md:text-sm uppercase tracking-wider hover:bg-white/20 transition-colors bord[...]
                 btn.innerHTML = `<i class="fas fa-plus"></i> Library`;
             }
 
-            await firestore.updateDoc(userRef, { library: firestore.arrayRemove(itemToRemove) });
+            // Delete from Firestore using new structure: users/{userId}/library/{animeId}
+            const libraryRef = firestore.doc(window.app.db, "users", profile.uid, "library", id);
+            await firestore.deleteDoc(libraryRef);
             if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
         } else {
             // Add to library
@@ -355,11 +357,18 @@ window.app.toggleLibrary = async (event, id, title, img) => {
             localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
 
             if (btn) {
-                btn.className = "bg-white text-black px-6 py-3.5 rounded-lg shadow-md font-black text-xs md:text-sm uppercase tracking-wider hover:bg-gray-200 transition-colors border border-white flex items-center gap-2";
+                btn.className = "bg-white text-black px-6 py-3.5 rounded-lg shadow-md font-black text-xs md:text-sm uppercase tracking-wider hover:bg-gray-200 transition-colors border border-white fle[...]
                 btn.innerHTML = `<i class="fas fa-check text-green-500"></i> Added`;
             }
 
-            await firestore.updateDoc(userRef, { library: firestore.arrayUnion(formattedAnime) });
+            // Save to Firestore using new structure: users/{userId}/library/{animeId}
+            const libraryRef = firestore.doc(window.app.db, "users", profile.uid, "library", id);
+            await firestore.setDoc(libraryRef, {
+                id: formattedAnime.id,
+                title: formattedAnime.title,
+                img: formattedAnime.img,
+                addedAt: new Date().toISOString()
+            });
             if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
         }
     } catch (error) {
@@ -377,8 +386,8 @@ window.app.renderInfoInlineTabContent = () => {
 window.app.switchInfoTab = (tabName) => {
     if (window.app.state.activeInfoTab === tabName) return;
     window.app.state.activeInfoTab = tabName;
-    document.getElementById('tab-information').className = `flex-1 text-center pb-3 transition-colors ${tabName === 'information' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white'}`;
-    document.getElementById('tab-episodes').className = `flex-1 text-center pb-3 transition-colors ${tabName === 'episodes' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white'}`;
+    document.getElementById('tab-information').className = `flex-1 text-center pb-3 transition-colors ${tabName === 'information' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text[...]
+    document.getElementById('tab-episodes').className = `flex-1 text-center pb-3 transition-colors ${tabName === 'episodes' ? 'text-white border-b-2 border-[#F47521]' : 'text-gray-500 hover:text-white[...]
     window.app.renderInfoInlineTabContent();
 };
 
@@ -408,7 +417,7 @@ async function injectVerifiedAlternativePills() {
                 const statusStr = rel.status ? rel.status.toLowerCase().replace('_', ' ') : '';
 
                 const blockDiv = document.createElement('div');
-                blockDiv.className = `relative w-[260px] md:w-[320px] h-20 rounded-xl overflow-hidden border border-white/5 hover:border-[#F47521]/50 cursor-pointer transition-all flex items-center px-4 group shadow-lg flex-shrink-0 snap-start`;
+                blockDiv.className = `relative w-[260px] md:w-[320px] h-20 rounded-xl overflow-hidden border border-white/5 hover:border-[#F47521]/50 cursor-pointer transition-all flex items-center px[...]
                 blockDiv.onclick = () => window.app.loadInfoPageData(targetApiId);
                 
                 blockDiv.innerHTML = `
@@ -493,12 +502,12 @@ window.app.components.informationtab = () => {
 
     const rawStudioStr = ani?.studios?.nodes?.map(s => s.name).join(', ') || unpackArrayString(raw?.studios);
     const studioButtonsHtml = rawStudioStr !== 'N/A' 
-        ? rawStudioStr.split(',').map(s => `<button onclick="window.location.href='results.html?producer=${encodeURIComponent(s.trim())}'" class="bg-white/5 border border-white/10 px-3 py-1.5 rounded text-white text-[11px] font-bold uppercase hover:bg-[#F47521] hover:text-black transition-colors shadow-sm text-left truncate max-w-full">${s.trim()}</button>`).join('')
+        ? rawStudioStr.split(',').map(s => `<button onclick="window.location.href='results.html?producer=${encodeURIComponent(s.trim())}'" class="bg-white/5 border border-white/10 px-3 py-1.5 rounded [...]
         : '<span class="text-white font-medium">N/A</span>';
 
     const rawProducerStr = unpackArrayString(raw?.producers);
     const producerButtonsHtml = rawProducerStr !== 'N/A'
-        ? rawProducerStr.split(',').map(p => `<button onclick="window.location.href='results.html?producer=${encodeURIComponent(p.trim())}'" class="bg-white/5 border border-white/10 px-3 py-1.5 rounded text-white text-[11px] font-bold uppercase hover:bg-[#F47521] hover:text-black transition-colors shadow-sm text-left truncate max-w-full">${p.trim()}</button>`).join('')
+        ? rawProducerStr.split(',').map(p => `<button onclick="window.location.href='results.html?producer=${encodeURIComponent(p.trim())}'" class="bg-white/5 border border-white/10 px-3 py-1.5 rounde[...]
         : '<span class="text-white font-medium">N/A</span>';
 
     let synonymsList = [];
@@ -562,19 +571,19 @@ window.app.components.informationtab = () => {
                 <div class="flex flex-col gap-4">
                     <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Format Type</span><span class="text-white capitalize font-medium">${formatStr}</span></div>
                     <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Current Status</span><span class="text-white capitalize font-medium">${statusStr}</span></div>
-                    <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-1.5">Production Studios</span><div class="flex flex-wrap gap-1.5 w-full">${studioButtonsHtml}</div></div>
-                    <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-1.5">Industrial Producers</span><div class="flex flex-wrap gap-1.5 w-full">${producerButtonsHtml}</div></div>
+                    <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-1.5">Production Studios</span><div class="flex flex-wrap gap-1.5 w-full">${studioButtonsHtml}</div></div[...]
+                    <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-1.5">Industrial Producers</span><div class="flex flex-wrap gap-1.5 w-full">${producerButtonsHtml}</div><[...]
                     <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Total Units</span><span class="text-white font-medium">${totalEpsCount} Eps</span></div>
                     <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Runtime Length</span><span class="text-white font-medium">${trackDuration}</span></div>
-                    <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Season Window</span><span class="text-white uppercase font-medium">${premSeason} (${airedTimeline})</span></div>
+                    <div><span class="text-gray-500 font-bold uppercase tracking-wider block mb-0.5">Season Window</span><span class="text-white uppercase font-medium">${premSeason} (${airedTimeline})[...]
                 </div>
-                ${uniqueSynonyms.length > 0 ? `<div class="pt-4 border-t border-white/5 mt-1"><h5 class="text-gray-500 font-bold uppercase tracking-wider mb-2">Alternative Titles</h5><div class="text-gray-400 leading-relaxed space-y-1 text-[11px] truncate">${uniqueSynonyms.map(syn => `<p>• ${syn}</p>`).join('')}</div></div>` : ''}
+                ${uniqueSynonyms.length > 0 ? `<div class="pt-4 border-t border-white/5 mt-1"><h5 class="text-gray-500 font-bold uppercase tracking-wider mb-2">Alternative Titles</h5><div class="text-[...]
             </div>
 
             <div class="lg:col-span-2 flex flex-col gap-4">
                 <div class="flex items-center gap-4 border-b border-white/5 text-[11px] font-black uppercase tracking-wider pb-1">
-                    <button onclick="window.app.switchMetaContentTab('characters')" id="subtab-characters" class="pb-2 transition-colors ${activeMeta === 'characters' ? 'text-white border-b border-[#F47521]' : 'text-gray-500 hover:text-white'}">Characters</button>
-                    <button onclick="window.app.switchMetaContentTab('staff')" id="subtab-staff" class="pb-2 transition-colors ${activeMeta === 'staff' ? 'text-white border-b border-[#F47521]' : 'text-gray-500 hover:text-white'}">Staff Core</button>
+                    <button onclick="window.app.switchMetaContentTab('characters')" id="subtab-characters" class="pb-2 transition-colors ${activeMeta === 'characters' ? 'text-white border-b border-[#F[...]
+                    <button onclick="window.app.switchMetaContentTab('staff')" id="subtab-staff" class="pb-2 transition-colors ${activeMeta === 'staff' ? 'text-white border-b border-[#F47521]' : 'text[...]
                 </div>
                 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full">
@@ -647,7 +656,7 @@ window.app.components.episodestab = () => {
             const label = `Episodes ${startNum} - ${endNum}`;
             if (!window.app.state.epRangeFilter && i === 0) window.app.state.epRangeFilter = val;
             if (window.app.state.epRangeFilter === val) currentRangeLabel = label;
-            rangeDropdownHtml += `<button onclick="window.app.selectDropdownOption('${label}', '${val}')" class="w-full text-left px-4 py-3 text-xs md:text-sm font-bold text-white hover:bg-[#F47521] hover:text-black transition-colors border-b border-white/5 last:border-0">${label}</button>`;
+            rangeDropdownHtml += `<button onclick="window.app.selectDropdownOption('${label}', '${val}')" class="w-full text-left px-4 py-3 text-xs md:text-sm font-bold text-white hover:bg-[#F47521] h[...]
         }
     } else {
         currentRangeLabel = 'No Episodes';
@@ -661,22 +670,22 @@ window.app.components.episodestab = () => {
             
             <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between bg-[#0a0a0a] p-3 rounded-xl border border-white/5 shadow-md w-full">
                 <div class="flex bg-[#111] p-1 border border-white/10 rounded-lg max-w-xs md:w-44 text-[11px] font-black select-none tracking-wider uppercase h-10 shrink-0">
-                    <button onclick="window.app.toggleActiveAudioLanguage('sub')" id="lang-btn-sub" class="flex-1 rounded-md transition-all flex items-center justify-center gap-1 ${currentLang === 'sub' ? 'bg-[#F47521] text-black shadow-md font-black' : 'text-gray-400 hover:text-white'}">Sub</button>
-                    <button onclick="window.app.toggleActiveAudioLanguage('dub')" id="lang-btn-dub" class="flex-1 rounded-md transition-all flex items-center justify-center gap-1 ${currentLang === 'dub' ? 'bg-[#F47521] text-black shadow-md font-black' : 'text-gray-400 hover:text-white'}">Dub</button>
+                    <button onclick="window.app.toggleActiveAudioLanguage('sub')" id="lang-btn-sub" class="flex-1 rounded-md transition-all flex items-center justify-center gap-1 ${currentLang === 'su[...]
+                    <button onclick="window.app.toggleActiveAudioLanguage('dub')" id="lang-btn-dub" class="flex-1 rounded-md transition-all flex items-center justify-center gap-1 ${currentLang === 'du[...]
                 </div>
 
                 <div class="relative w-full sm:w-56 shrink-0" id="custom-dropdown-container">
-                    <button id="custom-dropdown-btn" onclick="window.app.toggleDropdown()" class="flex items-center justify-between w-full bg-[#111] border border-white/10 text-white text-xs font-bold h-10 px-4 rounded-lg outline-none hover:border-white/30 focus:border-[#F47521] transition-all">
+                    <button id="custom-dropdown-btn" onclick="window.app.toggleDropdown()" class="flex items-center justify-between w-full bg-[#111] border border-white/10 text-white text-xs font-bold[...]
                         <span id="custom-dropdown-selected">${currentRangeLabel}</span>
                         <i id="custom-dropdown-icon" class="fas fa-chevron-down text-gray-400 text-xs transition-transform duration-300"></i>
                     </button>
-                    <div id="custom-dropdown-menu" class="absolute left-0 mt-2 w-full bg-[#111] border border-white/10 rounded-lg shadow-2xl z-50 hidden overflow-hidden flex flex-col max-h-60 overflow-y-auto hide-scrollbar">
+                    <div id="custom-dropdown-menu" class="absolute left-0 mt-2 w-full bg-[#111] border border-white/10 rounded-lg shadow-2xl z-50 hidden overflow-hidden flex flex-col max-h-60 overflow[...]
                         ${rangeDropdownHtml}
                     </div>
                 </div>
 
                 <div class="relative flex-1 max-w-md w-full">
-                    <input type="number" id="episode-search-box" value="${window.app.state.epSearchValue || ''}" onkeyup="window.app.runEpisodeSearch(this.value)" placeholder="Search episode #..." class="w-full bg-[#111] border border-white/10 text-white text-xs h-10 pl-10 pr-4 rounded-lg outline-none focus:border-[#F47521] placeholder-gray-600 transition-colors">
+                    <input type="number" id="episode-search-box" value="${window.app.state.epSearchValue || ''}" onkeyup="window.app.runEpisodeSearch(this.value)" placeholder="Search episode #..." cla[...]
                     <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-xs"></i>
                 </div>
             </div>
@@ -693,8 +702,8 @@ window.app.components.episodestab = () => {
 window.app.toggleActiveAudioLanguage = (langMode) => {
     if (window.app.state.activeLanguageType === langMode) return;
     window.app.state.activeLanguageType = langMode;
-    document.getElementById('lang-btn-sub').className = `flex-1 rounded-md transition-all flex items-center justify-center gap-1 ${langMode === 'sub' ? 'bg-[#F47521] text-black shadow-md font-black' : 'text-gray-400 hover:text-white'}`;
-    document.getElementById('lang-btn-dub').className = `flex-1 rounded-md transition-all flex items-center justify-center gap-1 ${langMode === 'dub' ? 'bg-[#F47521] text-black shadow-md font-black' : 'text-gray-400 hover:text-white'}`;
+    document.getElementById('lang-btn-sub').className = `flex-1 rounded-md transition-all flex items-center justify-center gap-1 ${langMode === 'sub' ? 'bg-[#F47521] text-black shadow-md font-black' :[...]
+    document.getElementById('lang-btn-dub').className = `flex-1 rounded-md transition-all flex items-center justify-center gap-1 ${langMode === 'dub' ? 'bg-[#F47521] text-black shadow-md font-black' :[...]
     window.app.renderNumericEpisodeGrid();
 };
 
@@ -787,7 +796,7 @@ window.app.renderNumericEpisodeGrid = () => {
         }
 
         gridHtml += `
-            <button ${interactiveActionAttr} class="relative w-full aspect-square flex flex-col items-center justify-center rounded border transition-all duration-150 p-1 group bg-white/5 ${buttonStyleClass}">
+            <button ${interactiveActionAttr} class="relative w-full aspect-square flex flex-col items-center justify-center rounded border transition-all duration-150 p-1 group bg-white/5 ${buttonStyl[...]
                 <span class="${!isSupportedByLang ? '-translate-y-1' : ''}">${epNumber}</span>
                 ${fillerIconDot}
                 ${conditionalLabelBadge}
