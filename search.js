@@ -1,8 +1,58 @@
-// search.js - Full Featured Search & History Engine (Clean Text Firestore IDs)
+// search.js - Full Featured Search & History Engine (Firestore Only - No LocalStorage)
 
 window.app = window.app || {};
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // --- IN-MEMORY STATE (Replaces LocalStorage) ---
+    let currentUserId = null;
+    let inMemoryLibrary = [];
+    let inMemoryClickedHistory = [];
+    let inMemorySearchHistory = [];
+
+    // --- FIREBASE INITIALIZATION ---
+    try {
+        const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js');
+        const { getFirestore, collection, getDocs, setDoc, deleteDoc, doc, query, orderBy, limit } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        const { getAuth, onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
+            authDomain: "blaze-x-db2f5.firebaseapp.com",
+            projectId: "blaze-x-db2f5",
+            storageBucket: "blaze-x-db2f5.firebasestorage.app",
+            messagingSenderId: "770812306638",
+            appId: "1:770812306638:web:eaf5ded647861f32c25c9f"
+        };
+
+        const firebaseApp = initializeApp(firebaseConfig);
+        window.app.db = window.app.db || getFirestore(firebaseApp);
+        const auth = getAuth(firebaseApp);
+
+        // Listen for Auth State to securely get UID without LocalStorage
+        onAuthStateChanged(auth, (user) => {
+            if (user && !user.isAnonymous) {
+                currentUserId = user.uid;
+                syncWithCloud();
+            } else {
+                currentUserId = null;
+                // If not logged in, show empty states
+                inMemoryLibrary = [];
+                inMemoryClickedHistory = [];
+                inMemorySearchHistory = [];
+                renderClickedHistory();
+                renderSearchTextHistory();
+                
+                // Trigger auth UI if needed
+                if (window.app.components && window.app.components.auth) {
+                    window.app.components.auth();
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error("Failed to initialize Firebase:", error);
+    }
+
     // --- DOM ELEMENTS ---
     const searchInput = document.getElementById('search-input');
     const clearBtn = document.getElementById('clear-search-btn');
@@ -25,36 +75,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- FIREBASE CLOUD SYNC LOGIC ---
     const syncWithCloud = async () => {
-        const profile = window.app.state?.activeProfile || null;
-        if (!profile || !profile.uid || profile.uid.startsWith('anon_')) return;
+        if (!currentUserId) return;
 
         try {
             const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
             const { collection, getDocs, query, orderBy, limit } = firestore;
 
-            // 1. Fetch Cloud Library
-            const libraryRef = collection(window.app.db, "users", profile.uid, "library");
+            // 1. Fetch Cloud Library into Memory
+            const libraryRef = collection(window.app.db, "users", currentUserId, "library");
             const libSnapshot = await getDocs(libraryRef);
-            profile.library = libSnapshot.docs.map(doc => doc.data());
-            localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
+            inMemoryLibrary = libSnapshot.docs.map(doc => doc.data());
 
-            // 2. Fetch Cloud History
-            const historyRef = collection(window.app.db, "users", profile.uid, "history");
+            // 2. Fetch Cloud History into Memory
+            const historyRef = collection(window.app.db, "users", currentUserId, "history");
             const historyQuery = query(historyRef, orderBy("timestamp", "desc"), limit(30));
             const histSnapshot = await getDocs(historyQuery);
             
-            let cloudClicked = [];
-            let cloudSearches = [];
+            inMemoryClickedHistory = [];
+            inMemorySearchHistory = [];
 
             histSnapshot.docs.forEach(doc => {
                 const data = doc.data();
-                if (data.historyType === 'anime') cloudClicked.push(data);
-                else if (data.historyType === 'search') cloudSearches.push(data.term);
+                if (data.historyType === 'anime') inMemoryClickedHistory.push(data);
+                else if (data.historyType === 'search') inMemorySearchHistory.push(data.term);
             });
 
-            localStorage.setItem('blazex_clicked_anime', JSON.stringify(cloudClicked.slice(0, 15)));
-            localStorage.setItem('blazex_search_history', JSON.stringify(cloudSearches.slice(0, 10)));
+            // Keep array limits in memory
+            inMemoryClickedHistory = inMemoryClickedHistory.slice(0, 15);
+            inMemorySearchHistory = inMemorySearchHistory.slice(0, 10);
 
+            // Render UI with fetched data
             renderClickedHistory();
             renderSearchTextHistory();
         } catch (error) {
@@ -93,10 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- 1. INITIALIZATION ---
     const initSearchPage = async () => {
-        renderSearchTextHistory(); 
-        renderClickedHistory();    
-        initTypewriterPlaceholder();
-        syncWithCloud();           
+        initTypewriterPlaceholder();       
     };
 
     const initTypewriterPlaceholder = async () => {
@@ -137,23 +184,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- 2. RECENTLY VIEWED (CLICKED) HISTORY ---
     window.saveAndGo = async (id, title, image, type, sub, dub) => {
-        let history = JSON.parse(localStorage.getItem('blazex_clicked_anime')) || [];
-        history = history.filter(item => String(item.id) !== String(id));
-        
-        const docIdStr = String(id); // Handles string IDs like "dr-stone-science-future..."
+        const docIdStr = String(id); 
         const animeData = { historyType: 'anime', id: docIdStr, title, image, type, sub, dub, timestamp: Date.now() };
-        history.unshift(animeData);
-        if (history.length > 15) history.pop(); 
         
-        localStorage.setItem('blazex_clicked_anime', JSON.stringify(history));
+        // Update Memory Array
+        inMemoryClickedHistory = inMemoryClickedHistory.filter(item => String(item.id) !== docIdStr);
+        inMemoryClickedHistory.unshift(animeData);
+        if (inMemoryClickedHistory.length > 15) inMemoryClickedHistory.pop(); 
 
-        // Save to Cloud Subcollection
-        const profile = window.app.state?.activeProfile || null;
-        if (profile && profile.uid && !profile.uid.startsWith('anon_')) {
+        // Write directly to Firestore
+        if (currentUserId) {
             try {
                 const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-                // Uses clean string ID: anime_dr-stone-science-future-part-3-6d6cc
-                const docRef = firestore.doc(window.app.db, "users", profile.uid, "history", `anime_${docIdStr}`);
+                const docRef = firestore.doc(window.app.db, "users", currentUserId, "history", `anime_${docIdStr}`);
                 await firestore.setDoc(docRef, animeData, { merge: true });
             } catch (e) { console.error("Firebase History Write Error:", e); }
         }
@@ -163,17 +206,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.deleteClickedHistory = async (event, id) => {
         event.stopPropagation(); 
-        let history = JSON.parse(localStorage.getItem('blazex_clicked_anime')) || [];
-        history = history.filter(item => String(item.id) !== String(id));
-        localStorage.setItem('blazex_clicked_anime', JSON.stringify(history));
+        
+        // Update Memory Array
+        inMemoryClickedHistory = inMemoryClickedHistory.filter(item => String(item.id) !== String(id));
         renderClickedHistory();
 
-        // Delete from Cloud Subcollection
-        const profile = window.app.state?.activeProfile || null;
-        if (profile && profile.uid && !profile.uid.startsWith('anon_')) {
+        // Delete directly from Firestore
+        if (currentUserId) {
             try {
                 const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-                const docRef = firestore.doc(window.app.db, "users", profile.uid, "history", `anime_${id}`);
+                const docRef = firestore.doc(window.app.db, "users", currentUserId, "history", `anime_${id}`);
                 await firestore.deleteDoc(docRef);
             } catch (e) { console.error("Firebase History Delete Error:", e); }
         }
@@ -182,9 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderClickedHistory = () => {
         if(!trendingContainer) return;
         
-        let history = JSON.parse(localStorage.getItem('blazex_clicked_anime')) || [];
-        
-        if (history.length === 0) {
+        if (inMemoryClickedHistory.length === 0) {
             trendingContainer.innerHTML = `
                 <div class="p-10 text-center w-full flex flex-col items-center justify-center opacity-60">
                     <i class="fas fa-history text-3xl text-gray-600 mb-3 block"></i>
@@ -196,7 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         trendingContainer.className = "flex flex-col gap-4 pb-6 md:grid md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 md:overflow-visible"; 
 
-        trendingContainer.innerHTML = history.map(anime => {
+        trendingContainer.innerHTML = inMemoryClickedHistory.map(anime => {
             const safeTitle = anime.title.replace(/'/g, "\\'");
             return `
             <div onclick="window.saveAndGo('${anime.id}', '${safeTitle}', '${anime.image}', '${anime.type}', '${anime.sub}', '${anime.dub}')" class="relative flex gap-4 items-stretch bg-gradient-to-br from-[#141414] to-[#0a0a0a] p-3 rounded-xl cursor-pointer hover:border-[#F47521]/50 border border-white/5 transition-all duration-300 shadow-md hover:shadow-xl hover:-translate-y-0.5 group h-full">
@@ -224,41 +264,37 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- 3. SEARCH TEXT HISTORY LOGIC ---
-    const getSearchHistory = () => JSON.parse(localStorage.getItem('blazex_search_history')) || [];
-    
     const saveSearchHistory = async (term) => {
-        let history = getSearchHistory().filter(t => t.toLowerCase() !== term.toLowerCase()); 
-        history.unshift(term);
-        if (history.length > 10) history.pop();
-        localStorage.setItem('blazex_search_history', JSON.stringify(history));
+        // Update Memory Array
+        inMemorySearchHistory = inMemorySearchHistory.filter(t => t.toLowerCase() !== term.toLowerCase()); 
+        inMemorySearchHistory.unshift(term);
+        if (inMemorySearchHistory.length > 10) inMemorySearchHistory.pop();
         renderSearchTextHistory();
 
-        // Save to Cloud Subcollection
-        const profile = window.app.state?.activeProfile || null;
-        if (profile && profile.uid && !profile.uid.startsWith('anon_')) {
+        // Write directly to Firestore
+        if (currentUserId) {
             try {
                 const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-                // Clean the term so Firebase doesn't crash if they search for symbols like "/"
                 const safeTerm = term.trim().replace(/[\/\\.#$\[\]]/g, '_');
                 const docId = `search_${safeTerm}`; 
-                const docRef = firestore.doc(window.app.db, "users", profile.uid, "history", docId);
+                const docRef = firestore.doc(window.app.db, "users", currentUserId, "history", docId);
                 await firestore.setDoc(docRef, { historyType: 'search', term: term, timestamp: Date.now() }, { merge: true });
             } catch (e) { console.error("Firebase Search Term Save Error:", e); }
         }
     };
 
     const deleteSearchHistoryItem = async (term) => {
-        localStorage.setItem('blazex_search_history', JSON.stringify(getSearchHistory().filter(t => t !== term)));
+        // Update Memory Array
+        inMemorySearchHistory = inMemorySearchHistory.filter(t => t !== term);
         renderSearchTextHistory();
 
-        // Delete from Cloud Subcollection
-        const profile = window.app.state?.activeProfile || null;
-        if (profile && profile.uid && !profile.uid.startsWith('anon_')) {
+        // Delete directly from Firestore
+        if (currentUserId) {
             try {
                 const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
                 const safeTerm = term.trim().replace(/[\/\\.#$\[\]]/g, '_');
                 const docId = `search_${safeTerm}`;
-                const docRef = firestore.doc(window.app.db, "users", profile.uid, "history", docId);
+                const docRef = firestore.doc(window.app.db, "users", currentUserId, "history", docId);
                 await firestore.deleteDoc(docRef);
             } catch (e) { console.error("Firebase Search Term Delete Error:", e); }
         }
@@ -266,14 +302,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const renderSearchTextHistory = () => {
         if(!historyContainer) return;
-        const history = getSearchHistory();
         const clearAllBtn = document.getElementById('clear-all-history');
         const historyHint = document.getElementById('history-hint');
         
-        if(clearAllBtn) clearAllBtn.classList.toggle('hidden', history.length === 0);
-        if(historyHint) historyHint.classList.toggle('hidden', history.length === 0);
+        if(clearAllBtn) clearAllBtn.classList.toggle('hidden', inMemorySearchHistory.length === 0);
+        if(historyHint) historyHint.classList.toggle('hidden', inMemorySearchHistory.length === 0);
         
-        historyContainer.innerHTML = history.map(term => `
+        historyContainer.innerHTML = inMemorySearchHistory.map(term => `
             <div class="history-item relative flex items-center bg-[#111] border border-white/5 rounded-full px-4 py-2 cursor-pointer hover:border-[#F47521] transition select-none shadow-sm" data-term="${term}">
                 <i class="fas fa-history text-gray-500 mr-2 text-xs"></i>
                 <span class="text-xs font-semibold text-gray-300">${term}</span>
@@ -291,9 +326,21 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
+    // Delete all text search history from Firestore
     const clearAllBtn = document.getElementById('clear-all-history');
-    if(clearAllBtn) clearAllBtn.addEventListener('click', () => { 
-        localStorage.removeItem('blazex_search_history'); 
+    if(clearAllBtn) clearAllBtn.addEventListener('click', async () => { 
+        if (currentUserId) {
+            try {
+                const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+                for (const term of inMemorySearchHistory) {
+                    const safeTerm = term.trim().replace(/[\/\\.#$\[\]]/g, '_');
+                    const docId = `search_${safeTerm}`;
+                    const docRef = firestore.doc(window.app.db, "users", currentUserId, "history", docId);
+                    await firestore.deleteDoc(docRef);
+                }
+            } catch (e) { console.error("Firebase clear all error:", e); }
+        }
+        inMemorySearchHistory = []; 
         renderSearchTextHistory(); 
     });
 
@@ -471,11 +518,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const topType = topAnime.type || 'TV';
 
             const checkLibraryStatus = (animeId) => {
-                const profile = window.app.state?.activeProfile || null;
-                if (profile && profile.library && profile.uid && !profile.uid.startsWith('anon_')) {
-                    return profile.library.some(item => String(item.id) === String(animeId));
-                }
-                return false;
+                return inMemoryLibrary.some(item => String(item.id) === String(animeId));
             };
 
             const isTopAdded = checkLibraryStatus(topAnime.id);
@@ -575,30 +618,27 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- 6. SAVE TO SUBCOLLECTION LOGIC ---
     window.app.toggleSearchLibraryClick = async (event, id, title, img) => {
         event.stopPropagation(); 
-        const profile = window.app.state?.activeProfile || null;
-        if (!profile || !profile.uid || profile.uid.startsWith('anon_')) {
+        
+        if (!currentUserId) {
             if (window.app.components && window.app.components.auth) window.app.components.auth();
             else if (window.app.showCustomAlert) window.app.showCustomAlert("Log in to save to your Library!", "error");
             return;
         }
-
-        if(!profile.library) profile.library = [];
         
         const docIdStr = String(id);
         const formattedAnime = { id: docIdStr, title, img, timestamp: Date.now() };
         
-        const existingItemIndex = profile.library.findIndex(item => String(item.id) === docIdStr);
+        const existingItemIndex = inMemoryLibrary.findIndex(item => String(item.id) === docIdStr);
         const isCurrentlyAdded = existingItemIndex !== -1;
         const btn = event.currentTarget;
 
         try {
             const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-            // Clean ID string format applied perfectly for Firestore Library
-            const libDocRef = firestore.doc(window.app.db, "users", profile.uid, "library", docIdStr);
+            const libDocRef = firestore.doc(window.app.db, "users", currentUserId, "library", docIdStr);
 
             if (isCurrentlyAdded) {
-                profile.library.splice(existingItemIndex, 1); 
-                localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
+                // Remove from memory
+                inMemoryLibrary.splice(existingItemIndex, 1); 
                 
                 if (btn) {
                     if (btn.innerText.includes("ADDED") || btn.innerText.includes("Added") || btn.innerText.includes("Saved")) {
@@ -612,11 +652,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
                 
+                // Delete from Firestore
                 await firestore.deleteDoc(libDocRef);
                 if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
             } else {
-                profile.library.unshift(formattedAnime);
-                localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
+                // Add to memory
+                inMemoryLibrary.unshift(formattedAnime);
                 
                 if (btn) {
                     if(btn.classList.contains('px-4')) {
@@ -628,6 +669,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
                 
+                // Add to Firestore
                 await firestore.setDoc(libDocRef, formattedAnime);
                 if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
             }
