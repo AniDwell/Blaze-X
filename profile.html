@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile | AniKoto</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #050505;
+            color: white;
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        /* Custom Scrollbar for a premium feel */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0a0a0a; }
+        ::-webkit-scrollbar-thumb { background: #F47521; border-radius: 10px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <div id="header-mount"></div>
+
+    <main class="flex-1 max-w-4xl w-full mx-auto p-4 md:p-8 pt-24">
+        
+        <div class="bg-gradient-to-br from-[#111] to-[#0a0a0a] border border-white/10 rounded-3xl p-6 md:p-10 shadow-2xl relative overflow-hidden mb-8 group">
+            <div class="absolute -top-20 -right-20 w-64 h-64 bg-[#F47521]/10 rounded-full blur-3xl group-hover:bg-[#F47521]/20 transition-all duration-700"></div>
+            
+            <div class="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6">
+                <div class="relative w-28 h-28 md:w-32 md:h-32 rounded-full p-1 bg-gradient-to-b from-[#F47521] to-transparent shadow-lg shrink-0">
+                    <img id="user-avatar" src="https://ui-avatars.com/api/?name=User&background=111&color=F47521" alt="Profile Picture" class="w-full h-full rounded-full object-cover border-4 border-[#050505] bg-[#111]">
+                </div>
+                
+                <div class="flex-1 text-center md:text-left flex flex-col justify-center pt-2">
+                    <h1 id="user-name" class="text-2xl md:text-4xl font-black tracking-tight text-white mb-1">Loading...</h1>
+                    <p id="user-email" class="text-sm md:text-base text-gray-400 mb-4 font-medium"></p>
+                    <div class="inline-flex gap-3 justify-center md:justify-start">
+                        <span class="bg-[#F47521]/10 text-[#F47521] border border-[#F47521]/30 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+                            <i class="fas fa-user-astronaut mr-1"></i> Member
+                        </span>
+                    </div>
+                </div>
+
+                <div class="hidden md:flex flex-col gap-3 ml-auto mt-2 shrink-0">
+                    <button onclick="handleLogout()" class="bg-white/5 hover:bg-white/10 text-white border border-white/10 px-5 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 justify-center w-40">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </button>
+                    <button onclick="handleDeleteAccount()" class="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/30 px-5 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 justify-center w-40 group/del">
+                        <i class="fas fa-trash-alt group-hover/del:animate-bounce"></i> Delete App
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-8">
+            <div id="history-container" class="bg-[#0a0a0a] rounded-2xl border border-white/5 p-4 min-h-[150px]">
+                <h3 class="text-lg font-bold text-white mb-4 border-b border-white/10 pb-2"><i class="fas fa-history text-[#F47521] mr-2"></i> Activity History</h3>
+                <div id="history-list-mount" class="text-center text-gray-500 text-sm py-4">Loading history...</div>
+            </div>
+
+            <div id="chatlist-container" class="bg-[#0a0a0a] rounded-2xl border border-white/5 p-4 min-h-[150px]">
+                <h3 class="text-lg font-bold text-white mb-4 border-b border-white/10 pb-2"><i class="fas fa-comments text-[#F47521] mr-2"></i> Messages</h3>
+                <div id="chatlist-mount" class="text-center text-gray-500 text-sm py-4">Loading chats...</div>
+            </div>
+        </div>
+
+        <div class="flex md:hidden flex-col gap-3 mt-8">
+            <button onclick="handleLogout()" class="w-full bg-white/5 hover:bg-white/10 text-white border border-white/10 px-5 py-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </button>
+            <button onclick="handleDeleteAccount()" class="w-full bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/30 px-5 py-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2">
+                <i class="fas fa-trash-alt"></i> Delete Account & Data
+            </button>
+        </div>
+
+    </main>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signOut, deleteUser } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
+        import { getFirestore, doc, getDoc, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
+            authDomain: "blaze-x-db2f5.firebaseapp.com",
+            projectId: "blaze-x-db2f5",
+            storageBucket: "blaze-x-db2f5.firebasestorage.app",
+            messagingSenderId: "770812306638",
+            appId: "1:770812306638:web:eaf5ded647861f32c25c9f"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Global variables for external scripts to use if needed
+        window.app = window.app || {};
+        window.app.db = db;
+        window.app.auth = auth;
+
+        // Listen for Auth State
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                // Populate Auth basics
+                document.getElementById('user-email').innerText = user.email || "No email linked";
+                
+                // Fetch deeper user profile details from Firestore
+                try {
+                    const userDocRef = doc(db, "users", user.uid);
+                    const userDoc = await getDoc(userDocRef);
+                    
+                    if (userDoc.exists()) {
+                        const data = userDoc.data();
+                        document.getElementById('user-name').innerText = data.username || data.displayName || user.displayName || "Anime Fan";
+                        
+                        const pfpUrl = data.photoURL || user.photoURL;
+                        if(pfpUrl) document.getElementById('user-avatar').src = pfpUrl;
+                    } else {
+                        // Fallback to Auth payload if Firestore doc doesn't exist yet
+                        document.getElementById('user-name').innerText = user.displayName || "Anime Fan";
+                        if(user.photoURL) document.getElementById('user-avatar').src = user.photoURL;
+                    }
+                } catch (error) {
+                    console.error("Failed to load user document:", error);
+                }
+            } else {
+                // Not logged in, boot them to login page
+                window.location.replace('index.html'); // Change 'index.html' to your actual login page
+            }
+        });
+
+        // Expose functions globally for the buttons
+        window.handleLogout = async () => {
+            try {
+                await signOut(auth);
+                // Clear any stored cache related to the session
+                localStorage.removeItem('blazex_user_profile'); 
+                window.location.href = 'index.html'; 
+            } catch (error) {
+                alert("Error logging out.");
+            }
+        };
+
+        window.handleDeleteAccount = async () => {
+            const user = auth.currentUser;
+            if (!user) return;
+
+            const confirm1 = confirm("Are you sure you want to delete your account? This action is permanent.");
+            if (!confirm1) return;
+            
+            const confirm2 = confirm("FINAL WARNING: This will permanently delete your profile, chat history, watch library, and all local app data. Continue?");
+            if (!confirm2) return;
+
+            try {
+                // Change UI to loading state to prevent double clicks
+                document.body.style.opacity = '0.5';
+                document.body.style.pointerEvents = 'none';
+
+                // 1. Sweep and Delete Subcollection: 'library'
+                const libRef = collection(db, "users", user.uid, "library");
+                const libSnapshot = await getDocs(libRef);
+                const libDeletions = libSnapshot.docs.map(d => deleteDoc(d.ref));
+                await Promise.all(libDeletions);
+
+                // 2. Sweep and Delete Subcollection: 'history'
+                const histRef = collection(db, "users", user.uid, "history");
+                const histSnapshot = await getDocs(histRef);
+                const histDeletions = histSnapshot.docs.map(d => deleteDoc(d.ref));
+                await Promise.all(histDeletions);
+
+                // 3. Delete Main User Document
+                await deleteDoc(doc(db, "users", user.uid));
+
+                // 4. NUKE Local Storage entirely
+                localStorage.clear();
+
+                // 5. Delete Firebase Authentication Profile
+                await deleteUser(user);
+
+                // Success
+                alert("Account and all associated data have been permanently deleted.");
+                window.location.replace("index.html");
+
+            } catch (error) {
+                document.body.style.opacity = '1';
+                document.body.style.pointerEvents = 'auto';
+                console.error("Deletion Error:", error);
+
+                if (error.code === 'auth/requires-recent-login') {
+                    alert("For security reasons, you must log out and log back in before deleting your account.");
+                    await signOut(auth);
+                    window.location.href = 'index.html';
+                } else {
+                    alert("An error occurred while deleting your data. Please try again.");
+                }
+            }
+        };
+    </script>
+
+    <script src="header.js"></script>
+    <script src="history.js"></script>
+    <script src="chatlist.js"></script>
+
+</body>
+</html>
