@@ -1,4 +1,4 @@
-// search.js - Full Featured Search & Filter Engine (Premium & Responsive Edition)
+// search.js - Full Featured Search & Filter Engine (Premium & Parallel Optimized)
 
 window.app = window.app || {};
 
@@ -95,59 +95,71 @@ document.addEventListener('DOMContentLoaded', () => {
         type();
     };
 
-    // --- ANILIST TO DB MAPPING (TOP 10 PREMIUM UI) ---
+    // --- ANILIST TO DB MAPPING (TOP 10 PARALLEL FETCHING) ---
     const loadTop10Popular = async () => {
         if(!trendingContainer) return;
-        trendingContainer.innerHTML = `<div class="p-8 text-center text-xs text-gray-500 w-full"><i class="fas fa-circle-notch fa-spin text-[#F47521] text-2xl mb-3 block"></i> Fetching Live Rankings...</div>`;
+        trendingContainer.innerHTML = `<div class="p-8 text-center text-xs text-gray-500 w-full"><i class="fas fa-circle-notch fa-spin text-[#F47521] text-2xl mb-3 block"></i> Loading Top 10...</div>`;
         
         try {
-            const query = `query { Page(page: 1, perPage: 10) { media(type: ANIME, sort: TRENDING_DESC) { title { romaji english } coverImage { extraLarge } } } }`;
+            // Fetch top 15 from AniList to ensure we get at least 10 valid matches in your DB
+            const query = `query { Page(page: 1, perPage: 15) { media(type: ANIME, sort: TRENDING_DESC) { title { romaji english } coverImage { extraLarge } } } }`;
             const res = await fetch(ANILIST_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query }) });
             const json = await res.json();
             const animeList = json.data.Page.media;
 
-            trendingContainer.innerHTML = '';
-            // PREMIUM NATIVE APP FEEL: Horizontal scroll on mobile (snap), Grid on Desktop
-            trendingContainer.className = "flex overflow-x-auto snap-x snap-mandatory hide-scrollbar gap-4 pb-6 md:grid md:grid-cols-2 lg:grid-cols-5 md:overflow-visible md:snap-none"; 
-
-            let count = 1;
-            for (const anime of animeList) {
+            // PARALLEL FETCHING: Hits your custom API for all titles simultaneously (Super Fast)
+            const fetchPromises = animeList.map(async (anime) => {
                 const title = anime.title.english || anime.title.romaji;
                 try {
                     const searchRes = await fetch(`${API_BASE}/api/search?keyword=${encodeURIComponent(title)}`);
                     const searchJson = await searchRes.json();
-                    
                     if (searchJson.success && searchJson.results?.length > 0) {
-                        const match = searchJson.results[0];
-                        const imgUrl = match.image || match.poster || anime.coverImage.extraLarge;
-                        const aSub = match.tvInfo?.sub || match.sub || '?';
-                        const aDub = match.tvInfo?.dub || match.dub || 0;
-
-                        // Premium Top 10 Card UI
-                        trendingContainer.innerHTML += `
-                        <div onclick="window.location.href='info.html?id=${match.id}'" class="snap-start min-w-[260px] md:min-w-0 flex md:flex-col gap-4 items-center md:items-start bg-gradient-to-br from-[#111] to-[#0a0a0a] p-3 md:p-4 rounded-2xl cursor-pointer hover:border-[#F47521] border border-white/5 transition-all duration-300 relative overflow-hidden group shadow-lg hover:shadow-[#F47521]/20 transform hover:-translate-y-1">
-                            <div class="absolute top-0 left-0 bg-[#F47521] text-black font-black text-[11px] px-3 py-1 rounded-br-2xl z-10 shadow-md">#${count}</div>
-                            <div class="relative w-20 h-28 md:w-full md:h-56 shrink-0">
-                                <img src="${imgUrl}" class="w-full h-full object-cover rounded-xl shadow-inner group-hover:scale-105 transition-transform duration-500">
-                                <div class="absolute inset-0 bg-black/20 group-hover:bg-transparent transition duration-300 rounded-xl"></div>
-                            </div>
-                            <div class="flex flex-col flex-1 min-w-0 py-1 w-full">
-                                <h4 class="text-sm md:text-base font-bold text-white truncate group-hover:text-[#F47521] transition-colors">${match.title}</h4>
-                                <p class="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate italic">${match.japanese_title || 'N/A'}</p>
-                                <div class="flex gap-2 mt-2 md:mt-3 items-center text-[9px] md:text-[10px] font-black uppercase tracking-wider">
-                                    <span class="text-gray-400 border border-gray-600 px-1.5 py-0.5 rounded bg-black/50">${match.type || 'TV'}</span>
-                                    <div class="flex gap-1 ml-auto">
-                                        <span class="bg-gray-800 text-gray-300 px-1.5 py-0.5 rounded">SUB <span class="text-white">${aSub}</span></span>
-                                        ${aDub > 0 ? `<span class="bg-gray-800 text-gray-300 px-1.5 py-0.5 rounded">DUB <span class="text-white">${aDub}</span></span>` : ''}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>`;
-                        count++;
+                        return { anime, match: searchJson.results[0] };
                     }
                 } catch(e) {}
+                return null;
+            });
+
+            // Wait for all mappings to complete
+            const mappingResults = await Promise.all(fetchPromises);
+            // Filter out failed matches and grab exactly the top 10
+            const validRankings = mappingResults.filter(result => result !== null).slice(0, 10);
+
+            trendingContainer.innerHTML = '';
+            trendingContainer.className = "flex overflow-x-auto snap-x snap-mandatory hide-scrollbar gap-4 pb-6 md:grid md:grid-cols-2 lg:grid-cols-5 md:overflow-visible md:snap-none"; 
+
+            if (validRankings.length === 0) {
+                trendingContainer.innerHTML = `<div class="p-8 text-center text-sm text-gray-500 w-full">No trending titles mapped successfully.</div>`;
+                return;
             }
-            if(trendingContainer.innerHTML === '') trendingContainer.innerHTML = `<div class="p-8 text-center text-sm text-gray-500 w-full">Failed to map trending titles. Database might be updating.</div>`;
+
+            let count = 1;
+            validRankings.forEach(({ anime, match }) => {
+                const imgUrl = match.image || match.poster || anime.coverImage.extraLarge;
+                const aSub = match.tvInfo?.sub || match.sub || '?';
+                const aDub = match.tvInfo?.dub || match.dub || 0;
+
+                trendingContainer.innerHTML += `
+                <div onclick="window.location.href='info.html?id=${match.id}'" class="snap-start min-w-[260px] md:min-w-0 flex md:flex-col gap-4 items-center md:items-start bg-gradient-to-br from-[#111] to-[#0a0a0a] p-3 md:p-4 rounded-2xl cursor-pointer hover:border-[#F47521] border border-white/5 transition-all duration-300 relative overflow-hidden group shadow-lg hover:shadow-[#F47521]/20 transform hover:-translate-y-1">
+                    <div class="absolute top-0 left-0 bg-[#F47521] text-black font-black text-[11px] px-3 py-1 rounded-br-2xl z-10 shadow-md">#${count}</div>
+                    <div class="relative w-20 h-28 md:w-full md:h-56 shrink-0">
+                        <img src="${imgUrl}" class="w-full h-full object-cover rounded-xl shadow-inner group-hover:scale-105 transition-transform duration-500">
+                        <div class="absolute inset-0 bg-black/20 group-hover:bg-transparent transition duration-300 rounded-xl"></div>
+                    </div>
+                    <div class="flex flex-col flex-1 min-w-0 py-1 w-full">
+                        <h4 class="text-sm md:text-base font-bold text-white truncate group-hover:text-[#F47521] transition-colors">${match.title}</h4>
+                        <p class="text-[10px] md:text-xs text-gray-500 mt-0.5 truncate italic">${match.japanese_title || 'N/A'}</p>
+                        <div class="flex gap-2 mt-2 md:mt-3 items-center text-[9px] md:text-[10px] font-black uppercase tracking-wider">
+                            <span class="text-gray-400 border border-gray-600 px-1.5 py-0.5 rounded bg-black/50">${match.type || 'TV'}</span>
+                            <div class="flex gap-1 ml-auto">
+                                <span class="bg-gray-800 text-gray-300 px-1.5 py-0.5 rounded">SUB <span class="text-white">${aSub}</span></span>
+                                ${aDub > 0 ? `<span class="bg-gray-800 text-gray-300 px-1.5 py-0.5 rounded">DUB <span class="text-white">${aDub}</span></span>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+                count++;
+            });
         } catch (error) {
             trendingContainer.innerHTML = `<p class="text-sm text-red-500 w-full text-center py-6">Could not load popular titles at this moment.</p>`;
         }
@@ -197,9 +209,39 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearAllBtn = document.getElementById('clear-all-history');
     if(clearAllBtn) clearAllBtn.addEventListener('click', () => { localStorage.removeItem('blazex_search_history'); renderHistory(); });
 
-    // --- 3. FILTER LOGIC & VIEW SWITCHING (Kept untouched mostly) ---
-    // ... [Filter logic remains exactly the same] ...
+    // --- 3. BULLETPROOF FILTER LOGIC ---
+    const filterBtn = document.getElementById('filter-btn');
+    const closeFilterBtn = document.getElementById('close-filter-btn');
+    const resetFilterBtn = document.getElementById('reset-filter-btn');
+    const applyFilterBtn = document.getElementById('apply-filter-btn');
+
+    if(filterBtn) filterBtn.addEventListener('click', () => { filterModal.classList.remove('hidden'); filterModal.classList.add('flex'); });
+    if(closeFilterBtn) closeFilterBtn.addEventListener('click', () => { filterModal.classList.add('hidden'); filterModal.classList.remove('flex'); });
     
+    if(resetFilterBtn) resetFilterBtn.addEventListener('click', () => {
+        ['genres', 'sy', 'sm', 'sd', 'ey', 'em', 'ed'].forEach(id => { const el = document.getElementById(`f-${id}`); if(el) el.value = ''; });
+        const setSelect = (id, val, text) => {
+            const select = document.querySelector(`#wrap-${id} .custom-select`);
+            const span = document.querySelector(`#wrap-${id} .selected-text`);
+            if(select && span) { select.setAttribute('data-value', val); span.innerText = text; }
+        };
+        setSelect('type', '', 'ALL'); setSelect('status', '', 'ALL'); setSelect('lang', '', 'ALL'); setSelect('sort', '', 'Default');
+        activeFilters = {};
+    });
+
+    if(applyFilterBtn) applyFilterBtn.addEventListener('click', () => {
+        const getVal = (id) => document.querySelector(`#wrap-${id} .custom-select`)?.getAttribute('data-value');
+        const getInput = (id) => document.getElementById(`f-${id}`)?.value;
+
+        activeFilters = {
+            type: getVal('type'), status: getVal('status'), language: getVal('lang'), sort: getVal('sort'),
+            genres: getInput('genres'), sy: getInput('sy'), sm: getInput('sm'), sd: getInput('sd'), ey: getInput('ey'), em: getInput('em'), ed: getInput('ed'),
+        };
+        filterModal.classList.add('hidden');
+        if (searchInput.value.trim()) handleSearchSubmit(searchInput.value.trim());
+    });
+
+    // --- 4. VIEW SWITCHING ---
     const switchView = (view) => {
         if(idleView) idleView.classList.add('hidden');
         if(typingView) typingView.classList.add('hidden');
@@ -240,18 +282,39 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- 5. SUGGESTIONS ---
     const fetchSuggestions = async (term) => {
-        // ... [Suggestions fetching logic remains the same] ...
+        if(!suggestionsContainer) return;
+        const query = `query ($search: String) { Page(page: 1, perPage: 8) { media(type: ANIME, search: $search, sort: SEARCH_MATCH) { title { romaji english } } } }`;
+        try {
+            const res = await fetch(ANILIST_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, variables: { search: term } }) });
+            const json = await res.json();
+            const media = json.data?.Page?.media || [];
+
+            if (media.length === 0) { suggestionsContainer.innerHTML = `<div class="p-4 text-xs text-gray-500">No suggestions.</div>`; return; }
+
+            window.handleSuggestionClick = (title) => { searchInput.value = title; handleSearchSubmit(title); };
+
+            suggestionsContainer.innerHTML = media.map(anime => {
+                const title = anime.title.english || anime.title.romaji;
+                const safeTitle = title.replace(/'/g, "\\'");
+                const highlighted = highlightText(title, term);
+                return `
+                <div onclick="handleSuggestionClick('${safeTitle}')" class="flex items-center gap-3 p-3 hover:bg-[#111] rounded-lg cursor-pointer transition border-b border-white/5 last:border-0">
+                    <i class="fas fa-search text-gray-600 text-sm"></i><span class="text-sm text-gray-300 truncate">${highlighted}</span>
+                </div>`;
+            }).join('');
+        } catch (err) { suggestionsContainer.innerHTML = `<div class="p-4 text-xs text-gray-500">Network error.</div>`; }
     };
 
-    // --- 6. SUBMIT SEARCH (WITH PREMIUM DESKTOP SCALING & LIST DESCRIPTIONS/BUTTONS) ---
+    // --- 6. SUBMIT SEARCH & RENDER RESULTS ---
     const render404State = (message = "Nothing matched your search.") => {
         if(topResultCard) topResultCard.innerHTML = '';
         if(resultsListContainer) resultsListContainer.innerHTML = ''; 
         if(window.BlazeX && window.BlazeX.show404) {
             window.BlazeX.show404('results-list-container', message);
         } else if(resultsListContainer) {
-            resultsListContainer.innerHTML = `<div class="text-center p-16"><i class="fas fa-ghost text-4xl text-gray-700 mb-4"></i><p class="text-gray-400 text-sm md:text-base">${message}</p></div>`;
+            resultsListContainer.innerHTML = `<div class="text-center p-16 col-span-full"><i class="fas fa-ghost text-4xl text-gray-700 mb-4 block"></i><p class="text-gray-400 text-sm md:text-base">${message}</p></div>`;
         }
     };
 
@@ -261,39 +324,55 @@ document.addEventListener('DOMContentLoaded', () => {
         switchView('results');
         
         if(topResultCard) topResultCard.innerHTML = `<div class="animate-pulse w-full h-64 md:h-80 bg-[#111] rounded-2xl"></div>`;
-        if(resultsListContainer) resultsListContainer.innerHTML = `<div class="p-8 text-center text-sm text-[#F47521]"><i class="fas fa-circle-notch fa-spin text-2xl mb-2 block"></i> Parsing Database...</div>`;
+        if(resultsListContainer) {
+            resultsListContainer.className = "flex flex-col gap-4 mt-6"; // Reset grid during load
+            resultsListContainer.innerHTML = `<div class="p-8 text-center text-sm text-[#F47521] w-full"><i class="fas fa-circle-notch fa-spin text-2xl mb-3 block"></i> Scanning Anime...</div>`;
+        }
 
         try {
             let queryParams = new URLSearchParams();
             queryParams.append('keyword', term);
+            
+            // Strictly check for valid filters to prevent empty params
+            let hasFilters = false;
             Object.keys(activeFilters).forEach(key => {
-                if (activeFilters[key] && activeFilters[key] !== 'default') queryParams.append(key, activeFilters[key]);
+                if (activeFilters[key] && activeFilters[key] !== 'default' && activeFilters[key] !== '') {
+                    queryParams.append(key, activeFilters[key]);
+                    hasFilters = true;
+                }
             });
 
-            const endpoint = Array.from(queryParams.keys()).length > 1 ? '/api/filter' : '/api/search';
-            const res = await fetch(`${API_BASE}${endpoint}?${queryParams.toString()}`);
+            // If any filter is active, use /api/filter, else use /api/search
+            const endpoint = hasFilters ? '/api/filter' : '/api/search';
+            const reqUrl = `${API_BASE}${endpoint}?${queryParams.toString()}`;
+            
+            const res = await fetch(reqUrl);
             const json = await res.json();
             
             let results = [];
             if (endpoint === '/api/filter' && json.success && json.results?.data) results = json.results.data;
             else if (endpoint === '/api/search' && json.success && json.data) results = json.data;
+            else if (json.results && Array.isArray(json.results)) results = json.results; // Fallback
 
-            if (results.length === 0) { render404State("We couldn't find any anime matching your query or filters."); return; }
+            if (!results || results.length === 0) { render404State("We couldn't find any anime matching your query or filters."); return; }
 
             const topAnime = results[0];
             const restAnime = results.slice(1);
 
-            // Fetch Top Result Meta
+            // Fetch Top Result Meta from AniList asynchronously
             let backdrop = topAnime.image || topAnime.poster;
             let description = topAnime.description || 'No description available for this title.';
-            try {
-                const mRes = await fetch(ANILIST_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: `query { Media(type: ANIME, search: "${topAnime.title}") { bannerImage description(asHtml: false) } }` }) });
-                const mJson = await mRes.json();
+            
+            fetch(ANILIST_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: `query { Media(type: ANIME, search: "${topAnime.title}") { bannerImage description(asHtml: false) } }` }) })
+            .then(r => r.json())
+            .then(mJson => {
                 if(mJson.data?.Media) {
-                    backdrop = mJson.data.Media.bannerImage || backdrop;
-                    description = mJson.data.Media.description || description;
+                    const dynamicBackdrop = document.getElementById('top-result-backdrop');
+                    const dynamicDesc = document.getElementById('top-result-desc');
+                    if(dynamicBackdrop && mJson.data.Media.bannerImage) dynamicBackdrop.src = mJson.data.Media.bannerImage;
+                    if(dynamicDesc && mJson.data.Media.description) dynamicDesc.innerHTML = mJson.data.Media.description;
                 }
-            } catch(e) {}
+            }).catch(() => {}); // Fails silently, fallbacks stay
 
             const topSubEps = topAnime.tvInfo?.sub || topAnime.sub || '?';
             const topDubEps = topAnime.tvInfo?.dub || topAnime.dub || 0;
@@ -315,12 +394,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? `<button onclick="window.app.toggleSearchLibraryClick(event, '${topAnime.id}', '${topSafeTitle}', '${topImg}')" class="bg-[#F47521] text-black px-4 py-2.5 rounded-lg font-black text-[11px] md:text-xs uppercase hover:bg-white transition border border-[#F47521] flex items-center gap-2 shadow-lg shadow-[#F47521]/20"><i class="fas fa-check"></i> Added</button>`
                 : `<button onclick="window.app.toggleSearchLibraryClick(event, '${topAnime.id}', '${topSafeTitle}', '${topImg}')" class="bg-[#111]/80 backdrop-blur-sm text-white px-4 py-2.5 rounded-lg font-black text-[11px] md:text-xs uppercase hover:border-[#F47521] hover:bg-black transition border border-white/10 flex items-center gap-2"><i class="fas fa-plus"></i> Save</button>`;
 
-            // Top Result Render (Scaled for Desktop)
+            // Top Result Render
             if(topResultCard) {
                 topResultCard.innerHTML = `
                 <div onclick="window.location.href='info.html?id=${topAnime.id}'" class="relative overflow-hidden rounded-2xl border border-white/10 cursor-pointer hover:border-[#F47521] transition-all duration-300 group shadow-2xl bg-[#0a0a0a] min-h-[280px] md:min-h-[350px] flex items-end">
                     <div class="absolute inset-0">
-                        <img src="${backdrop}" class="w-full h-full object-cover opacity-30 group-hover:scale-105 transition-transform duration-700 blur-sm">
+                        <img id="top-result-backdrop" src="${backdrop}" class="w-full h-full object-cover opacity-30 group-hover:scale-105 transition-transform duration-700 blur-sm">
                         <div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/90 md:via-[#050505]/60 to-transparent"></div>
                         <div class="absolute inset-0 bg-gradient-to-r from-[#050505] via-[#050505]/80 to-transparent hidden md:block"></div>
                     </div>
@@ -331,7 +410,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <i class="fas fa-fire"></i> Top Match
                             </span>
                             <h3 class="text-xl md:text-4xl font-black leading-tight text-white mb-2 md:mb-3 drop-shadow-lg">${topAnime.title}</h3>
-                            <p class="text-xs md:text-sm text-gray-300 line-clamp-3 md:line-clamp-4 mb-4 md:mb-6 leading-relaxed max-w-3xl">${description}</p>
+                            <p id="top-result-desc" class="text-xs md:text-sm text-gray-300 line-clamp-3 md:line-clamp-4 mb-4 md:mb-6 leading-relaxed max-w-3xl">${description}</p>
                             
                             <div class="flex flex-wrap items-center gap-3 mt-auto">
                                 <button onclick="event.stopPropagation(); window.location.href='info.html?id=${topAnime.id}'" class="bg-white text-black px-5 py-2.5 rounded-lg font-black text-[11px] md:text-xs uppercase tracking-widest hover:bg-[#F47521] hover:text-white transition shadow-lg"><i class="fas fa-play mr-2"></i> Watch Now</button>
@@ -351,8 +430,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>`;
             }
 
-            // Results List View (With Description, Grid on Desktop, and Buttons)
-            if(resultsListContainer) {
+            // Results List View
+            if(resultsListContainer && restAnime.length > 0) {
                 resultsListContainer.className = "flex flex-col gap-4 mt-6 md:grid md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3";
                 
                 resultsListContainer.innerHTML = restAnime.map(anime => {
@@ -395,6 +474,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>`;
                 }).join('');
+            } else if(resultsListContainer) {
+                resultsListContainer.innerHTML = ''; // Clear if only 1 result found
             }
         } catch (err) {
             render404State("Network error occurred while communicating with the database.");
@@ -425,15 +506,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 profile.library.splice(existingItemIndex, 1); 
                 localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
                 
-                // Update UI based on which button was clicked (Top Result vs List Result)
                 if (btn) {
-                    if (btn.innerText.includes("ADDED") || btn.innerText.includes("Added")) {
-                        // Top match button reset
+                    if (btn.innerText.includes("ADDED") || btn.innerText.includes("Added") || btn.innerText.includes("Saved")) {
                         if(btn.classList.contains('px-4')) {
                             btn.className = "bg-[#111]/80 backdrop-blur-sm text-white px-4 py-2.5 rounded-lg font-black text-[11px] md:text-xs uppercase hover:border-[#F47521] hover:bg-black transition border border-white/10 flex items-center gap-2";
                             btn.innerHTML = `<i class="fas fa-plus"></i> Save`;
                         } else {
-                            // List view button reset
                             btn.className = "text-gray-400 bg-white/5 px-2.5 py-1.5 rounded text-[10px] font-bold hover:bg-white hover:text-black transition flex items-center gap-1.5";
                             btn.innerHTML = `<i class="fas fa-bookmark"></i> Save`;
                         }
@@ -446,12 +524,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 profile.library.unshift(formattedAnime);
                 localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
                 
-                // Update UI
                 if (btn) {
-                    if(btn.classList.contains('px-4')) { // Top match button
+                    if(btn.classList.contains('px-4')) {
                         btn.className = "bg-[#F47521] text-black px-4 py-2.5 rounded-lg font-black text-[11px] md:text-xs uppercase hover:bg-white transition border border-[#F47521] flex items-center gap-2 shadow-lg shadow-[#F47521]/20";
                         btn.innerHTML = `<i class="fas fa-check"></i> Added`;
-                    } else { // List view button
+                    } else {
                         btn.className = "text-[#F47521] bg-[#F47521]/10 px-2.5 py-1.5 rounded text-[10px] font-bold hover:bg-[#F47521] hover:text-black transition flex items-center gap-1.5";
                         btn.innerHTML = `<i class="fas fa-check"></i> Saved`;
                     }
@@ -467,11 +544,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- SHARE LOGIC BRIDGE ---
     window.app.shareAnime = (id, title) => {
-        // This triggers the logic expected in share.js
         if(window.openShareModal) {
             window.openShareModal(id, title);
         } else {
-            // Fallback native share if share.js isn't ready
             if (navigator.share) {
                 navigator.share({
                     title: `Watch ${title}`,
@@ -479,7 +554,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     url: `${window.location.origin}/info.html?id=${id}`
                 }).catch(console.error);
             } else {
-                // Quick clipboard fallback
                 navigator.clipboard.writeText(`${window.location.origin}/info.html?id=${id}`);
                 if(window.app.showCustomAlert) window.app.showCustomAlert("Link copied to clipboard!", "success");
             }
