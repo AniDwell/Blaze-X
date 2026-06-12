@@ -273,6 +273,10 @@ function renderAnimeInfoShell() {
                             </button>` : ''}
                             
                             ${libraryBtnHtml}
+
+                            <button onclick="window.app.shareAnime('${data.id}', '${data.title.replace(/'/g, "\\'")}')" class="bg-white/10 backdrop-blur-md text-white px-5 py-3.5 rounded-lg shadow-md font-bold text-xs md:text-sm uppercase tracking-wider hover:bg-blue-500 transition-colors border border-white/10 flex items-center gap-2">
+                                <i class="fas fa-share-nodes"></i>
+                            </button>
                         </div>
 
                         <div class="relative w-full max-w-3xl transition-all duration-300">
@@ -314,31 +318,49 @@ function renderAnimeInfoShell() {
     setupDropdownListener();
 }
 
+window.app.shareAnime = (id, title) => {
+    if(window.openShareModal) {
+        window.openShareModal(id, title);
+    } else {
+        if (navigator.share) {
+            navigator.share({
+                title: `Watch ${title}`,
+                text: `Check out ${title} on AniKoto!`,
+                url: `${window.location.origin}/info.html?id=${id}`
+            }).catch(console.error);
+        } else {
+            navigator.clipboard.writeText(`${window.location.origin}/info.html?id=${id}`);
+            if(window.app.showCustomAlert) window.app.showCustomAlert("Link copied to clipboard!", "success");
+        }
+    }
+};
+
 // --- DYNAMIC LIBRARY TOGGLE LOGIC ---
 window.app.toggleLibrary = async (event, id, title, img) => {
     const profile = window.app.state?.activeProfile || null;
     
     // Auth Check
     if (!profile || !profile.uid || profile.uid.startsWith('anon_')) {
-        if (window.app.components.auth) window.app.components.auth();
+        if (window.app.components && window.app.components.auth) window.app.components.auth();
         else if (window.app.showCustomAlert) window.app.showCustomAlert("Please log in to save to your Library!", "error");
         return;
     }
 
     if (!profile.library) profile.library = [];
     
-    const formattedAnime = { id, title, img };
-    const existingItemIndex = profile.library.findIndex(item => item.id === id);
+    const docIdStr = String(id);
+    const formattedAnime = { id: docIdStr, title, img, timestamp: Date.now() };
+    
+    const existingItemIndex = profile.library.findIndex(item => String(item.id) === docIdStr);
     const isCurrentlyAdded = existingItemIndex !== -1;
     const btn = event.currentTarget;
 
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-        const userRef = firestore.doc(window.app.db, "users", profile.uid);
+        const libDocRef = firestore.doc(window.app.db, "users", profile.uid, "library", docIdStr);
 
         if (isCurrentlyAdded) {
-            // Remove from library
-            const itemToRemove = profile.library[existingItemIndex];
+            // Remove from local memory
             profile.library.splice(existingItemIndex, 1);
             localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
 
@@ -347,10 +369,11 @@ window.app.toggleLibrary = async (event, id, title, img) => {
                 btn.innerHTML = `<i class="fas fa-plus"></i> Library`;
             }
 
-            await firestore.updateDoc(userRef, { library: firestore.arrayRemove(itemToRemove) });
+            // Sync with Firestore Subcollection
+            await firestore.deleteDoc(libDocRef);
             if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
         } else {
-            // Add to library
+            // Add to local memory
             profile.library.unshift(formattedAnime);
             localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
 
@@ -359,7 +382,8 @@ window.app.toggleLibrary = async (event, id, title, img) => {
                 btn.innerHTML = `<i class="fas fa-check text-green-500"></i> Added`;
             }
 
-            await firestore.updateDoc(userRef, { library: firestore.arrayUnion(formattedAnime) });
+            // Sync with Firestore Subcollection
+            await firestore.setDoc(libDocRef, formattedAnime);
             if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
         }
     } catch (error) {
