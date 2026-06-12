@@ -1,17 +1,17 @@
-// search.js - Premium Search Engine with Cloud-Synced Click History
+// search.js - Full Featured Search & History Engine (Premium UI)
 
 window.app = window.app || {};
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM ELEMENTS ---
     const searchInput = document.getElementById('search-input');
+    const clearBtn = document.getElementById('clear-search-btn');
     const idleView = document.getElementById('idle-view');
     const typingView = document.getElementById('typing-view');
     const resultsView = document.getElementById('results-view');
     
-    // We are repurposing the trending/history containers for the Rich History view
-    const historyContainer = document.getElementById('trending-container'); 
-    const textHistoryContainer = document.getElementById('history-container'); // Original text pills
+    const historyContainer = document.getElementById('history-container');
+    const trendingContainer = document.getElementById('trending-container'); // We'll reuse this container for Clicked History
     const suggestionsContainer = document.getElementById('suggestions-container');
     const topResultCard = document.getElementById('top-result-card');
     const resultsListContainer = document.getElementById('results-list-container');
@@ -23,70 +23,56 @@ document.addEventListener('DOMContentLoaded', () => {
     let typingTimer;
     let activeFilters = {};
 
-    // --- 1. SEARCH BAR UI INJECTION (BACK & CLEAR BUTTONS) ---
-    // Assuming searchInput is wrapped in a relative div, we inject the icons dynamically
-    if (searchInput) {
-        const parent = searchInput.parentElement;
-        parent.classList.add('flex', 'items-center', 'relative');
-        
-        // Add Back Button (<-)
-        const backBtn = document.createElement('button');
-        backBtn.className = "absolute left-3 text-white hover:text-[#F47521] transition hidden z-10";
-        backBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>`;
-        parent.insertBefore(backBtn, searchInput);
-        
-        // Add Clear Button (X)
-        const clearBtn = document.createElement('button');
-        clearBtn.className = "absolute right-3 text-gray-400 hover:text-[#F47521] transition hidden z-10 bg-[#111] rounded-full p-1";
-        clearBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>`;
-        parent.appendChild(clearBtn);
+    // --- CUSTOM CSS DROPDOWN LOGIC ---
+    document.querySelectorAll('.custom-select-wrapper').forEach(wrapper => {
+        const selectBtn = wrapper.querySelector('.custom-select');
+        const textSpan = wrapper.querySelector('.selected-text');
+        const options = wrapper.querySelectorAll('.custom-options div');
 
-        // Adjust input padding to fit icons
-        searchInput.classList.add('pl-10', 'pr-10');
+        if(selectBtn) {
+            selectBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); 
+                document.querySelectorAll('.custom-select-wrapper').forEach(w => {
+                    if (w !== wrapper) w.classList.remove('dropdown-open');
+                });
+                wrapper.classList.toggle('dropdown-open');
+            });
+        }
 
-        // Search Input Events
-        searchInput.addEventListener('input', (e) => {
-            const val = e.target.value.trim();
-            clearBtn.classList.toggle('hidden', val.length === 0);
-            backBtn.classList.toggle('hidden', val.length === 0);
-            
-            clearTimeout(typingTimer);
-            if (val.length === 0) { switchView('idle'); return; }
-
-            switchView('typing');
-            if(suggestionsContainer) suggestionsContainer.innerHTML = `<div class="p-8 text-center text-sm text-gray-400"><i class="fas fa-spinner fa-spin text-[#F47521] mr-2"></i> Fetching suggestions...</div>`;
-            typingTimer = setTimeout(() => fetchSuggestions(val), 300); 
+        options.forEach(opt => {
+            opt.addEventListener('click', () => {
+                selectBtn.setAttribute('data-value', opt.getAttribute('data-value'));
+                textSpan.innerText = opt.innerText;
+                wrapper.classList.remove('dropdown-open');
+            });
         });
+    });
 
-        searchInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && searchInput.value.trim()) handleSearchSubmit(searchInput.value.trim());
-        });
+    document.addEventListener('click', () => {
+        document.querySelectorAll('.custom-select-wrapper').forEach(w => w.classList.remove('dropdown-open'));
+    });
 
-        clearBtn.addEventListener('click', () => {
-            searchInput.value = '';
-            clearBtn.classList.add('hidden');
-            searchInput.focus();
-            if (resultsView.classList.contains('hidden')) switchView('idle');
-        });
-
-        backBtn.addEventListener('click', () => {
-            searchInput.value = '';
-            clearBtn.classList.add('hidden');
-            backBtn.classList.hidden = true;
-            switchView('idle');
-            loadRichHistory(); // Refresh history view
-        });
-    }
-
-    // --- 2. INITIALIZATION ---
-    const initSearchPage = () => {
+    // --- 1. INITIALIZATION ---
+    const initSearchPage = async () => {
+        renderSearchTextHistory();
+        renderClickedHistory(); // Replaces Top 10
         initTypewriterPlaceholder();
-        loadRichHistory();
     };
 
-    const initTypewriterPlaceholder = () => {
+    const initTypewriterPlaceholder = async () => {
         if(!searchInput) return;
-        const trendingTitles = ["Naruto", "Jujutsu Kaisen", "One Piece", "Bleach", "Solo Leveling", "Demon Slayer"];
+        let trendingTitles = ["anime, genres..."];
+        try {
+            const query = `query { Page(page: 1, perPage: 3) { media(type: ANIME, sort: TRENDING_DESC) { title { english romaji } } } }`;
+            const res = await fetch(ANILIST_URL, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query })
+            });
+            const json = await res.json();
+            if (json.data && json.data.Page.media) {
+                trendingTitles = json.data.Page.media.map(a => a.title.english || a.title.romaji);
+            }
+        } catch (e) {}
+
         let titleIndex = 0; let charIndex = 0; let isDeleting = false;
         
         const type = () => {
@@ -109,42 +95,68 @@ document.addEventListener('DOMContentLoaded', () => {
         type();
     };
 
-    // --- 3. RICH HISTORY LOGIC (CLOUD SYNCED) ---
-    const loadRichHistory = () => {
-        if(!historyContainer) return;
+    // --- 2. RECENTLY VIEWED (CLICKED) HISTORY ---
+    
+    // Global function to intercept clicks, save to history, and redirect
+    window.saveAndGo = (id, title, image, type, sub, dub) => {
+        let history = JSON.parse(localStorage.getItem('blazex_clicked_anime')) || [];
+        // Remove if it already exists so we can move it to the front
+        history = history.filter(item => item.id !== id);
         
-        const profile = window.app.state?.activeProfile || {};
-        // Fallback to local storage if user is not logged in or data hasn't synced
-        const history = profile.searchHistory || JSON.parse(localStorage.getItem('blazex_rich_history')) || [];
+        history.unshift({ id, title, image, type, sub, dub });
+        if (history.length > 15) history.pop(); // Keep maximum 15 items
+        
+        localStorage.setItem('blazex_clicked_anime', JSON.stringify(history));
+        window.location.href = `info.html?id=${id}`;
+    };
 
+    // Global function to delete a specific item from clicked history
+    window.deleteClickedHistory = (event, id) => {
+        event.stopPropagation(); // Prevents triggering the card click
+        let history = JSON.parse(localStorage.getItem('blazex_clicked_anime')) || [];
+        history = history.filter(item => item.id !== id);
+        localStorage.setItem('blazex_clicked_anime', JSON.stringify(history));
+        renderClickedHistory();
+    };
+
+    const renderClickedHistory = () => {
+        if(!trendingContainer) return;
+        
+        let history = JSON.parse(localStorage.getItem('blazex_clicked_anime')) || [];
+        
         if (history.length === 0) {
-            historyContainer.innerHTML = `<div class="p-8 text-center text-sm text-gray-500 w-full col-span-full bg-[#111] rounded-xl border border-white/5"><i class="fas fa-history text-2xl mb-3 block text-[#F47521]/50"></i> Your recently clicked anime will appear here.</div>`;
-            historyContainer.className = "flex flex-col w-full";
+            trendingContainer.innerHTML = `
+                <div class="p-10 text-center w-full flex flex-col items-center justify-center opacity-60">
+                    <i class="fas fa-history text-3xl text-gray-600 mb-3 block"></i>
+                    <p class="text-sm text-gray-400">Your recently viewed anime will appear here.</p>
+                </div>`;
+            trendingContainer.className = "flex w-full"; 
             return;
         }
 
-        historyContainer.className = "flex flex-col gap-4 mt-2 md:grid md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3"; 
-        
-        historyContainer.innerHTML = history.map(anime => {
+        // Apply the same premium grid/list styling used in search results
+        trendingContainer.className = "flex flex-col gap-4 pb-6 md:grid md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 md:overflow-visible"; 
+
+        trendingContainer.innerHTML = history.map(anime => {
             const safeTitle = anime.title.replace(/'/g, "\\'");
             return `
-            <div class="relative flex gap-4 items-stretch bg-gradient-to-br from-[#141414] to-[#0a0a0a] p-3 rounded-xl hover:border-[#F47521]/50 border border-white/5 transition-all duration-300 shadow-md group h-full cursor-pointer" onclick="window.location.href='info.html?id=${anime.id}'">
+            <div onclick="window.saveAndGo('${anime.id}', '${safeTitle}', '${anime.image}', '${anime.type}', '${anime.sub}', '${anime.dub}')" class="relative flex gap-4 items-stretch bg-gradient-to-br from-[#141414] to-[#0a0a0a] p-3 rounded-xl cursor-pointer hover:border-[#F47521]/50 border border-white/5 transition-all duration-300 shadow-md hover:shadow-xl hover:-translate-y-0.5 group h-full">
                 
-                <button onclick="window.app.removeFromHistory(event, '${anime.id}')" class="absolute top-2 right-2 z-20 bg-black/80 hover:bg-[#F47521] text-gray-400 hover:text-white p-1.5 rounded-md transition backdrop-blur-sm border border-white/10 hover:border-[#F47521]">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                <button onclick="window.deleteClickedHistory(event, '${anime.id}')" class="absolute top-2 right-2 bg-black/60 hover:bg-[#F47521] text-white w-6 h-6 rounded-full flex items-center justify-center transition-colors z-10 border border-white/10 hover:border-white shadow-md group/btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 group-hover/btn:scale-110 transition-transform" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
                 </button>
 
                 <div class="relative w-20 md:w-24 shrink-0">
-                    <img src="${anime.img}" class="w-full h-full object-cover rounded-lg shadow-md group-hover:brightness-110 transition">
-                    <div class="absolute inset-0 bg-black/10 group-hover:bg-transparent transition rounded-lg"></div>
+                    <img src="${anime.image}" class="w-full h-full object-cover rounded-lg shadow-md group-hover:brightness-110 transition">
                 </div>
-                
-                <div class="flex flex-col flex-1 min-w-0 py-1 pr-6 justify-center">
+                <div class="flex flex-col flex-1 min-w-0 justify-center py-1 pr-6">
                     <h4 class="text-sm md:text-base font-bold text-white truncate group-hover:text-[#F47521] transition-colors">${anime.title}</h4>
                     
-                    <div class="flex gap-2 items-center text-[9px] md:text-[10px] font-black uppercase tracking-wider mt-3">
+                    <div class="flex gap-2 items-center text-[9px] md:text-[10px] font-black uppercase tracking-wider mt-2.5">
                         <span class="text-gray-300 bg-black border border-white/10 px-1.5 py-0.5 rounded shadow-sm">${anime.type || 'TV'}</span>
-                        <span class="text-gray-300">SUB <span class="text-[#F47521]">${anime.sub || '?'}</span></span>
+                        <span class="text-gray-300">SUB <span class="text-[#F47521]">${anime.sub}</span></span>
                         ${anime.dub > 0 ? `<span class="text-gray-300 border-l border-white/10 pl-2">DUB <span class="text-purple-400">${anime.dub}</span></span>` : ''}
                     </div>
                 </div>
@@ -152,76 +164,134 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
     };
 
-    window.app.saveResultClick = async (event, id, title, img, sub, dub, type) => {
-        event.preventDefault(); // Stop immediate navigation to process save
-        
-        const animeObj = { id, title, img, sub, dub, type };
-        const profile = window.app.state?.activeProfile || null;
-        
-        // 1. Local Storage Update
-        let history = JSON.parse(localStorage.getItem('blazex_rich_history')) || [];
-        history = history.filter(item => item.id !== id); // Remove duplicates
-        history.unshift(animeObj); // Add to front
-        if (history.length > 20) history.pop(); // Keep max 20 items
-        localStorage.setItem('blazex_rich_history', JSON.stringify(history));
-
-        // 2. State & Database Update
-        if (profile && profile.uid && !profile.uid.startsWith('anon_')) {
-            profile.searchHistory = history;
-            localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
-            
-            try {
-                const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-                const userRef = firestore.doc(window.app.db, "users", profile.uid);
-                // Fire and forget, don't await so user navigation is instant
-                firestore.updateDoc(userRef, { searchHistory: history }).catch(console.error);
-            } catch (error) { console.error("Firebase history sync failed."); }
-        }
-
-        // Navigate
-        window.location.href = `info.html?id=${id}`;
+    // --- 3. SEARCH TEXT HISTORY LOGIC ---
+    const getSearchHistory = () => JSON.parse(localStorage.getItem('blazex_search_history')) || [];
+    const saveSearchHistory = (term) => {
+        let history = getSearchHistory().filter(t => t.toLowerCase() !== term.toLowerCase()); 
+        history.unshift(term);
+        if (history.length > 10) history.pop();
+        localStorage.setItem('blazex_search_history', JSON.stringify(history));
+        renderSearchTextHistory();
+    };
+    const deleteSearchHistoryItem = (term) => {
+        localStorage.setItem('blazex_search_history', JSON.stringify(getSearchHistory().filter(t => t !== term)));
+        renderSearchTextHistory();
     };
 
-    window.app.removeFromHistory = async (event, id) => {
-        event.stopPropagation(); // Prevent triggering the card click (navigation)
+    const renderSearchTextHistory = () => {
+        if(!historyContainer) return;
+        const history = getSearchHistory();
+        const clearAllBtn = document.getElementById('clear-all-history');
+        const historyHint = document.getElementById('history-hint');
         
-        const profile = window.app.state?.activeProfile || null;
+        if(clearAllBtn) clearAllBtn.classList.toggle('hidden', history.length === 0);
+        if(historyHint) historyHint.classList.toggle('hidden', history.length === 0);
         
-        let history = JSON.parse(localStorage.getItem('blazex_rich_history')) || [];
-        history = history.filter(item => item.id !== id);
-        localStorage.setItem('blazex_rich_history', JSON.stringify(history));
+        historyContainer.innerHTML = history.map(term => `
+            <div class="history-item relative flex items-center bg-[#111] border border-white/5 rounded-full px-4 py-2 cursor-pointer hover:border-[#F47521] transition select-none shadow-sm" data-term="${term}">
+                <i class="fas fa-history text-gray-500 mr-2 text-xs"></i>
+                <span class="text-xs font-semibold text-gray-300">${term}</span>
+            </div>
+        `).join('');
 
-        if (profile && profile.uid && !profile.uid.startsWith('anon_')) {
-            profile.searchHistory = history;
-            localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
-            
-            try {
-                const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-                const userRef = firestore.doc(window.app.db, "users", profile.uid);
-                await firestore.updateDoc(userRef, { searchHistory: history });
-            } catch (error) {}
-        }
-        
-        // Visually remove element with animation
-        const card = event.currentTarget.closest('.relative.flex');
-        card.style.opacity = '0';
-        card.style.transform = 'scale(0.95)';
-        setTimeout(() => { loadRichHistory(); }, 200);
+        document.querySelectorAll('.history-item').forEach(item => {
+            let pressTimer;
+            const term = item.getAttribute('data-term');
+            const startPress = () => { pressTimer = setTimeout(() => { deleteSearchHistoryItem(term); navigator.vibrate?.(50); }, 600); };
+            const cancelPress = () => clearTimeout(pressTimer);
+            item.addEventListener('mousedown', startPress); item.addEventListener('touchstart', startPress, {passive: true});
+            item.addEventListener('mouseup', cancelPress); item.addEventListener('mouseleave', cancelPress); item.addEventListener('touchend', cancelPress);
+            item.addEventListener('click', () => { cancelPress(); searchInput.value = term; handleSearchSubmit(term); });
+        });
     };
 
-    // --- 4. VIEW SWITCHING & SUGGESTIONS ---
+    const clearAllBtn = document.getElementById('clear-all-history');
+    if(clearAllBtn) clearAllBtn.addEventListener('click', () => { localStorage.removeItem('blazex_search_history'); renderSearchTextHistory(); });
+
+    // --- 4. FILTER LOGIC ---
+    const filterBtn = document.getElementById('filter-btn');
+    const closeFilterBtn = document.getElementById('close-filter-btn');
+    const resetFilterBtn = document.getElementById('reset-filter-btn');
+    const applyFilterBtn = document.getElementById('apply-filter-btn');
+
+    if(filterBtn) filterBtn.addEventListener('click', () => { filterModal.classList.remove('hidden'); filterModal.classList.add('flex'); });
+    if(closeFilterBtn) closeFilterBtn.addEventListener('click', () => { filterModal.classList.add('hidden'); filterModal.classList.remove('flex'); });
+    
+    if(resetFilterBtn) resetFilterBtn.addEventListener('click', () => {
+        ['genres', 'sy', 'sm', 'sd', 'ey', 'em', 'ed'].forEach(id => { const el = document.getElementById(`f-${id}`); if(el) el.value = ''; });
+        const setSelect = (id, val, text) => {
+            const select = document.querySelector(`#wrap-${id} .custom-select`);
+            const span = document.querySelector(`#wrap-${id} .selected-text`);
+            if(select && span) { select.setAttribute('data-value', val); span.innerText = text; }
+        };
+        setSelect('type', '', 'ALL'); setSelect('status', '', 'ALL'); setSelect('lang', '', 'ALL'); setSelect('sort', '', 'Default');
+        activeFilters = {};
+    });
+
+    if(applyFilterBtn) applyFilterBtn.addEventListener('click', () => {
+        const getVal = (id) => document.querySelector(`#wrap-${id} .custom-select`)?.getAttribute('data-value');
+        const getInput = (id) => document.getElementById(`f-${id}`)?.value;
+
+        activeFilters = {
+            type: getVal('type'), status: getVal('status'), language: getVal('lang'), sort: getVal('sort'),
+            genres: getInput('genres'), sy: getInput('sy'), sm: getInput('sm'), sd: getInput('sd'), ey: getInput('ey'), em: getInput('em'), ed: getInput('ed'),
+        };
+        filterModal.classList.add('hidden');
+        if (searchInput.value.trim()) handleSearchSubmit(searchInput.value.trim());
+    });
+
+    // --- 5. VIEW SWITCHING & CLEAR BUTTON UI ---
     const switchView = (view) => {
         if(idleView) idleView.classList.add('hidden');
         if(typingView) typingView.classList.add('hidden');
         if(resultsView) resultsView.classList.add('hidden');
         
-        if (view === 'idle' && idleView) idleView.classList.remove('hidden');
+        if (view === 'idle' && idleView) { idleView.classList.remove('hidden'); renderClickedHistory(); }
         if (view === 'typing' && typingView) typingView.classList.remove('hidden');
         if (view === 'results' && resultsView) resultsView.classList.remove('hidden');
     };
 
+    const highlightText = (text, query) => {
+        if (!query) return text;
+        const regex = new RegExp(`(${query})`, 'gi');
+        return text.replace(regex, '<span class="text-[#F47521] font-bold">$1</span>');
+    };
+
+    // Inject the Orange/White Clear SVG
+    if(clearBtn) {
+        clearBtn.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 hover:text-[#F47521] bg-[#111] hover:bg-white rounded-full p-0.5 transition-all duration-200" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+        </svg>`;
+        
+        clearBtn.addEventListener('click', () => {
+            searchInput.value = ''; 
+            clearBtn.classList.add('hidden'); 
+            switchView('idle'); 
+            searchInput.focus();
+        });
+    }
+
+    if(searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            const val = e.target.value.trim();
+            if(clearBtn) clearBtn.classList.toggle('hidden', val.length === 0);
+            
+            clearTimeout(typingTimer);
+            if (val.length === 0) { switchView('idle'); return; }
+
+            switchView('typing');
+            if(suggestionsContainer) suggestionsContainer.innerHTML = `<div class="p-8 text-center text-sm text-gray-400"><i class="fas fa-spinner fa-spin text-[#F47521] mr-2"></i> Fetching suggestions...</div>`;
+            typingTimer = setTimeout(() => fetchSuggestions(val), 300); 
+        });
+
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && searchInput.value.trim()) handleSearchSubmit(searchInput.value.trim());
+        });
+    }
+
+    // --- 6. SUGGESTIONS ---
     const fetchSuggestions = async (term) => {
-        // ... [Suggestions logic remains the same] ...
         if(!suggestionsContainer) return;
         const query = `query ($search: String) { Page(page: 1, perPage: 8) { media(type: ANIME, search: $search, sort: SEARCH_MATCH) { title { romaji english } } } }`;
         try {
@@ -233,36 +303,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
             window.handleSuggestionClick = (title) => { searchInput.value = title; handleSearchSubmit(title); };
 
-            const highlightText = (text, q) => text.replace(new RegExp(`(${q})`, 'gi'), '<span class="text-[#F47521] font-bold">$1</span>');
-
             suggestionsContainer.innerHTML = media.map(anime => {
                 const title = anime.title.english || anime.title.romaji;
                 const safeTitle = title.replace(/'/g, "\\'");
+                const highlighted = highlightText(title, term);
                 return `
                 <div onclick="handleSuggestionClick('${safeTitle}')" class="flex items-center gap-3 p-3 hover:bg-[#111] rounded-lg cursor-pointer transition border-b border-white/5 last:border-0">
-                    <i class="fas fa-search text-gray-600 text-sm"></i><span class="text-sm text-gray-300 truncate">${highlightText(title, term)}</span>
+                    <i class="fas fa-search text-gray-600 text-sm"></i><span class="text-sm text-gray-300 truncate">${highlighted}</span>
                 </div>`;
             }).join('');
         } catch (err) { suggestionsContainer.innerHTML = `<div class="p-4 text-xs text-gray-500">Network error.</div>`; }
     };
 
-    // --- 5. SUBMIT SEARCH & RENDER RESULTS (WITH DB SAVE INJECTION) ---
+    // --- 7. SUBMIT SEARCH & RENDER RESULTS ---
     const render404State = (message = "Nothing matched your search.") => {
         if(topResultCard) topResultCard.innerHTML = '';
         if(resultsListContainer) resultsListContainer.innerHTML = ''; 
-        if(resultsListContainer) {
+        if(window.BlazeX && window.BlazeX.show404) {
+            window.BlazeX.show404('results-list-container', message);
+        } else if(resultsListContainer) {
             resultsListContainer.innerHTML = `<div class="text-center p-16 col-span-full"><i class="fas fa-ghost text-4xl text-gray-700 mb-4 block"></i><p class="text-gray-400 text-sm md:text-base">${message}</p></div>`;
         }
     };
 
     const handleSearchSubmit = async (term) => {
         if(searchInput) searchInput.blur();
-        // saveHistory(term); // Removed plain text history in favor of Click History
+        saveSearchHistory(term);
         switchView('results');
-        
-        // Show Back Button explicitly when looking at results
-        const backBtn = searchInput.parentElement.querySelector('button.left-3');
-        if(backBtn) backBtn.classList.remove('hidden');
         
         if(topResultCard) topResultCard.innerHTML = `<div class="animate-pulse w-full h-64 md:h-80 bg-[#111] rounded-2xl"></div>`;
         if(resultsListContainer) {
@@ -283,13 +350,15 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             const endpoint = hasFilters ? '/api/filter' : '/api/search';
-            const res = await fetch(`${API_BASE}${endpoint}?${queryParams.toString()}`);
+            const reqUrl = `${API_BASE}${endpoint}?${queryParams.toString()}`;
+            
+            const res = await fetch(reqUrl);
             const json = await res.json();
             
             let results = [];
             if (endpoint === '/api/filter' && json.success && json.results?.data) results = json.results.data;
             else if (endpoint === '/api/search' && json.success && json.data) results = json.data;
-            else if (json.results && Array.isArray(json.results)) results = json.results;
+            else if (json.results && Array.isArray(json.results)) results = json.results; 
 
             if (!results || results.length === 0) { render404State("We couldn't find any anime matching your query or filters."); return; }
 
@@ -308,12 +377,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     if(dynamicBackdrop && mJson.data.Media.bannerImage) dynamicBackdrop.src = mJson.data.Media.bannerImage;
                     if(dynamicDesc && mJson.data.Media.description) dynamicDesc.innerHTML = mJson.data.Media.description;
                 }
-            }).catch(() => {}); 
+            }).catch(() => {});
 
             const topSubEps = topAnime.tvInfo?.sub || topAnime.sub || '?';
             const topDubEps = topAnime.tvInfo?.dub || topAnime.dub || 0;
-            const topType = topAnime.type || 'TV';
             const topImg = topAnime.image || topAnime.poster;
+            const topType = topAnime.type || 'TV';
 
             const checkLibraryStatus = (animeId) => {
                 const profile = window.app.state?.activeProfile || null;
@@ -330,10 +399,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? `<button onclick="window.app.toggleSearchLibraryClick(event, '${topAnime.id}', '${topSafeTitle}', '${topImg}')" class="bg-[#F47521] text-black px-4 py-2.5 rounded-lg font-black text-[11px] md:text-xs uppercase hover:bg-white transition border border-[#F47521] flex items-center gap-2 shadow-lg shadow-[#F47521]/20"><i class="fas fa-check"></i> Added</button>`
                 : `<button onclick="window.app.toggleSearchLibraryClick(event, '${topAnime.id}', '${topSafeTitle}', '${topImg}')" class="bg-[#111]/80 backdrop-blur-sm text-white px-4 py-2.5 rounded-lg font-black text-[11px] md:text-xs uppercase hover:border-[#F47521] hover:bg-black transition border border-white/10 flex items-center gap-2"><i class="fas fa-plus"></i> Save</button>`;
 
-            // Top Result Render (Injected saveResultClick)
+            // Render Top Result (Now uses saveAndGo)
             if(topResultCard) {
                 topResultCard.innerHTML = `
-                <div onclick="window.app.saveResultClick(event, '${topAnime.id}', '${topSafeTitle}', '${topImg}', '${topSubEps}', '${topDubEps}', '${topType}')" class="relative overflow-hidden rounded-2xl border border-white/10 cursor-pointer hover:border-[#F47521] transition-all duration-300 group shadow-2xl bg-[#0a0a0a] min-h-[280px] md:min-h-[350px] flex items-end">
+                <div onclick="window.saveAndGo('${topAnime.id}', '${topSafeTitle}', '${topImg}', '${topType}', '${topSubEps}', '${topDubEps}')" class="relative overflow-hidden rounded-2xl border border-white/10 cursor-pointer hover:border-[#F47521] transition-all duration-300 group shadow-2xl bg-[#0a0a0a] min-h-[280px] md:min-h-[350px] flex items-end">
                     <div class="absolute inset-0">
                         <img id="top-result-backdrop" src="${backdrop}" class="w-full h-full object-cover opacity-30 group-hover:scale-105 transition-transform duration-700 blur-sm">
                         <div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/90 md:via-[#050505]/60 to-transparent"></div>
@@ -349,16 +418,16 @@ document.addEventListener('DOMContentLoaded', () => {
                             <p id="top-result-desc" class="text-xs md:text-sm text-gray-300 line-clamp-3 md:line-clamp-4 mb-4 md:mb-6 leading-relaxed max-w-3xl">${description}</p>
                             
                             <div class="flex flex-wrap items-center gap-3 mt-auto">
-                                <button onclick="window.app.saveResultClick(event, '${topAnime.id}', '${topSafeTitle}', '${topImg}', '${topSubEps}', '${topDubEps}', '${topType}')" class="bg-white text-black px-5 py-2.5 rounded-lg font-black text-[11px] md:text-xs uppercase tracking-widest hover:bg-[#F47521] hover:text-white transition shadow-lg"><i class="fas fa-play mr-2"></i> Watch Now</button>
+                                <button onclick="event.stopPropagation(); window.saveAndGo('${topAnime.id}', '${topSafeTitle}', '${topImg}', '${topType}', '${topSubEps}', '${topDubEps}')" class="bg-white text-black px-5 py-2.5 rounded-lg font-black text-[11px] md:text-xs uppercase tracking-widest hover:bg-[#F47521] hover:text-white transition shadow-lg"><i class="fas fa-play mr-2"></i> Watch Now</button>
                                 ${libraryBtnHtml}
-                                <button onclick="event.stopPropagation(); window.app.shareAnime('${topAnime.id}', '${topSafeTitle}')" class="bg-[#111]/80 backdrop-blur-sm text-white px-4 py-2.5 rounded-lg font-black text-[11px] md:text-xs uppercase hover:text-[#F47521] hover:border-[#F47521] transition border border-white/10 flex items-center gap-2">
+                                <button onclick="event.stopPropagation(); window.app.shareAnime('${topAnime.id}', '${topSafeTitle}')" class="bg-[#111]/80 backdrop-blur-sm text-white px-4 py-2.5 rounded-lg font-black text-[11px] md:text-xs uppercase hover:text-blue-400 hover:border-blue-400 transition border border-white/10 flex items-center gap-2">
                                     <i class="fas fa-share-nodes"></i> Share
                                 </button>
                                 
                                 <div class="flex gap-2 ml-auto text-[10px] md:text-xs font-bold mt-2 md:mt-0 w-full md:w-auto justify-end">
                                     <span class="bg-black/50 backdrop-blur-sm text-white px-2 py-1 rounded border border-white/10">${topType}</span>
                                     <span class="bg-[#F47521]/20 border border-[#F47521]/40 text-[#F47521] px-2 py-1 rounded">SUB ${topSubEps}</span>
-                                    ${topDubEps > 0 ? `<span class="bg-white/10 border border-white/20 text-white px-2 py-1 rounded">DUB ${topDubEps}</span>` : ''}
+                                    ${topDubEps > 0 ? `<span class="bg-purple-500/20 border border-purple-500/40 text-purple-400 px-2 py-1 rounded">DUB ${topDubEps}</span>` : ''}
                                 </div>
                             </div>
                         </div>
@@ -366,7 +435,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>`;
             }
 
-            // Results List View (Injected saveResultClick)
+            // Render Results List (Now uses saveAndGo)
             if(resultsListContainer && restAnime.length > 0) {
                 resultsListContainer.className = "flex flex-col gap-4 mt-6 md:grid md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3";
                 
@@ -384,7 +453,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         : `<button onclick="window.app.toggleSearchLibraryClick(event, '${anime.id}', '${safeTitle}', '${img}')" class="text-gray-400 bg-white/5 px-2.5 py-1.5 rounded text-[10px] font-bold hover:bg-white hover:text-black transition flex items-center gap-1.5"><i class="fas fa-bookmark"></i> Save</button>`;
 
                     return `
-                    <div onclick="window.app.saveResultClick(event, '${anime.id}', '${safeTitle}', '${img}', '${aSub}', '${aDub}', '${aType}')" class="flex gap-4 items-stretch bg-gradient-to-br from-[#141414] to-[#0a0a0a] p-3 rounded-xl cursor-pointer hover:border-[#F47521]/50 border border-white/5 transition-all duration-300 shadow-md hover:shadow-xl hover:-translate-y-0.5 group h-full">
+                    <div onclick="window.saveAndGo('${anime.id}', '${safeTitle}', '${img}', '${aType}', '${aSub}', '${aDub}')" class="flex gap-4 items-stretch bg-gradient-to-br from-[#141414] to-[#0a0a0a] p-3 rounded-xl cursor-pointer hover:border-[#F47521]/50 border border-white/5 transition-all duration-300 shadow-md hover:shadow-xl hover:-translate-y-0.5 group h-full">
                         <div class="relative w-24 md:w-28 shrink-0">
                             <img src="${img}" class="w-full h-full object-cover rounded-lg shadow-md group-hover:brightness-110 transition">
                             <div class="absolute inset-0 bg-black/10 group-hover:bg-transparent transition rounded-lg"></div>
@@ -399,11 +468,11 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <div class="flex gap-2 items-center text-[9px] md:text-[10px] font-black uppercase tracking-wider">
                                     <span class="text-gray-300 bg-black border border-white/10 px-1.5 py-0.5 rounded shadow-sm">${aType}</span>
                                     <span class="text-gray-300">SUB <span class="text-[#F47521]">${aSub}</span></span>
-                                    ${aDub > 0 ? `<span class="text-gray-300 border-l border-white/10 pl-2">DUB <span class="text-white">${aDub}</span></span>` : ''}
+                                    ${aDub > 0 ? `<span class="text-gray-300 border-l border-white/10 pl-2">DUB <span class="text-purple-400">${aDub}</span></span>` : ''}
                                 </div>
                                 <div class="flex items-center gap-2 mt-1 border-t border-white/5 pt-2">
                                     ${listSaveBtn}
-                                    <button onclick="event.stopPropagation(); window.app.shareAnime('${anime.id}', '${safeTitle}')" class="text-gray-400 bg-white/5 px-2.5 py-1.5 rounded text-[10px] font-bold hover:bg-[#F47521] hover:text-white transition flex items-center gap-1.5">
+                                    <button onclick="event.stopPropagation(); window.app.shareAnime('${anime.id}', '${safeTitle}')" class="text-gray-400 bg-white/5 px-2.5 py-1.5 rounded text-[10px] font-bold hover:bg-blue-500 hover:text-white transition flex items-center gap-1.5">
                                         <i class="fas fa-share"></i> Share
                                     </button>
                                 </div>
@@ -419,7 +488,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // --- LIBRARY BUTTON ACTION (Reused logic from carousel) ---
+    // --- LIBRARY BUTTON ACTION ---
     window.app.toggleSearchLibraryClick = async (event, id, title, img) => {
         event.stopPropagation(); 
         const profile = window.app.state?.activeProfile || null;
@@ -497,6 +566,5 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Initialize 
     initSearchPage();
 });
