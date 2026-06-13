@@ -202,8 +202,13 @@ function renderAnimeInfoShell() {
     if (ani && ani.genres) genresStr = ani.genres.join(' • ');
     else if (raw && raw.genres) genresStr = Array.isArray(raw.genres) ? raw.genres.join(' • ') : raw.genres;
 
-    const isUpcoming = (raw?.status && raw.status.toString().toLowerCase().includes('upcoming')) || 
+    // CHANGED: Let variable and override check for episodes
+    let isUpcoming = (raw?.status && raw.status.toString().toLowerCase().includes('upcoming')) || 
                        (ani?.status && ani.status.toString().toLowerCase().includes('not_yet_released'));
+
+    if (data.episodes && data.episodes.length > 0) {
+        isUpcoming = false;
+    }
 
     const upcomingBadge = isUpcoming ? `<span class="bg-red-500 text-white text-[10px] font-black px-2.5 py-0.5 rounded shadow-sm uppercase tracking-wider animate-pulse"><i class="fas fa-clock mr-1"></i> Upcoming</span>` : '';
     const trendingBadge = ani && ani.trending ? `<span class="bg-[#F47521]/10 border border-[#F47521]/30 px-2 py-0.5 rounded backdrop-blur-sm">#${ani.trending} Trending</span>` : '';
@@ -626,8 +631,13 @@ window.app.components.episodestab = () => {
     const ani = data.aniList;
     const raw = data.rawPayload;
 
-    const isUpcoming = (raw?.status && raw.status.toString().toLowerCase().includes('upcoming')) || 
+    // CHANGED: Let variable and override check for episodes
+    let isUpcoming = (raw?.status && raw.status.toString().toLowerCase().includes('upcoming')) || 
                        (ani?.status && ani.status.toString().toLowerCase().includes('not_yet_released'));
+
+    if (data.episodes && data.episodes.length > 0) {
+        isUpcoming = false;
+    }
 
     let scheduleContainerHtml = '';
     if (data.scheduleCountdown) {
