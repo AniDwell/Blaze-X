@@ -13,66 +13,174 @@
             font-family: 'Inter', sans-serif;
             -webkit-font-smoothing: antialiased;
         }
-        /* Custom Scrollbar for a premium feel */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #0a0a0a; }
         ::-webkit-scrollbar-thumb { background: #F47521; border-radius: 10px; }
+        .hidden-el { display: none !important; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
 
     <div id="header-mount"></div>
 
+    <div id="fullscreen-avatar-modal" class="fixed inset-0 bg-black/90 z-50 flex items-center justify-center hidden-el opacity-0 transition-opacity duration-300">
+        <button onclick="closeFullscreenAvatar()" class="absolute top-6 right-6 text-white text-3xl hover:text-gray-300">
+            <i class="fas fa-times"></i>
+        </button>
+        <img id="modal-avatar-img" src="" alt="Fullscreen Preview" class="max-w-[90vw] max-h-[80vh] rounded-2xl object-contain border border-white/10">
+    </div>
+
+    <div id="comments-modal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 hidden-el">
+        <div class="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+            <div class="p-4 border-b border-white/10 flex items-center justify-between">
+                <h3 class="text-lg font-bold"><i class="fas fa-comments text-[#F47521] mr-2"></i>All User Comments</h3>
+                <button onclick="toggleCommentsModal(false)" class="text-gray-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <div class="p-4 bg-white/5 border-b border-white/5 flex flex-wrap gap-2 items-center justify-between text-xs">
+                <span class="text-gray-400 font-medium">Filter/Sort By:</span>
+                <div class="flex gap-2">
+                    <button onclick="sortComments('recent')" id="sort-recent" class="bg-[#F47521] text-white px-3 py-1.5 rounded-lg font-bold">Most Recent</button>
+                    <button onclick="sortComments('likes')" id="sort-likes" class="bg-white/5 hover:bg-white/10 text-gray-300 px-3 py-1.5 rounded-lg font-bold">Most Liked</button>
+                    <button onclick="sortComments('replies')" id="sort-replies" class="bg-white/5 hover:bg-white/10 text-gray-300 px-3 py-1.5 rounded-lg font-bold">Most Replies</button>
+                </div>
+            </div>
+            <div id="modal-comments-list" class="flex-1 overflow-y-auto p-4 space-y-3">
+                </div>
+        </div>
+    </div>
+
     <main class="flex-1 max-w-4xl w-full mx-auto p-4 md:p-8 pt-24">
         
         <div class="bg-gradient-to-br from-[#111] to-[#0a0a0a] border border-white/10 rounded-3xl p-6 md:p-10 shadow-2xl relative overflow-hidden mb-8 group">
-            <div class="absolute -top-20 -right-20 w-64 h-64 bg-[#F47521]/10 rounded-full blur-3xl group-hover:bg-[#F47521]/20 transition-all duration-700"></div>
-            
             <div class="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6">
-                <div class="relative w-28 h-28 md:w-32 md:h-32 rounded-full p-1 bg-gradient-to-b from-[#F47521] to-transparent shadow-lg shrink-0">
+                
+                <div onclick="handleAvatarClick()" class="relative w-28 h-28 md:w-32 md:h-32 rounded-full p-1 bg-gradient-to-b from-[#F47521] to-transparent shadow-lg shrink-0 cursor-pointer group/avatar">
                     <img id="user-avatar" src="https://ui-avatars.com/api/?name=User&background=111&color=F47521" alt="Profile Picture" class="w-full h-full rounded-full object-cover border-4 border-[#050505] bg-[#111]">
+                    <div id="avatar-overlay-hint" class="absolute inset-1 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity text-xs font-bold text-white">
+                        <i class="fas fa-expand mr-1"></i> View
+                    </div>
                 </div>
                 
                 <div class="flex-1 text-center md:text-left flex flex-col justify-center pt-2">
-                    <h1 id="user-name" class="text-2xl md:text-4xl font-black tracking-tight text-white mb-1">Loading...</h1>
-                    <p id="user-email" class="text-sm md:text-base text-gray-400 mb-4 font-medium"></p>
-                    <div class="inline-flex gap-3 justify-center md:justify-start">
-                        <span class="bg-[#F47521]/10 text-[#F47521] border border-[#F47521]/30 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-                            <i class="fas fa-user-astronaut mr-1"></i> Member
-                        </span>
+                    <div class="flex flex-col md:flex-row items-center gap-2 mb-1">
+                        <h1 id="user-name" class="text-2xl md:text-4xl font-black tracking-tight text-white">Loading...</h1>
+                        <span id="view-badge" class="bg-white/10 text-gray-300 px-2 py-0.5 rounded text-[10px] uppercase font-extrabold tracking-widest border border-white/10">Private View</span>
+                    </div>
+                    <p id="user-uid-display" class="text-xs text-[#F47521] font-mono mb-1 select-all"></p>
+                    <p id="user-email" class="text-sm text-gray-400 mb-4 font-medium"></p>
+                    
+                    <div class="grid grid-cols-3 gap-2 max-w-sm mx-auto md:mx-0 text-center bg-black/30 p-2.5 rounded-xl border border-white/5 mb-4">
+                        <div class="flex flex-col">
+                            <span id="stat-library-count" class="text-lg font-black text-white">0</span>
+                            <span class="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Library Items</span>
+                        </div>
+                        <div id="like-metric-box" onclick="handleProfileLike()" class="flex flex-col cursor-pointer transition-colors hover:bg-white/5 p-0.5 rounded-lg">
+                            <span id="stat-likes-count" class="text-lg font-black text-[#F47521]">0</span>
+                            <span class="text-[10px] uppercase tracking-wider text-gray-400 font-bold"><i id="heart-icon" class="far fa-heart mr-0.5"></i> Profile Likes</span>
+                        </div>
+                        <div class="flex flex-col">
+                            <span id="stat-comments-count" class="text-lg font-black text-white">0</span>
+                            <span class="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Comments</span>
+                        </div>
                     </div>
                 </div>
 
-                <div class="hidden md:flex flex-col gap-3 ml-auto mt-2 shrink-0">
-                    <button onclick="handleLogout()" class="bg-white/5 hover:bg-white/10 text-white border border-white/10 px-5 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 justify-center w-40">
-                        <i class="fas fa-sign-out-alt"></i> Logout
-                    </button>
-                    <button onclick="handleDeleteAccount()" class="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/30 px-5 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 justify-center w-40 group/del">
-                        <i class="fas fa-trash-alt group-hover/del:animate-bounce"></i> Delete App
-                    </button>
+                <div class="hidden md:flex flex-col gap-3 ml-auto mt-2 shrink-0 w-44">
+                    <div id="owner-actions-desktop" class="space-y-2 hidden-el">
+                        <button onclick="toggleSettingsPanel()" class="w-full bg-white/5 hover:bg-white/10 text-white border border-white/10 px-4 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 justify-center">
+                            <i class="fas fa-cog"></i> Settings
+                        </button>
+                        <button onclick="handleLogout()" class="w-full bg-white/5 hover:bg-white/10 text-white border border-white/10 px-4 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 justify-center">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </button>
+                        <button onclick="handleDeleteAccount()" class="w-full bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/30 px-4 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 justify-center group/del">
+                            <i class="fas fa-trash-alt group-hover/del:animate-bounce"></i> Delete Profile
+                        </button>
+                    </div>
+                    <div id="visitor-actions-desktop" class="space-y-2 hidden-el">
+                        <button onclick="navigateToChat()" class="w-full bg-[#F47521] hover:bg-[#d96216] text-white px-4 py-3 rounded-xl text-sm font-black tracking-wide transition-all flex items-center gap-2 justify-center shadow-lg">
+                            <i class="fas fa-paper-plane"></i> Message User
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="owner-settings-panel" class="mb-8 p-5 bg-[#0a0a0a] border border-white/10 rounded-2xl hidden-el transition-all">
+            <h3 class="text-md font-bold mb-4 text-white flex items-center gap-2"><i class="fas fa-sliders-h text-[#F47521]"></i> Profile Settings Configuration</h3>
+            <div class="space-y-4">
+                <div class="flex flex-col gap-1.5">
+                    <label class="text-xs font-bold text-gray-400 uppercase tracking-wider">Modify Screen Identity Handle</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="input-edit-username" class="flex-1 bg-black border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-[#F47521]" placeholder="Change custom handle...">
+                        <button onclick="updateProfileMetadata()" class="bg-white/10 hover:bg-white/20 px-4 text-xs font-bold rounded-xl transition-all">Save</button>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between p-3 bg-black/40 rounded-xl border border-white/5">
+                    <div>
+                        <p class="text-sm font-bold text-white">Hide Personal Watch Library</p>
+                        <p class="text-xs text-gray-500">When enabled, visitors visiting your public URL cannot access your media tracking catalog lists.</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="toggle-hide-library" onchange="handleLibraryVisibilityToggle()" class="sr-only peer">
+                        <div class="w-11 h-6 bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-gray-400 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#F47521] peer-checked:after:bg-white"></div>
+                    </label>
                 </div>
             </div>
         </div>
 
         <div class="space-y-8">
-            <div id="history-container" class="bg-[#0a0a0a] rounded-2xl border border-white/5 p-4 min-h-[150px]">
-                <h3 class="text-lg font-bold text-white mb-4 border-b border-white/10 pb-2"><i class="fas fa-history text-[#F47521] mr-2"></i> Activity History</h3>
-                <div id="history-list-mount" class="text-center text-gray-500 text-sm py-4">Loading history...</div>
+            <div id="library-block-container" class="bg-[#0a0a0a] rounded-2xl border border-white/5 p-5 min-h-[120px]">
+                <h3 class="text-lg font-bold text-white mb-4 border-b border-white/10 pb-2 flex items-center justify-between">
+                    <span><i class="fas fa-bookmark text-[#F47521] mr-2"></i> Media Library Catalog</span>
+                    <span id="library-locked-badge" class="hidden-el text-xs bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded"><i class="fas fa-lock mr-1"></i> Private</span>
+                </h3>
+                <div id="library-list-mount" class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-gray-500 text-sm py-2">
+                    Loading media list content...
+                </div>
             </div>
 
-            <div id="chatlist-container" class="bg-[#0a0a0a] rounded-2xl border border-white/5 p-4 min-h-[150px]">
-                <h3 class="text-lg font-bold text-white mb-4 border-b border-white/10 pb-2"><i class="fas fa-comments text-[#F47521] mr-2"></i> Messages</h3>
-                <div id="chatlist-mount" class="text-center text-gray-500 text-sm py-4">Loading chats...</div>
+            <div id="comments-block-container" class="bg-[#0a0a0a] rounded-2xl border border-white/5 p-5 min-h-[150px]">
+                <h3 class="text-lg font-bold text-white mb-4 border-b border-white/10 pb-2 flex items-center justify-between">
+                    <span><i class="fas fa-comments text-[#F47521] mr-2"></i> Featured Feed Comments</span>
+                </h3>
+                <div id="comments-list-mount" class="space-y-3">
+                    </div>
+                <div class="mt-4 pt-2 border-t border-white/5 text-center">
+                    <button onclick="toggleCommentsModal(true)" class="text-xs font-bold text-[#F47521] hover:underline bg-white/5 px-4 py-2 rounded-xl transition-all">
+                        See More Comments & View Custom Sort Filters <i class="fas fa-chevron-right ml-1 text-[10px]"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div id="history-container" class="bg-[#0a0a0a] rounded-2xl border border-white/5 p-5 min-h-[120px]">
+                <h3 class="text-lg font-bold text-white mb-4 border-b border-white/10 pb-2"><i class="fas fa-history text-[#F47521] mr-2"></i> Activity Stream Logs</h3>
+                <div id="history-list-mount" class="text-center text-gray-500 text-sm py-2">Loading history references...</div>
+            </div>
+
+            <div id="chatlist-container" class="bg-[#0a0a0a] rounded-2xl border border-white/5 p-5 min-h-[120px]">
+                <h3 class="text-lg font-bold text-white mb-4 border-b border-white/10 pb-2"><i class="fas fa-envelope text-[#F47521] mr-2"></i> Native Profile Messages</h3>
+                <div id="chatlist-mount" class="text-center text-gray-500 text-sm py-2">Loading communications matrix...</div>
             </div>
         </div>
 
-        <div class="flex md:hidden flex-col gap-3 mt-8">
-            <button onclick="handleLogout()" class="w-full bg-white/5 hover:bg-white/10 text-white border border-white/10 px-5 py-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2">
-                <i class="fas fa-sign-out-alt"></i> Logout
-            </button>
-            <button onclick="handleDeleteAccount()" class="w-full bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/30 px-5 py-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2">
-                <i class="fas fa-trash-alt"></i> Delete Account & Data
-            </button>
+        <div class="flex md:hidden flex-col gap-2.5 mt-8">
+            <div id="owner-actions-mobile" class="space-y-2.5 w-full hidden-el">
+                <button onclick="toggleSettingsPanel()" class="w-full bg-white/5 hover:bg-white/10 text-white border border-white/10 px-5 py-3.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2">
+                    <i class="fas fa-cog"></i> Adjust Profile Settings
+                </button>
+                <button onclick="handleLogout()" class="w-full bg-white/5 hover:bg-white/10 text-white border border-white/10 px-5 py-3.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2">
+                    <i class="fas fa-sign-out-alt"></i> Logout Engine Session
+                </button>
+                <button onclick="handleDeleteAccount()" class="w-full bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/30 px-5 py-3.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2">
+                    <i class="fas fa-trash-alt"></i> Delete Account & Data
+                </button>
+            </div>
+            <div id="visitor-actions-mobile" class="w-full hidden-el">
+                <button onclick="navigateToChat()" class="w-full bg-[#F47521] hover:bg-[#d96216] text-white px-5 py-4 rounded-xl text-sm font-black tracking-wide transition-all flex items-center justify-center gap-2 shadow-xl">
+                    <i class="fas fa-paper-plane"></i> Message User Connection
+                </button>
+            </div>
         </div>
 
     </main>
@@ -80,7 +188,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut, deleteUser } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
-        import { getFirestore, doc, getDoc, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, collection, getDocs, deleteDoc, updateDoc, increment, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
@@ -95,47 +203,371 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // Global variables for external scripts to use if needed
+        // State Machine Cache Storage Variables
+        let activeProfileUid = null; 
+        let currentAuthenticatedUser = null; 
+        let isOwnerMode = true; 
+        let cachedProfileData = null;
+        let cachedCommentsArray = [];
+
         window.app = window.app || {};
         window.app.db = db;
         window.app.auth = auth;
 
-        // Listen for Auth State
+        // Runtime Entrypoint Execution Monitor Hook
         onAuthStateChanged(auth, async (user) => {
+            currentAuthenticatedUser = user;
+            
+            // Resolve URL parameters to establish execution layout state
+            const urlParams = new URLSearchParams(window.location.search);
+            const targetQueryId = urlParams.get('id');
+
             if (user) {
-                // Populate Auth basics
-                document.getElementById('user-email').innerText = user.email || "No email linked";
-                
-                // Fetch deeper user profile details from Firestore
-                try {
-                    const userDocRef = doc(db, "users", user.uid);
-                    const userDoc = await getDoc(userDocRef);
-                    
-                    if (userDoc.exists()) {
-                        const data = userDoc.data();
-                        document.getElementById('user-name').innerText = data.username || data.displayName || user.displayName || "Anime Fan";
-                        
-                        const pfpUrl = data.photoURL || user.photoURL;
-                        if(pfpUrl) document.getElementById('user-avatar').src = pfpUrl;
-                    } else {
-                        // Fallback to Auth payload if Firestore doc doesn't exist yet
-                        document.getElementById('user-name').innerText = user.displayName || "Anime Fan";
-                        if(user.photoURL) document.getElementById('user-avatar').src = user.photoURL;
-                    }
-                } catch (error) {
-                    console.error("Failed to load user document:", error);
+                if (!targetQueryId || targetQueryId === user.uid) {
+                    activeProfileUid = user.uid;
+                    isOwnerMode = true;
+                } else {
+                    activeProfileUid = targetQueryId;
+                    isOwnerMode = false;
                 }
+                
+                await evaluateProfileViewStructure();
             } else {
-                // Not logged in, boot them to login page
-                window.location.replace('index.html'); // Change 'index.html' to your actual login page
+                if (targetQueryId) {
+                    activeProfileUid = targetQueryId;
+                    isOwnerMode = false;
+                    await evaluateProfileViewStructure();
+                } else {
+                    window.location.replace('index.html');
+                }
             }
         });
 
-        // Expose functions globally for the buttons
+        // Evaluate view parameters to apply layouts and toggles
+        async function evaluateProfileViewStructure() {
+            const badge = document.getElementById('view-badge');
+            
+            if (isOwnerMode) {
+                badge.innerText = "Private View";
+                document.getElementById('owner-actions-desktop').classList.remove('hidden-el');
+                document.getElementById('owner-actions-mobile').classList.remove('hidden-el');
+                document.getElementById('visitor-actions-desktop').classList.add('hidden-el');
+                document.getElementById('visitor-actions-mobile').classList.add('hidden-el');
+                document.getElementById('chatlist-container').classList.remove('hidden-el');
+            } else {
+                badge.innerText = "Public View";
+                document.getElementById('owner-actions-desktop').classList.add('hidden-el');
+                document.getElementById('owner-actions-mobile').classList.add('hidden-el');
+                document.getElementById('visitor-actions-desktop').classList.remove('hidden-el');
+                document.getElementById('visitor-actions-mobile').classList.remove('hidden-el');
+                document.getElementById('chatlist-container').classList.add('hidden-el'); // Visitors do not read your other open DM paths
+            }
+
+            document.getElementById('user-uid-display').innerText = `ID: ${activeProfileUid}`;
+            await pullTargetProfilePayload();
+        }
+
+        // Pull core profile data from Firestore
+        async function pullTargetProfilePayload() {
+            try {
+                const userDocRef = doc(db, "users", activeProfileUid);
+                const userDoc = await getDoc(userDocRef);
+                
+                if (userDoc.exists()) {
+                    cachedProfileData = userDoc.data();
+                    renderProfileHeader(cachedProfileData);
+                } else {
+                    // Failback setup if profile entry does not exist yet
+                    cachedProfileData = {
+                        username: "Anime Fan",
+                        likesCount: 0,
+                        hideLibrary: false
+                    };
+                    renderProfileHeader(cachedProfileData);
+                }
+
+                // Process contextual dynamic items sub-lists fetches
+                await fetchLibrarySubcollection();
+                await fetchCommentsCollectionDataset();
+
+            } catch (error) {
+                console.error("Critical error mapping data layout context tree: ", error);
+            }
+        }
+
+        // Apply metadata field assignments to DOM elements
+        function renderProfileHeader(data) {
+            document.getElementById('user-name').innerText = data.username || data.displayName || "Anime Fan";
+            document.getElementById('user-email').innerText = isOwnerMode && currentAuthenticatedUser ? currentAuthenticatedUser.email : "";
+            
+            const pfpUrl = data.photoURL || "https://ui-avatars.com/api/?name=User&background=111&color=F47521";
+            document.getElementById('user-avatar').src = pfpUrl;
+
+            // Handle Dynamic Likes Array counting architecture safely
+            let countedLikes = 0;
+            if (data.likedByArray) {
+                countedLikes = data.likedByArray.length;
+            } else if (data.likesCount) {
+                countedLikes = data.likesCount;
+            }
+            document.getElementById('stat-likes-count').innerText = countedLikes;
+
+            if (currentAuthenticatedUser && data.likedByArray && data.likedByArray.includes(currentAuthenticatedUser.uid)) {
+                document.getElementById('heart-icon').className = "fas fa-heart text-[#F47521]";
+            } else {
+                document.getElementById('heart-icon').className = "far fa-heart text-gray-400";
+            }
+
+            // Sync structural parameters settings inputs matching internal config variables state
+            if (isOwnerMode) {
+                document.getElementById('input-edit-username').value = data.username || "";
+                document.getElementById('toggle-hide-library').checked = data.hideLibrary || false;
+            }
+        }
+
+        // Subcollection sync matching visibility configuration privileges
+        async function fetchLibrarySubcollection() {
+            const listMount = document.getElementById('library-list-mount');
+            const lockedBadge = document.getElementById('library-locked-badge');
+
+            if (!isOwnerMode && cachedProfileData.hideLibrary === true) {
+                listMount.innerHTML = `<div class="col-span-full py-4 text-gray-500 italic"><i class="fas fa-eye-slash mr-1"></i> This user has chosen to set their collection private.</div>`;
+                lockedBadge.classList.remove('hidden-el');
+                document.getElementById('stat-library-count').innerText = "Locked";
+                return;
+            }
+
+            try {
+                const libRef = collection(db, "users", activeProfileUid, "library");
+                const snapshot = await getDocs(libRef);
+                document.getElementById('stat-library-count').innerText = snapshot.size;
+                lockedBadge.classList.add('hidden-el');
+
+                if (snapshot.empty) {
+                    listMount.innerHTML = `<div class="col-span-full py-4 text-gray-600">No content entries located in tracking catalog.</div>`;
+                    return;
+                }
+
+                let htmlPayload = "";
+                snapshot.forEach((itemDoc) => {
+                    const item = itemDoc.data();
+                    htmlPayload += `
+                        <div class="bg-black/40 border border-white/5 rounded-xl p-3 flex flex-col items-center justify-center space-y-1">
+                            <div class="text-xs font-bold text-gray-200 truncate w-full">${item.title || 'Untitled Track'}</div>
+                            <div class="text-[10px] text-[#F47521] uppercase tracking-wider font-extrabold">${item.status || 'Watching'}</div>
+                        </div>
+                    `;
+                });
+                listMount.innerHTML = htmlPayload;
+
+            } catch (err) {
+                listMount.innerHTML = `<div class="col-span-full text-red-500 py-2">Error processing items stack catalog stream.</div>`;
+            }
+        }
+
+        // Pull full public user comments references dataset to run parsing filter configurations maps
+        async function fetchCommentsCollectionDataset() {
+            try {
+                const commentsRef = collection(db, "users", activeProfileUid, "comments");
+                const snapshot = await getDocs(commentsRef);
+                document.getElementById('stat-comments-count').innerText = snapshot.size;
+
+                cachedCommentsArray = [];
+                snapshot.forEach((cDoc) => {
+                    const cData = cDoc.data();
+                    cachedCommentsArray.push({
+                        id: cDoc.id,
+                        text: cData.text || "",
+                        author: cData.authorName || "Anonymous",
+                        timestamp: cData.timestamp ? cData.timestamp.toDate() : new Date(),
+                        likes: cData.likesCount || 0,
+                        replies: cData.repliesCount || 0
+                    });
+                });
+
+                // Display top 10 on main page feed instantly
+                renderMainDashboardCommentsFeed();
+
+            } catch(e) {
+                document.getElementById('comments-list-mount').innerHTML = `<div class="text-xs text-red-500 py-2">Failed to sync feed.</div>`;
+            }
+        }
+
+        function renderMainDashboardCommentsFeed() {
+            const mount = document.getElementById('comments-list-mount');
+            if (cachedCommentsArray.length === 0) {
+                mount.innerHTML = `<div class="text-center text-sm py-4 text-gray-600">No public comments mapped here yet.</div>`;
+                return;
+            }
+
+            // Default dashboard lists sliced strictly by chronological newest sequence order mapping array limits
+            const sliceDataset = [...cachedCommentsArray]
+                .sort((a,b) => b.timestamp - a.timestamp)
+                .slice(0, 10);
+
+            let html = "";
+            sliceDataset.forEach(c => {
+                html += `
+                    <div class="bg-black/30 border border-white/5 p-3.5 rounded-xl text-xs space-y-1.5">
+                        <div class="flex items-center justify-between text-gray-400 font-bold">
+                            <span class="text-[#F47521]">@${c.author}</span>
+                            <span>${c.timestamp.toLocaleDateString()}</span>
+                        </div>
+                        <p class="text-gray-200">${c.text}</p>
+                    </div>
+                `;
+            });
+            mount.innerHTML = html;
+        }
+
+        // Handle full sort toggle view inside comments management modal layer panel
+        window.sortComments = (filterCriteria) => {
+            const buttons = ['recent', 'likes', 'replies'];
+            buttons.forEach(b => {
+                const el = document.getElementById(`sort-${b}`);
+                if(b === filterCriteria) {
+                    el.className = "bg-[#F47521] text-white px-3 py-1.5 rounded-lg font-bold";
+                } else {
+                    el.className = "bg-white/5 hover:bg-white/10 text-gray-300 px-3 py-1.5 rounded-lg font-bold";
+                }
+            });
+
+            let sorted = [...cachedCommentsArray];
+            if (filterCriteria === 'recent') {
+                sorted.sort((a,b) => b.timestamp - a.timestamp);
+            } else if (filterCriteria === 'likes') {
+                sorted.sort((a,b) => b.likes - a.likes);
+            } else if (filterCriteria === 'replies') {
+                sorted.sort((a,b) => b.replies - a.replies);
+            }
+
+            const modalMount = document.getElementById('modal-comments-list');
+            let html = "";
+            sorted.forEach(c => {
+                html += `
+                    <div class="bg-white/5 border border-white/10 p-4 rounded-xl text-xs space-y-2">
+                        <div class="flex items-center justify-between font-bold text-gray-400">
+                            <span class="text-[#F47521]">@${c.author}</span>
+                            <span>${c.timestamp.toLocaleString()}</span>
+                        </div>
+                        <p class="text-gray-100 text-sm">${c.text}</p>
+                        <div class="flex gap-4 text-gray-500 font-bold pt-1 text-[11px]">
+                            <span><i class="fas fa-heart text-red-500/60 mr-1"></i> ${c.likes} Likes</span>
+                            <span><i class="fas fa-reply text-blue-500/60 mr-1"></i> ${c.replies} Replies</span>
+                        </div>
+                    </div>
+                `;
+            });
+            modalMount.innerHTML = html || `<div class="text-center text-gray-500 py-8">Zero entries available matching criteria.</div>`;
+        };
+
+        window.toggleCommentsModal = (shouldShow) => {
+            const modal = document.getElementById('comments-modal');
+            if(shouldShow) {
+                modal.classList.remove('hidden-el');
+                sortComments('recent');
+            } else {
+                modal.classList.add('hidden-el');
+            }
+        };
+
+        // Profile like implementation supporting authentication state tracking arrays
+        window.handleProfileLike = async () => {
+            if (!currentAuthenticatedUser) {
+                alert("Please authenticate into your application account space instance first to click like items mapping.");
+                return;
+            }
+
+            const userDocRef = doc(db, "users", activeProfileUid);
+            const heartIcon = document.getElementById('heart-icon');
+            
+            try {
+                if (cachedProfileData.likedByArray && cachedProfileData.likedByArray.includes(currentAuthenticatedUser.uid)) {
+                    // Undo like reference status metrics point
+                    await updateDoc(userDocRef, {
+                        likedByArray: arrayRemove(currentAuthenticatedUser.uid),
+                        likesCount: increment(-1)
+                    });
+                    heartIcon.className = "far fa-heart text-gray-400";
+                } else {
+                    // Inject account array assignment identification marker trace
+                    await updateDoc(userDocRef, {
+                        likedByArray: arrayUnion(currentAuthenticatedUser.uid),
+                        likesCount: increment(1)
+                    });
+                    heartIcon.className = "fas fa-heart text-[#F47521]";
+                }
+                
+                // Live sync structural references UI indicators elements
+                await pullTargetProfilePayload();
+
+            } catch (err) {
+                console.error("Failed handling registration execution mutation tracking loops updates: ", err);
+            }
+        };
+
+        // Expand profile pictures to full size view context overlay layer interface
+        window.handleAvatarClick = () => {
+            const modal = document.getElementById('fullscreen-avatar-modal');
+            const targetImgSrc = document.getElementById('user-avatar').src;
+            document.getElementById('modal-avatar-img').src = targetImgSrc;
+            
+            modal.classList.remove('hidden-el');
+            setTimeout(() => { modal.style.opacity = '1'; }, 10);
+        };
+
+        window.closeFullscreenAvatar = () => {
+            const modal = document.getElementById('fullscreen-avatar-modal');
+            modal.style.opacity = '0';
+            setTimeout(() => { modal.classList.add('hidden-el'); }, 300);
+        };
+
+        // Open structural communication path parameter string mappings matrix routing references directly
+        window.navigateToChat = () => {
+            if(!currentAuthenticatedUser) {
+                alert("Sign inside system profile view structure context workspace directory routing index first.");
+                return;
+            }
+            window.location.href = `cht.html?userA=${currentAuthenticatedUser.uid}&userB=${activeProfileUid}`;
+        };
+
+        window.toggleSettingsPanel = () => {
+            const panel = document.getElementById('owner-settings-panel');
+            panel.classList.toggle('hidden-el');
+        };
+
+        window.updateProfileMetadata = async () => {
+            if (!isOwnerMode || !currentAuthenticatedUser) return;
+            const newName = document.getElementById('input-edit-username').value.trim();
+            if(!newName) return;
+
+            try {
+                const userDocRef = doc(db, "users", currentAuthenticatedUser.uid);
+                await updateDoc(userDocRef, { username: newName });
+                alert("Profile credentials synchronized efficiently.");
+                await pullTargetProfilePayload();
+            } catch(e) {
+                alert("Failed configuration save matrix initialization processes routes.");
+            }
+        };
+
+        window.handleLibraryVisibilityToggle = async () => {
+            if (!isOwnerMode || !currentAuthenticatedUser) return;
+            const checkedVal = document.getElementById('toggle-hide-library').checked;
+
+            try {
+                const userDocRef = doc(db, "users", currentAuthenticatedUser.uid);
+                await updateDoc(userDocRef, { hideLibrary: checkedVal });
+                cachedProfileData.hideLibrary = checkedVal;
+                await fetchLibrarySubcollection();
+            } catch(e) {
+                alert("Failed setting property configurations framework values parameters.");
+            }
+        };
+
         window.handleLogout = async () => {
             try {
                 await signOut(auth);
-                // Clear any stored cache related to the session
                 localStorage.removeItem('blazex_user_profile'); 
                 window.location.href = 'index.html'; 
             } catch (error) {
@@ -154,32 +586,32 @@
             if (!confirm2) return;
 
             try {
-                // Change UI to loading state to prevent double clicks
                 document.body.style.opacity = '0.5';
                 document.body.style.pointerEvents = 'none';
 
-                // 1. Sweep and Delete Subcollection: 'library'
+                // Sweep and Delete Subcollection: 'library'
                 const libRef = collection(db, "users", user.uid, "library");
                 const libSnapshot = await getDocs(libRef);
                 const libDeletions = libSnapshot.docs.map(d => deleteDoc(d.ref));
                 await Promise.all(libDeletions);
 
-                // 2. Sweep and Delete Subcollection: 'history'
+                // Sweep and Delete Subcollection: 'history'
                 const histRef = collection(db, "users", user.uid, "history");
                 const histSnapshot = await getDocs(histRef);
                 const histDeletions = histSnapshot.docs.map(d => deleteDoc(d.ref));
                 await Promise.all(histDeletions);
 
-                // 3. Delete Main User Document
+                // Sweep and Delete Subcollection: 'comments'
+                const commsRef = collection(db, "users", user.uid, "comments");
+                const commsSnapshot = await getDocs(commsRef);
+                const commsDeletions = commsSnapshot.docs.map(d => deleteDoc(d.ref));
+                await Promise.all(commsDeletions);
+
+                // Delete Main User Document
                 await deleteDoc(doc(db, "users", user.uid));
-
-                // 4. NUKE Local Storage entirely
                 localStorage.clear();
-
-                // 5. Delete Firebase Authentication Profile
                 await deleteUser(user);
 
-                // Success
                 alert("Account and all associated data have been permanently deleted.");
                 window.location.replace("index.html");
 
