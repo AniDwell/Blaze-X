@@ -1,4 +1,4 @@
-// genre_sliders.js - Sequential Queue Infinite Scroll (No Glow, Clean UI)
+// genre_sliders.js - 10 Pre-Defined Categories (Sequential Lazy Load, No Glow)
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
@@ -31,19 +31,22 @@ window.app.components.genreSliders = async () => {
     `;
 
     try {
-        // 2. FETCH ALL GENRES FROM ANILIST ONCE
-        const query = `query { GenreCollection }`;
-        const res = await fetch('https://graphql.anilist.co', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query })
-        });
-        const json = await res.json();
-        let allGenres = json.data?.GenreCollection || [];
+        // 2. DEFINE THE 10 PRE-DEFINED CATEGORIES (Action is already excluded)
+        const predefinedCategories = [
+            'Comedy', 
+            'Romance', 
+            'Fantasy', 
+            'Sci-Fi', 
+            'Drama', 
+            'Slice of Life', 
+            'Thriller', 
+            'Mystery', 
+            'Sports', 
+            'Hentai' // Included to demonstrate your custom 18+ red UI
+        ];
 
-        // 3. EXCLUDE SPECIFIC GENRES AND INITIALIZE QUEUE
-        const excludedGenres = ['Action']; 
-        window.app.state.genreQueue = allGenres.filter(g => !excludedGenres.includes(g));
+        // 3. INITIALIZE QUEUE
+        window.app.state.genreQueue = [...predefinedCategories];
         window.app.state.isFetchingGenre = false;
 
         const loader = document.getElementById('master-genre-loader');
