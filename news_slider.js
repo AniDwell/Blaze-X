@@ -1,4 +1,4 @@
-// news_slider.js - Bigger Card View with YouTube Video Embeds & Custom Bottom-Sheet Modal
+// news_slider.js - Custom Proxy Integrated Bigger Card View & Modal
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
@@ -9,6 +9,9 @@ window.app.newsCache = [];
 window.app.components.newsSlider = async () => {
     const container = document.getElementById('news-container');
     if (!container) return;
+
+    // YOUR CUSTOM PROXY FROM PLAYER.JS
+    const customProxyUrl = 'https://icy-wave-30d8.prashant-yash69.workers.dev/proxy?url=';
 
     // 1. SHOW SKELETON
     container.innerHTML = `
@@ -23,43 +26,53 @@ window.app.components.newsSlider = async () => {
     `;
 
     try {
-        // 2. FETCH REAL NEWS FEED (Using Anime Corner for reliable images + full articles)
-        const rssUrl = encodeURIComponent('https://animecorner.me/feed/');
-        const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${rssUrl}`);
-        const json = await res.json();
+        // 2. FETCH RAW RSS VIA YOUR CUSTOM PROXY (Bypassing rss2json API limits)
+        const targetRss = 'https://animecorner.me/feed/';
+        const res = await fetch(customProxyUrl + encodeURIComponent(targetRss));
+        const xmlText = await res.text();
         
-        let newsItems = json.items || [];
+        // Parse XML to DOM
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+        const items = Array.from(xmlDoc.querySelectorAll("item"));
 
-        if (newsItems.length === 0) {
+        if (items.length === 0) {
             container.innerHTML = ''; 
             return;
         }
 
-        // Limit to 12 latest news items and cache them globally
-        window.app.newsCache = newsItems.slice(0, 12);
-
-        // Helper function to extract and PROXY image URLs to bypass ALL blocking
-        const extractImageUrl = (item) => {
-            let src = item.thumbnail || (item.enclosure && item.enclosure.link) || '';
-            if (!src) {
-                const rawHtml = item.content || item.description || '';
-                const imgMatch = rawHtml.match(/<img[^>]+src=["'](https?:\/\/[^"']+)["']/i);
-                src = imgMatch ? imgMatch[1] : '';
-            }
-            if (!src) {
-                return 'https://via.placeholder.com/800x450/111/F47521?text=Anime+News';
-            }
+        // Map XML nodes into a usable JSON structure
+        let newsItems = items.map(item => {
+            const title = item.querySelector("title")?.textContent || "";
+            const link = item.querySelector("link")?.textContent || "";
+            const pubDate = item.querySelector("pubDate")?.textContent || "";
             
-            // Route through a free global image proxy to bypass 403 Forbidden & hotlinking blocks
-            // Converts to WebP automatically for faster loading
-            return `https://wsrv.nl/?url=${encodeURIComponent(src)}&w=800&output=webp`;
+            // Handle content namespace for full articles
+            const contentEncoded = item.getElementsByTagName("content:encoded");
+            const description = item.querySelector("description")?.textContent || "";
+            const content = contentEncoded.length > 0 ? contentEncoded[0].textContent : description;
+
+            return { title, link, pubDate, content, description };
+        }).slice(0, 12); // Limit to 12
+
+        window.app.newsCache = newsItems;
+
+        // Helper function to extract and PROXY image URLs using YOUR worker
+        const extractImageUrl = (item) => {
+            const rawHtml = item.content || item.description || '';
+            const imgMatch = rawHtml.match(/<img[^>]+src=["'](https?:\/\/[^"']+)["']/i);
+            let src = imgMatch ? imgMatch[1] : '';
+            
+            if (!src) return 'https://via.placeholder.com/800x450/111/F47521?text=Anime+News';
+            
+            // Route through your Cloudflare worker proxy to bypass 403 Forbidden & hotlink blocks
+            return customProxyUrl + encodeURIComponent(src);
         };
 
         // 3. RENDER CARDS
         let cardsHtml = window.app.newsCache.map((item, index) => {
             const imgSrc = extractImageUrl(item);
             
-            // Format publication date safely
             const pubDate = new Date(item.pubDate ? item.pubDate.replace(/-/g, '/') : Date.now()); 
             const dateStr = !isNaN(pubDate) ? pubDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently';
 
@@ -75,10 +88,8 @@ window.app.components.newsSlider = async () => {
                          onerror="this.onerror=null; this.src='https://via.placeholder.com/800x450/111/F47521?text=Anime+News';"
                          class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
                     
-                    <!-- Inner Gradient -->
                     <div class="absolute inset-0 bg-gradient-to-t from-[#111] via-transparent to-transparent"></div>
                     
-                    <!-- Category Badge -->
                     <div class="absolute top-3 left-3 bg-[#F47521] text-black text-[9px] md:text-[10px] font-black uppercase px-2 py-1 rounded shadow-md tracking-wider">
                         Anime News
                     </div>
@@ -87,18 +98,15 @@ window.app.components.newsSlider = async () => {
                 <!-- Bottom Text Area -->
                 <div class="p-4 md:p-5 flex flex-col h-[110px] md:h-[130px] justify-between relative z-10 -mt-2 bg-[#111]">
                     <div class="flex flex-col gap-1.5">
-                        <!-- Date -->
                         <span class="text-gray-400 text-[10px] md:text-xs font-bold uppercase tracking-wider flex items-center gap-1">
                             <i class="far fa-clock text-[#F47521]"></i> ${dateStr}
                         </span>
                         
-                        <!-- Headline -->
                         <h3 class="text-white font-black text-sm md:text-base line-clamp-2 leading-tight group-hover:text-[#F47521] transition-colors drop-shadow-sm">
                             ${item.title}
                         </h3>
                     </div>
 
-                    <!-- Call to Action -->
                     <p class="text-[10px] md:text-xs text-gray-500 font-bold uppercase tracking-widest group-hover:text-white transition-colors flex items-center gap-1 mt-2">
                         Read Full Article <i class="fas fa-arrow-up text-[#F47521] transform group-hover:-translate-y-1 transition-transform"></i>
                     </p>
@@ -165,13 +173,10 @@ function setupNewsModal() {
 
     const modalHtml = `
         <div id="news-modal-overlay" class="fixed inset-0 z-[100] hidden items-end justify-center pointer-events-none">
-            <!-- Dark Backdrop -->
             <div id="news-modal-backdrop" class="absolute inset-0 bg-black/85 backdrop-blur-md opacity-0 transition-opacity duration-400 pointer-events-auto cursor-pointer"></div>
             
-            <!-- Sliding Bottom Content Box -->
             <div id="news-modal-content" class="w-full md:w-[850px] bg-[#0a0a0a] max-h-[92vh] h-[92vh] rounded-t-[2rem] transform translate-y-full transition-transform duration-500 cubic-bezier(0.4, 0, 0.2, 1) relative flex flex-col pointer-events-auto border-t border-x border-[#F47521]/30 shadow-[0_-10px_50px_rgba(244,117,33,0.2)]">
                 
-                <!-- Header (Title & Close Button) -->
                 <div class="flex items-center justify-between p-5 md:p-6 border-b border-white/10 bg-[#111] rounded-t-[2rem] sticky top-0 z-20">
                     <h3 class="text-white font-black text-sm md:text-lg truncate pr-4 text-[#F47521] uppercase tracking-widest flex items-center gap-2">
                         <i class="far fa-newspaper"></i> Full Article
@@ -181,10 +186,8 @@ function setupNewsModal() {
                     </button>
                 </div>
                 
-                <!-- Scrollable Body with ample bottom padding -->
                 <div class="flex-1 overflow-y-auto p-5 md:p-8 custom-scrollbar relative pb-28 md:pb-36">
                     
-                    <!-- Cover Image -->
                     <div class="w-full h-[220px] md:h-[420px] relative rounded-2xl overflow-hidden mb-6 border border-white/10 bg-[#111]">
                         <img id="news-modal-img" 
                              class="w-full h-full object-cover" 
@@ -195,7 +198,6 @@ function setupNewsModal() {
                         <div class="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent"></div>
                     </div>
                     
-                    <!-- Meta Info -->
                     <div class="flex items-center gap-3 mb-4">
                         <span class="bg-[#F47521]/20 text-[#F47521] border border-[#F47521]/50 text-[10px] md:text-xs font-black uppercase px-3 py-1.5 rounded-md shadow-sm">
                             Latest Announcement
@@ -203,20 +205,16 @@ function setupNewsModal() {
                         <span id="news-modal-date" class="text-gray-400 text-xs md:text-sm font-bold flex items-center gap-1.5 uppercase tracking-wider"></span>
                     </div>
                     
-                    <!-- Title -->
                     <h1 id="news-modal-heading" class="text-xl md:text-3xl font-black text-white mb-6 leading-snug drop-shadow-md"></h1>
                     
-                    <!-- YouTube Video Container (Dynamically populated if found) -->
                     <div id="news-modal-video-container" class="hidden mb-6"></div>
 
-                    <!-- Article Content Box -->
                     <div class="bg-[#111] p-5 md:p-8 rounded-2xl border border-white/5 shadow-inner mb-8">
                         <div id="news-modal-body" class="text-gray-300 text-sm md:text-base leading-relaxed space-y-4">
                             <!-- Injected dynamically -->
                         </div>
                     </div>
                     
-                    <!-- Read Original Link -->
                     <div class="pt-4 border-t border-white/10 flex justify-center pb-12">
                         <a id="news-modal-link" href="#" target="_blank" class="inline-flex items-center justify-center gap-3 bg-[#F47521] text-black font-black uppercase tracking-widest px-8 py-4 rounded-xl hover:bg-white hover:text-black hover:scale-105 transition-all shadow-[0_4px_15px_rgba(244,117,33,0.4)] w-full md:w-auto">
                             Read Original Source <i class="fas fa-external-link-alt"></i>
@@ -232,8 +230,7 @@ function setupNewsModal() {
             .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
             .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #F47521; }
             
-            /* Typography & Layout adjustments for injected body content */
-            #news-modal-body img { border-radius: 12px; margin: 18px 0; max-width: 100%; border: 1px solid rgba(255,255,255,0.1); display: none; /* Hidden to prevent duplicate/broken inline images */ }
+            #news-modal-body img { border-radius: 12px; margin: 18px 0; max-width: 100%; border: 1px solid rgba(255,255,255,0.1); display: none; }
             #news-modal-body a { color: #F47521; font-weight: bold; text-decoration: underline; text-decoration-color: rgba(244,117,33,0.4); text-underline-offset: 4px; }
             #news-modal-body a:hover { text-decoration-color: #F47521; color: white; }
             #news-modal-body p { margin-bottom: 1.25rem; line-height: 1.7; }
@@ -248,12 +245,10 @@ function setupNewsModal() {
     document.getElementById('news-modal-backdrop').addEventListener('click', window.app.closeNewsModal);
 }
 
-// Function triggered on card click
 window.app.openNewsModal = (index, imgSrc, dateStr) => {
     const item = window.app.newsCache[index];
     if (!item) return;
 
-    // Populate Modal Data
     document.getElementById('news-modal-img').src = imgSrc;
     document.getElementById('news-modal-date').innerHTML = `<i class="far fa-calendar-alt"></i> ${dateStr}`;
     document.getElementById('news-modal-heading').innerText = item.title;
@@ -261,17 +256,15 @@ window.app.openNewsModal = (index, imgSrc, dateStr) => {
 
     const rawContent = item.content || item.description || '';
 
-    // --- YOUTUBE VIDEO EXTRACTION LOGIC ---
+    // --- YOUTUBE EXTRACTION ---
     const ytVideoContainer = document.getElementById('news-modal-video-container');
     ytVideoContainer.innerHTML = '';
     ytVideoContainer.classList.add('hidden');
 
-    // Regex to match YouTube Video URLs or Embed IDs
     const ytRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/gi;
     const ytMatches = [...rawContent.matchAll(ytRegex)];
 
     if (ytMatches.length > 0) {
-        // Grab unique YouTube video IDs
         const videoIds = [...new Set(ytMatches.map(m => m[1]))];
         
         let embedsHtml = videoIds.map(vId => `
@@ -295,7 +288,7 @@ window.app.openNewsModal = (index, imgSrc, dateStr) => {
         ytVideoContainer.classList.remove('hidden');
     }
 
-    // Clean up description content (removes images to avoid duplicates and strips embed codes to avoid breaking layout)
+    // Clean description content
     let cleanHTML = rawContent
         .replace(/<img[^>]*>/gi, '') 
         .replace(/<iframe[^>]*>.*?<\/iframe>/gi, '') 
@@ -303,18 +296,15 @@ window.app.openNewsModal = (index, imgSrc, dateStr) => {
 
     document.getElementById('news-modal-body').innerHTML = cleanHTML || '<p>No description available for this announcement.</p>';
 
-    // UI Animations
+    // Execute Animations
     const modal = document.getElementById('news-modal-overlay');
     const backdrop = document.getElementById('news-modal-backdrop');
     const content = document.getElementById('news-modal-content');
     
     modal.classList.remove('hidden');
     modal.classList.add('flex');
-    
-    // Prevent background scroll
     document.body.style.overflow = 'hidden';
 
-    // Trigger animations
     requestAnimationFrame(() => {
         backdrop.classList.remove('opacity-0');
         content.classList.remove('translate-y-full');
@@ -326,15 +316,11 @@ window.app.closeNewsModal = () => {
     const backdrop = document.getElementById('news-modal-backdrop');
     const content = document.getElementById('news-modal-content');
     
-    // Stop playing embedded YouTube videos when closing modal
     const videoContainer = document.getElementById('news-modal-video-container');
     if (videoContainer) videoContainer.innerHTML = '';
 
-    // Reverse animations
     backdrop.classList.add('opacity-0');
     content.classList.add('translate-y-full');
-    
-    // Restore body scroll
     document.body.style.overflow = '';
 
     setTimeout(() => {
