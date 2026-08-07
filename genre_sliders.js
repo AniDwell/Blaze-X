@@ -1,4 +1,4 @@
-// genre_sliders.js - Sequential Queue Infinite Scroll for Genre Sliders
+// genre_sliders.js - Sequential Queue Infinite Scroll (No Glow, Clean UI)
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
@@ -20,7 +20,7 @@ window.app.components.genreSliders = async () => {
     container.innerHTML = `
         <div id="genre-tracks-wrapper" class="flex flex-col w-full"></div>
         
-        <!-- The Single Master Loading Animation (Matches Carousel) -->
+        <!-- The Single Master Loading Animation -->
         <div id="master-genre-loader" class="w-full flex flex-col items-center justify-center py-12 transition-opacity duration-300">
             <div class="tk-loader scale-75 mb-4">
                 <div class="tk-dot tk-dot-1"></div>
@@ -54,13 +54,12 @@ window.app.components.genreSliders = async () => {
         }
 
         // 4. SETUP THE INTERSECTION OBSERVER
-        // It watches the master loader. When it enters the screen, we process the next genre in the queue.
         const observer = new IntersectionObserver((entries) => {
             const entry = entries[0];
             if (entry.isIntersecting) {
                 window.app.processNextGenreInQueue();
             }
-        }, { rootMargin: '400px' }); // Trigger load when user is 400px away from the bottom
+        }, { rootMargin: '400px' }); 
 
         observer.observe(loader);
 
@@ -71,10 +70,7 @@ window.app.components.genreSliders = async () => {
 };
 
 // --- CORE SEQUENTIAL LOADING LOGIC ---
-// This runs a while loop that guarantees we process genres one by one.
-// If a genre has 0 results, it skips it instantly and tries the next one without breaking the UI.
 window.app.processNextGenreInQueue = async () => {
-    // Prevent overlapping API calls
     if (window.app.state.isFetchingGenre) return;
     window.app.state.isFetchingGenre = true;
 
@@ -82,11 +78,10 @@ window.app.processNextGenreInQueue = async () => {
     const loader = document.getElementById('master-genre-loader');
 
     while (window.app.state.genreQueue.length > 0) {
-        const genre = window.app.state.genreQueue.shift(); // Pull the next genre
+        const genre = window.app.state.genreQueue.shift(); 
         const is18 = genre.toLowerCase() === 'hentai' || genre.toLowerCase() === 'explicit';
 
         try {
-            // Fetch top 12 trending for this genre
             const aniQuery = `
                 query ($genre: String) { 
                     Page(page: 1, perPage: 12) { 
@@ -108,7 +103,6 @@ window.app.processNextGenreInQueue = async () => {
             const animeList = aniData?.data?.Page?.media || [];
 
             if (animeList.length > 0) {
-                // Cross-reference with your custom API
                 const baseUrl = 'https://anikoto-api-xi.vercel.app';
                 const crossReferenced = await Promise.all(animeList.map(async (ani) => {
                     const title = ani.title.english || ani.title.romaji;
@@ -132,7 +126,6 @@ window.app.processNextGenreInQueue = async () => {
                         }
                     } catch(e) {}
                     
-                    // Fallback so it never breaks
                     return {
                         id: ani.id, title: title, image: ani.coverImage.extraLarge, type: ani.format || 'TV', sub: '?', dub: 0
                     };
@@ -140,35 +133,27 @@ window.app.processNextGenreInQueue = async () => {
 
                 const finalItems = crossReferenced.filter(item => item !== null);
 
-                // If we successfully found anime, render the row and BREAK the loop
-                // to wait for the user to scroll down again.
                 if (finalItems.length > 0) {
                     const rowHtml = window.app.buildGenreRowHtml(genre, finalItems, is18);
                     wrapper.insertAdjacentHTML('beforeend', rowHtml);
                     
-                    // Attach the slide button listeners for this new row
                     const safeSlug = genre.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
                     window.app.attachGenreScrollListeners(safeSlug);
                     
                     window.app.state.isFetchingGenre = false;
 
-                    // If the user is on a massive monitor, one row might not push the loader off screen.
-                    // We check if the loader is still visible, and if so, trigger the next fetch immediately.
                     const loaderRect = loader.getBoundingClientRect();
                     if (loaderRect.top <= window.innerHeight + 100) {
                         setTimeout(window.app.processNextGenreInQueue, 100);
                     }
-                    return; // Exit loop, wait for next scroll
+                    return; 
                 }
             }
         } catch (e) {
             console.error(`Skipping genre ${genre} due to error:`, e);
         }
-        // If we reach here, it means this genre had 0 results or failed.
-        // The while loop will instantly run again to grab the next genre from the queue.
     }
 
-    // If we break out of the while loop completely, the queue is empty!
     window.app.state.isFetchingGenre = false;
     if (loader) loader.style.display = 'none';
 };
@@ -180,13 +165,14 @@ window.app.buildGenreRowHtml = (genre, items, is18) => {
     const leftBtnId = `btn-left-${slug}`;
     const rightBtnId = `btn-right-${slug}`;
 
-    // Styling logic for 18+ vs Standard (No Gradients, No Play Buttons)
-    const bgClass = is18 ? 'bg-red-950/20 border-y border-red-900/50 py-8 my-4' : 'py-6';
-    const titleColor = is18 ? 'text-red-500 border-red-600 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]' : 'text-white border-[#F47521]';
-    const titleText = is18 ? `${genre} (18+ Adult)` : genre;
+    // Styling logic for 18+ vs Standard (No glows, flat UI)
+    const titleHtml = is18 
+        ? `<h2 class="text-xs md:text-sm font-black text-white bg-red-600 px-3 py-1.5 rounded tracking-widest uppercase inline-block">${genre} (18+)</h2>`
+        : `<h2 class="text-xl md:text-2xl font-black text-white border-l-4 border-[#F47521] pl-3 uppercase tracking-wider">${genre}</h2>`;
+        
     const btnColor = is18 ? 'hover:bg-red-600' : 'hover:bg-[#F47521]';
-    const hoverBorder = is18 ? 'group-hover:border-red-500/70' : 'group-hover:border-[#F47521]/70';
-    const badgeColor = is18 ? 'bg-red-600/90' : 'bg-[#F47521]/90';
+    const hoverBorder = is18 ? 'group-hover:border-red-500' : 'group-hover:border-[#F47521]';
+    const badgeColor = is18 ? 'bg-red-600' : 'bg-[#F47521]';
     const savedSvgColor = is18 ? 'text-red-500' : 'text-[#F47521]';
 
     const cardsHtml = items.map(anime => {
@@ -194,46 +180,44 @@ window.app.buildGenreRowHtml = (genre, items, is18) => {
         const docIdStr = String(anime.id);
         const isAdded = window.app.state.carouselLibrarySet && window.app.state.carouselLibrarySet.has(docIdStr);
         
-        const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ${savedSvgColor} drop-shadow-[0_0_5px_currentColor]" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
+        const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ${savedSvgColor}" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
         const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
 
         return `
         <div class="snap-start shrink-0 w-[140px] md:w-[190px] relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-10"
              onclick="window.app.sliderNavigate('${anime.id}', '${safeTitle}', '${anime.image}', '${anime.type}', '${anime.sub}', '${anime.dub}')">
             
-            <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden shadow-lg border border-white/10 ${hoverBorder} transition-colors bg-[#111]">
+            <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden border border-white/10 ${hoverBorder} transition-colors bg-[#111]">
                 <img src="${anime.image}" loading="lazy" class="w-full h-full object-cover">
                 
-                <!-- Save Button -->
+                <!-- Save Button (Flat, no glow) -->
                 <button onclick="window.app.toggleSliderLibrary(event, this, '${anime.id}', '${safeTitle}', '${anime.image}')" 
                         data-added="${isAdded}"
-                        class="absolute top-2 right-2 z-30 p-2 rounded bg-black/70 backdrop-blur-md border border-white/10 shadow-lg hover:bg-black transition-all flex items-center justify-center">
+                        class="absolute top-2 right-2 z-30 p-1.5 rounded bg-black/70 backdrop-blur-md border border-white/10 hover:bg-black transition-all flex items-center justify-center">
                     ${isAdded ? savedSvg : unsavedSvg}
                 </button>
                 
-                <!-- Badges -->
-                <div class="absolute top-0 left-0 p-2 flex flex-col gap-1.5 items-start z-10 pointer-events-none">
-                    <span class="bg-black/80 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded border border-white/10 font-bold uppercase shadow-md">${anime.type}</span>
-                    <span class="${badgeColor} backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-md font-bold">CC ${anime.sub}</span>
-                    ${anime.dub > 0 ? `<span class="bg-purple-600/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-md font-bold"><i class="fas fa-microphone text-[10px]"></i> ${anime.dub}</span>` : ''}
+                <!-- Badges (Flat, no glow) -->
+                <div class="absolute top-0 left-0 p-2 flex flex-col gap-1 items-start z-10 pointer-events-none">
+                    <span class="bg-black/80 backdrop-blur-sm text-white text-[9px] md:text-[10px] px-1.5 py-0.5 rounded border border-white/10 font-bold uppercase">${anime.type}</span>
+                    <span class="${badgeColor} text-white text-[9px] md:text-[10px] px-1.5 py-0.5 rounded font-bold">CC ${anime.sub}</span>
+                    ${anime.dub > 0 ? `<span class="bg-purple-600 text-white text-[9px] md:text-[10px] px-1.5 py-0.5 rounded font-bold"><i class="fas fa-microphone text-[8px]"></i> ${anime.dub}</span>` : ''}
                 </div>
             </div>
             
-            <h3 class="mt-2 text-sm md:text-base text-gray-100 font-bold truncate group-hover:text-white transition-colors drop-shadow-md">${anime.title}</h3>
+            <h3 class="mt-2 text-xs md:text-sm text-gray-100 font-bold truncate group-hover:text-white transition-colors">${anime.title}</h3>
         </div>
         `;
     }).join('');
 
     return `
-        <div class="genre-row-container relative w-full ${bgClass} animate-fade-in group/slider">
+        <div class="genre-row-container relative w-full py-6 animate-fade-in group/slider">
             <div class="px-4 md:px-8 mb-4 flex items-center justify-between">
-                <h2 class="text-xl md:text-2xl font-black ${titleColor} border-l-4 pl-3 uppercase tracking-wider drop-shadow-md">
-                    ${titleText}
-                </h2>
+                ${titleHtml}
             </div>
             
             <div class="relative w-full">
-                <button id="${leftBtnId}" class="hidden md:flex absolute -left-5 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 ${btnColor} border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0" onclick="window.app.scrollGenreTrack('${trackId}', -1)">
+                <button id="${leftBtnId}" class="hidden md:flex absolute -left-5 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 ${btnColor} border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all disabled:opacity-0" onclick="window.app.scrollGenreTrack('${trackId}', -1)">
                     <i class="fas fa-chevron-left text-lg"></i>
                 </button>
                 
@@ -241,7 +225,7 @@ window.app.buildGenreRowHtml = (genre, items, is18) => {
                     ${cardsHtml}
                 </div>
                 
-                <button id="${rightBtnId}" class="hidden md:flex absolute -right-5 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 ${btnColor} border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0" onclick="window.app.scrollGenreTrack('${trackId}', 1)">
+                <button id="${rightBtnId}" class="hidden md:flex absolute -right-5 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 ${btnColor} border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all disabled:opacity-0" onclick="window.app.scrollGenreTrack('${trackId}', 1)">
                     <i class="fas fa-chevron-right text-lg"></i>
                 </button>
             </div>
