@@ -1,9 +1,8 @@
-// genre_sliders.js - Bulletproof, Lazy-Loaded Vertical Stack of Genre Sliders
+// genre_sliders.js - Sequential Lazy-Loaded Vertical Stack of Genre Sliders with Carousel Loader
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
 
-// Global scroll helper for dynamically generated tracks
 window.app.scrollGenreTrack = (trackId, direction) => {
     const track = document.getElementById(trackId);
     if (track) {
@@ -27,25 +26,22 @@ window.app.components.genreSliders = async () => {
         const json = await res.json();
         let genres = json.data?.GenreCollection || [];
 
-        // 2. EXCLUDE ACTION (Already built as a separate slider)
+        // Exclude Action
         const excludedGenres = ['Action'];
         genres = genres.filter(g => !excludedGenres.includes(g));
 
         if (genres.length === 0) return;
 
-        // 3. BUILD SKELETON ROWS FOR EACH GENRE
+        // 2. BUILD SKELETON ROWS WITH COROUSEL-STYLE LOADERS
         let html = '';
-        genres.forEach((genre, index) => {
+        genres.forEach(genre => {
             const is18 = genre.toLowerCase() === 'hentai' || genre.toLowerCase() === 'explicit';
-            
             const bgClass = is18 ? 'bg-red-950/20 border-y border-red-900/50 py-8 my-6' : 'py-4 my-2';
             const titleColor = is18 ? 'text-red-500 border-red-600 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]' : 'text-white border-[#F47521]';
             const titleText = is18 ? `${genre} (18+ Adult)` : genre;
             const btnColor = is18 ? 'hover:bg-red-600' : 'hover:bg-[#F47521]';
             
-            // Safe unique ID string
-            const safeId = genre.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
-            const trackId = `track-${safeId}-${index}`;
+            const trackId = `track-${genre.replace(/[^a-zA-Z0-9]/g, '-')}`;
 
             html += `
                 <div class="genre-row-container relative ${bgClass} w-full min-h-[220px] group/slider" data-genre="${genre}" data-is18="${is18}">
@@ -60,11 +56,14 @@ window.app.components.genreSliders = async () => {
                             <i class="fas fa-chevron-left text-lg"></i>
                         </button>
                         
-                        <div id="${trackId}" class="genre-slider-track flex gap-4 md:gap-5 overflow-x-auto snap-x snap-mandatory hide-scrollbar px-4 md:px-8 pb-4">
-                            <!-- Skeletons -->
-                            ${[1, 2, 3, 4, 5, 6].map(() => `
-                                <div class="min-w-[140px] md:min-w-[190px] aspect-[2/3] bg-white/5 animate-pulse rounded-lg border border-white/5 shrink-0"></div>
-                            `).join('')}
+                        <div id="${trackId}" class="genre-slider-track flex gap-4 md:gap-5 overflow-x-auto snap-x snap-mandatory hide-scrollbar px-4 md:px-8 pb-4 items-center min-h-[190px]">
+                            <!-- Carousel-Style Loader Engine -->
+                            <div class="w-full flex items-center justify-center py-6">
+                                <div class="tk-loader scale-75">
+                                    <div class="tk-dot tk-dot-1"></div>
+                                    <div class="tk-dot tk-dot-2"></div>
+                                </div>
+                            </div>
                         </div>
                         
                         <button class="hidden md:flex absolute -right-5 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 ${btnColor} border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl" onclick="window.app.scrollGenreTrack('${trackId}', 1)">
@@ -77,43 +76,55 @@ window.app.components.genreSliders = async () => {
 
         container.innerHTML = html;
 
-        // 4. STAGGERED & INTERSECTION OBSERVER LAZY LOADING
-        // This queues requests so AniList doesn't block or rate-limit concurrent fetches.
+        // 3. SEQUENTIAL LAZY LOADING QUEUE (Load 1 at a time to prevent crashes)
+        const loadQueue = [];
+        let isFetchingQueue = false;
+
+        const processQueue = async () => {
+            if (isFetchingQueue || loadQueue.length === 0) return;
+            isFetchingQueue = true;
+            
+            const task = loadQueue.shift();
+            await loadGenreData(task.genre, task.trackId, task.is18, task.rowElement);
+            
+            isFetchingQueue = false;
+            processQueue(); // Process next in queue
+        };
+
         const observer = new IntersectionObserver((entries, obs) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
                     const targetEl = entry.target;
-                    obs.unobserve(targetEl); // Unobserve immediately to prevent duplicate triggers
-
                     const genre = targetEl.getAttribute('data-genre');
                     const is18 = targetEl.getAttribute('data-is18') === 'true';
-                    const trackId = targetEl.querySelector('.genre-slider-track').id;
+                    const trackId = `track-${genre.replace(/[^a-zA-Z0-9]/g, '-')}`;
                     
-                    // Safely queue execution with a small tick delay to prevent main-thread stuttering
-                    setTimeout(() => {
-                        loadGenreDataSafely(genre, trackId, is18, targetEl);
-                    }, 50);
+                    // Push to sequential execution queue
+                    loadQueue.push({ genre, trackId, is18, rowElement: targetEl });
+                    processQueue();
+
+                    obs.unobserve(targetEl);
                 }
             });
-        }, { rootMargin: '600px' }); // Pre-load when 600px away from the viewport
+        }, { rootMargin: '300px' });
 
         document.querySelectorAll('.genre-row-container').forEach(el => observer.observe(el));
 
     } catch (e) {
-        console.warn("Genre Sliders Initialization recovered:", e);
+        console.error("Genre Sliders Initialization Error:", e);
     }
 };
 
-// 6. BULLETPROOF SAFE LOADER
-async function loadGenreDataSafely(genre, trackId, is18, rowElement) {
+// 4. FETCH & RENDER SPECIFIC GENRE SAFELY
+async function loadGenreData(genre, trackId, is18, rowElement) {
     const track = document.getElementById(trackId);
     if (!track) return;
 
     try {
         const aniQuery = `
-            query ($genre: String) { 
+            query { 
                 Page(page: 1, perPage: 12) { 
-                    media(type: ANIME, genre_in: [$genre], sort: TRENDING_DESC) { 
+                    media(type: ANIME, genre_in: ["${genre}"], sort: TRENDING_DESC) { 
                         id
                         title { english romaji } 
                         coverImage { extraLarge } 
@@ -122,35 +133,21 @@ async function loadGenreDataSafely(genre, trackId, is18, rowElement) {
                 } 
             }
         `;
-        
         const aniRes = await fetch('https://graphql.anilist.co', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: aniQuery, variables: { genre } })
+            body: JSON.stringify({ query: aniQuery })
         });
-        
-        if (!aniRes.ok) throw new Error("AniList network request failed");
-        
         const aniData = await aniRes.json();
         const animeList = aniData?.data?.Page?.media || [];
 
-        if (animeList.length === 0) {
-            rowElement.style.display = 'none';
-            return;
-        }
-
-        // Cross-reference with custom API with a built-in safety net fallback
         const baseUrl = 'https://anikoto-api-xi.vercel.app';
         const crossReferenced = await Promise.all(animeList.map(async (ani) => {
             const title = ani.title.english || ani.title.romaji;
-            if (!title) return null;
-
             try {
                 const searchRes = await fetch(`${baseUrl}/api/search?keyword=${encodeURIComponent(title)}`);
-                if (!searchRes.ok) throw new Error();
                 const searchJson = await searchRes.json();
                 const results = searchJson.data || searchJson.results || [];
-                
                 if (results.length > 0) {
                     const match = results[0]; 
                     return {
@@ -163,16 +160,7 @@ async function loadGenreDataSafely(genre, trackId, is18, rowElement) {
                     };
                 }
             } catch(e) {}
-            
-            // Fallback: If custom API lookup fails, use raw AniList ID and cover so it never breaks
-            return {
-                id: ani.id,
-                title: title,
-                image: ani.coverImage.extraLarge,
-                type: ani.format || 'TV',
-                sub: '?',
-                dub: 0
-            };
+            return null; 
         }));
 
         const finalItems = crossReferenced.filter(item => item !== null);
@@ -182,7 +170,6 @@ async function loadGenreDataSafely(genre, trackId, is18, rowElement) {
             return;
         }
 
-        // Render Cards
         track.innerHTML = finalItems.map(anime => {
             const safeTitle = anime.title.replace(/'/g, "\\'");
             const docIdStr = String(anime.id);
@@ -220,7 +207,6 @@ async function loadGenreDataSafely(genre, trackId, is18, rowElement) {
         }).join('');
 
     } catch (err) {
-        // Silently hide row on failure so the rest of the application remains pristine
-        if (rowElement) rowElement.style.display = 'none';
+        rowElement.style.display = 'none';
     }
 }
