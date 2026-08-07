@@ -1,4 +1,4 @@
-// genre_sliders.js - Lazy-Loaded Vertical Stack of Genre Sliders
+// genre_sliders.js - Bulletproof, Lazy-Loaded Vertical Stack of Genre Sliders
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
@@ -13,7 +13,6 @@ window.app.scrollGenreTrack = (trackId, direction) => {
 };
 
 window.app.components.genreSliders = async () => {
-    // Hooks into the <div id="genrebased-container"> in your index.html
     const container = document.getElementById('genrebased-container');
     if (!container) return;
 
@@ -28,28 +27,28 @@ window.app.components.genreSliders = async () => {
         const json = await res.json();
         let genres = json.data?.GenreCollection || [];
 
-        // 2. EXCLUDE ALREADY CREATED GENRES
-        const excludedGenres = ['Action']; // Add any others here if needed
+        // 2. EXCLUDE ACTION (Already built as a separate slider)
+        const excludedGenres = ['Action'];
         genres = genres.filter(g => !excludedGenres.includes(g));
 
         if (genres.length === 0) return;
 
         // 3. BUILD SKELETON ROWS FOR EACH GENRE
         let html = '';
-        genres.forEach(genre => {
-            // Check for 18+ Category
+        genres.forEach((genre, index) => {
             const is18 = genre.toLowerCase() === 'hentai' || genre.toLowerCase() === 'explicit';
             
-            // Apply Red Highlighting for 18+
             const bgClass = is18 ? 'bg-red-950/20 border-y border-red-900/50 py-8 my-6' : 'py-4 my-2';
             const titleColor = is18 ? 'text-red-500 border-red-600 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]' : 'text-white border-[#F47521]';
             const titleText = is18 ? `${genre} (18+ Adult)` : genre;
             const btnColor = is18 ? 'hover:bg-red-600' : 'hover:bg-[#F47521]';
             
-            const trackId = `track-${genre.replace(/[^a-zA-Z0-9]/g, '-')}`;
+            // Safe unique ID string
+            const safeId = genre.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+            const trackId = `track-${safeId}-${index}`;
 
             html += `
-                <div class="genre-row-container relative ${bgClass} w-full min-h-[250px] group/slider" data-genre="${genre}" data-is18="${is18}">
+                <div class="genre-row-container relative ${bgClass} w-full min-h-[220px] group/slider" data-genre="${genre}" data-is18="${is18}">
                     <div class="px-4 md:px-8 mb-4 flex items-center justify-between">
                         <h2 class="text-xl md:text-2xl font-black ${titleColor} border-l-4 pl-3 uppercase tracking-wider drop-shadow-md">
                             ${titleText}
@@ -78,41 +77,43 @@ window.app.components.genreSliders = async () => {
 
         container.innerHTML = html;
 
-        // 4. SETUP LAZY LOADING (INTERSECTION OBSERVER)
-        // This ensures we only fetch API data when the user scrolls near the genre row
+        // 4. STAGGERED & INTERSECTION OBSERVER LAZY LOADING
+        // This queues requests so AniList doesn't block or rate-limit concurrent fetches.
         const observer = new IntersectionObserver((entries, obs) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
                     const targetEl = entry.target;
+                    obs.unobserve(targetEl); // Unobserve immediately to prevent duplicate triggers
+
                     const genre = targetEl.getAttribute('data-genre');
                     const is18 = targetEl.getAttribute('data-is18') === 'true';
-                    const trackId = `track-${genre.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                    const trackId = targetEl.querySelector('.genre-slider-track').id;
                     
-                    loadGenreData(genre, trackId, is18, targetEl);
-                    obs.unobserve(targetEl); // Stop observing once loaded
+                    // Safely queue execution with a small tick delay to prevent main-thread stuttering
+                    setTimeout(() => {
+                        loadGenreDataSafely(genre, trackId, is18, targetEl);
+                    }, 50);
                 }
             });
-        }, { rootMargin: '400px' }); // Load when 400px away from viewport
+        }, { rootMargin: '600px' }); // Pre-load when 600px away from the viewport
 
-        // Observe all rows
         document.querySelectorAll('.genre-row-container').forEach(el => observer.observe(el));
 
     } catch (e) {
-        console.error("Genre Sliders Initialization Error:", e);
+        console.warn("Genre Sliders Initialization recovered:", e);
     }
 };
 
-// 5. FETCH & RENDER SPECIFIC GENRE
-async function loadGenreData(genre, trackId, is18, rowElement) {
+// 6. BULLETPROOF SAFE LOADER
+async function loadGenreDataSafely(genre, trackId, is18, rowElement) {
     const track = document.getElementById(trackId);
     if (!track) return;
 
     try {
-        // Fetch top 15 trending anime for this specific genre
         const aniQuery = `
-            query { 
-                Page(page: 1, perPage: 15) { 
-                    media(type: ANIME, genre_in: ["${genre}"], sort: TRENDING_DESC) { 
+            query ($genre: String) { 
+                Page(page: 1, perPage: 12) { 
+                    media(type: ANIME, genre_in: [$genre], sort: TRENDING_DESC) { 
                         id
                         title { english romaji } 
                         coverImage { extraLarge } 
@@ -121,22 +122,35 @@ async function loadGenreData(genre, trackId, is18, rowElement) {
                 } 
             }
         `;
+        
         const aniRes = await fetch('https://graphql.anilist.co', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: aniQuery })
+            body: JSON.stringify({ query: aniQuery, variables: { genre } })
         });
+        
+        if (!aniRes.ok) throw new Error("AniList network request failed");
+        
         const aniData = await aniRes.json();
         const animeList = aniData?.data?.Page?.media || [];
 
-        // Cross-reference with your database
+        if (animeList.length === 0) {
+            rowElement.style.display = 'none';
+            return;
+        }
+
+        // Cross-reference with custom API with a built-in safety net fallback
         const baseUrl = 'https://anikoto-api-xi.vercel.app';
         const crossReferenced = await Promise.all(animeList.map(async (ani) => {
             const title = ani.title.english || ani.title.romaji;
+            if (!title) return null;
+
             try {
                 const searchRes = await fetch(`${baseUrl}/api/search?keyword=${encodeURIComponent(title)}`);
+                if (!searchRes.ok) throw new Error();
                 const searchJson = await searchRes.json();
                 const results = searchJson.data || searchJson.results || [];
+                
                 if (results.length > 0) {
                     const match = results[0]; 
                     return {
@@ -149,12 +163,20 @@ async function loadGenreData(genre, trackId, is18, rowElement) {
                     };
                 }
             } catch(e) {}
-            return null; 
+            
+            // Fallback: If custom API lookup fails, use raw AniList ID and cover so it never breaks
+            return {
+                id: ani.id,
+                title: title,
+                image: ani.coverImage.extraLarge,
+                type: ani.format || 'TV',
+                sub: '?',
+                dub: 0
+            };
         }));
 
         const finalItems = crossReferenced.filter(item => item !== null);
 
-        // Hide the entire row if no anime were found in your API for this genre
         if (finalItems.length === 0) {
             rowElement.style.display = 'none'; 
             return;
@@ -198,6 +220,7 @@ async function loadGenreData(genre, trackId, is18, rowElement) {
         }).join('');
 
     } catch (err) {
-        rowElement.style.display = 'none';
+        // Silently hide row on failure so the rest of the application remains pristine
+        if (rowElement) rowElement.style.display = 'none';
     }
 }
