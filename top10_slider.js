@@ -1,4 +1,4 @@
-// top10_slider.js - Larger Top 10 Slider with Titles (No Gradient/Play Button)
+// top10_slider.js - Top 10 Slider with Titles (Slightly Smaller)
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
@@ -6,12 +6,10 @@ window.app.components = window.app.components || {};
 window.app.components.topTenSlider = async () => {
     const container = document.getElementById('top10-slider-container');
     if (!container) return;
-
     if (window.app.state.currentView !== 'home') return;
-
     const currentYear = new Date().getFullYear();
 
-    // 1. INJECT CUSTOM CSS WITH LARGER SIZES
+    // 1. INJECT CUSTOM CSS SCALED DOWN SLIGHTLY
     if (!document.getElementById('top10-custom-styles')) {
         const style = document.createElement('style');
         style.id = 'top10-custom-styles';
@@ -19,7 +17,7 @@ window.app.components.topTenSlider = async () => {
             .top10-swiper {
                 width: 100%;
                 height: auto;
-                overflow: visible; /* Changed to visible so numbers don't clip */
+                overflow: visible; 
                 position: relative;
                 margin: 10px 0;
             }
@@ -29,7 +27,7 @@ window.app.components.topTenSlider = async () => {
                 gap: 28px;  
                 overflow-x: auto;
                 scroll-snap-type: x mandatory;
-                padding: 10px 10px 30px 50px; 
+                padding: 10px 10px 30px 45px; 
                 scrollbar-width: none;  
             }
             .top10-swiper-wrapper::-webkit-scrollbar {
@@ -37,14 +35,14 @@ window.app.components.topTenSlider = async () => {
             }
             .top10-swiper-slide {
                 flex: 0 0 auto;
-                width: 160px; /* Scaled up for mobile */
+                width: 140px; /* SCALED DOWN MOBILE */
                 scroll-snap-align: center;
                 position: relative;
                 cursor: pointer;
                 transition: transform 0.2s ease;
             }
             @media (min-width: 768px) {
-                .top10-swiper-slide { width: 220px; } /* Scaled up for desktop */
+                .top10-swiper-slide { width: 190px; } /* SCALED DOWN DESKTOP */
             }
             .top10-swiper-slide:hover {
                 transform: scale(1.03);
@@ -53,9 +51,9 @@ window.app.components.topTenSlider = async () => {
             .top10-slide-number {
                 position: absolute;
                 bottom: -5px;
-                left: -40px;
+                left: -35px; /* ADJUSTED OFFSET */
                 color: white;  
-                font-size: 110px;
+                font-size: 100px; /* SCALED DOWN */
                 line-height: 0.8;
                 font-weight: bold;
                 padding: 8px 14px;
@@ -67,15 +65,14 @@ window.app.components.topTenSlider = async () => {
             }
             @media (min-width: 768px) {
                 .top10-slide-number {
-                    font-size: 140px;
-                    left: -50px;
+                    font-size: 120px; /* SCALED DOWN */
+                    left: -45px; /* ADJUSTED OFFSET */
                 }
             }
         `;
         document.head.appendChild(style);
     }
 
-    // 2. SHOW LOADING SKELETON
     container.innerHTML = `
         <div class="px-4 md:px-8 py-2">
             <h2 class="text-xl md:text-2xl font-black text-white mb-2 pl-3 drop-shadow-md">Top 10 Anime of ${currentYear}</h2>
@@ -118,7 +115,6 @@ window.app.components.topTenSlider = async () => {
             try {
                 const searchRes = await fetch(`${baseUrl}/api/search?keyword=${encodeURIComponent(title)}`);
                 const searchJson = await searchRes.json();
-                
                 const results = searchJson.data || searchJson.results || [];
                 if (results.length > 0) {
                     const match = results[0]; 
@@ -142,12 +138,10 @@ window.app.components.topTenSlider = async () => {
             return;
         }
 
-        // 5. RENDER CARDS (No Gradient, No Play Button, Added Titles)
         let slidesHtml = finalTop10.map((anime, index) => {
             const safeTitle = anime.title.replace(/'/g, "\\'");
             const docIdStr = String(anime.id);
             const rank = index + 1;
-            
             const isAdded = window.app.state.carouselLibrarySet && window.app.state.carouselLibrarySet.has(docIdStr);
             
             const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
@@ -155,23 +149,15 @@ window.app.components.topTenSlider = async () => {
 
             return `
                 <div class="top10-swiper-slide group" onclick="window.app.sliderNavigate('${anime.id}', '${safeTitle}', '${anime.image}', '${anime.type}', '${anime.sub}', '${anime.dub}')">
-                    
-                    <!-- Image Wrapper -->
                     <div class="relative w-full aspect-[2/3] rounded-[16px] shadow-[0_6px_18px_rgba(0,0,0,0.35)] group-hover:border-[#F47521]/70 border border-transparent transition-colors">
-                        
                         <span class="top10-slide-number">${rank}</span>
                         <img src="${anime.image}" alt="Slide ${rank}" class="w-full h-full object-cover rounded-[16px] block">
-                        
-                        <!-- Permanent Save Button SVG -->
                         <button onclick="window.app.toggleSliderLibrary(event, this, '${anime.id}', '${safeTitle}', '${anime.image}')" 
                                 data-added="${isAdded}"
                                 class="absolute top-2 right-2 z-30 p-2 rounded-[8px] ${isAdded ? 'bg-black/80' : 'bg-black/50'} backdrop-blur-md border border-white/10 shadow-[0_4px_10px_rgba(0,0,0,0.5)] hover:bg-black/90 hover:scale-110 transition-all flex items-center justify-center">
                             ${isAdded ? savedSvg : unsavedSvg}
                         </button>
-
                     </div>
-
-                    <!-- Anime Title -->
                     <h3 class="mt-3 text-sm md:text-base text-gray-100 font-bold truncate group-hover:text-white transition-colors drop-shadow-md pl-1">${anime.title}</h3>
                 </div>
             `;
@@ -184,7 +170,6 @@ window.app.components.topTenSlider = async () => {
                         Top 10 of ${currentYear}
                     </h2>
                 </div>
-                
                 <div class="top10-swiper">
                     <div class="top10-swiper-wrapper">
                         ${slidesHtml}
