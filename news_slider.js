@@ -1,4 +1,4 @@
-// news_slider.js - Custom Proxy Integrated Bigger Card View & Modal
+// news_slider.js - Crunchyroll RSS Feed + Custom Proxy + Bottom-Sheet Modal
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
@@ -10,7 +10,7 @@ window.app.components.newsSlider = async () => {
     const container = document.getElementById('news-container');
     if (!container) return;
 
-    // YOUR CUSTOM PROXY FROM PLAYER.JS
+    // YOUR CUSTOM PROXY
     const customProxyUrl = 'https://icy-wave-30d8.prashant-yash69.workers.dev/proxy?url=';
 
     // 1. SHOW SKELETON
@@ -26,8 +26,8 @@ window.app.components.newsSlider = async () => {
     `;
 
     try {
-        // 2. FETCH RAW RSS VIA YOUR CUSTOM PROXY (Bypassing rss2json API limits)
-        const targetRss = 'https://animecorner.me/feed/';
+        // 2. FETCH CRUNCHYROLL RSS VIA YOUR CUSTOM PROXY
+        const targetRss = 'https://cr-news-api-service.prd.crunchyrollsvc.com/v1/en-US/rss';
         const res = await fetch(customProxyUrl + encodeURIComponent(targetRss));
         const xmlText = await res.text();
         
@@ -52,20 +52,32 @@ window.app.components.newsSlider = async () => {
             const description = item.querySelector("description")?.textContent || "";
             const content = contentEncoded.length > 0 ? contentEncoded[0].textContent : description;
 
-            return { title, link, pubDate, content, description };
+            // Look for Crunchyroll's media namespaces for high-res thumbnails
+            let mediaUrl = "";
+            const mediaContent = item.getElementsByTagName("media:content")[0];
+            const mediaThumb = item.getElementsByTagName("media:thumbnail")[0];
+            if (mediaContent) mediaUrl = mediaContent.getAttribute("url") || "";
+            if (!mediaUrl && mediaThumb) mediaUrl = mediaThumb.getAttribute("url") || "";
+
+            return { title, link, pubDate, content, description, mediaUrl };
         }).slice(0, 12); // Limit to 12
 
         window.app.newsCache = newsItems;
 
-        // Helper function to extract and PROXY image URLs using YOUR worker
+        // Helper function to extract and PROXY image URLs
         const extractImageUrl = (item) => {
-            const rawHtml = item.content || item.description || '';
-            const imgMatch = rawHtml.match(/<img[^>]+src=["'](https?:\/\/[^"']+)["']/i);
-            let src = imgMatch ? imgMatch[1] : '';
+            let src = item.mediaUrl;
             
-            if (!src) return 'https://via.placeholder.com/800x450/111/F47521?text=Anime+News';
+            // Fallback to searching the HTML body for an image
+            if (!src) {
+                const rawHtml = item.content || item.description || '';
+                const imgMatch = rawHtml.match(/<img[^>]+src=["'](https?:\/\/[^"']+)["']/i);
+                src = imgMatch ? imgMatch[1] : '';
+            }
             
-            // Route through your Cloudflare worker proxy to bypass 403 Forbidden & hotlink blocks
+            if (!src) return 'https://via.placeholder.com/800x450/111/F47521?text=Crunchyroll+News';
+            
+            // Route through your Cloudflare worker proxy
             return customProxyUrl + encodeURIComponent(src);
         };
 
@@ -91,7 +103,7 @@ window.app.components.newsSlider = async () => {
                     <div class="absolute inset-0 bg-gradient-to-t from-[#111] via-transparent to-transparent"></div>
                     
                     <div class="absolute top-3 left-3 bg-[#F47521] text-black text-[9px] md:text-[10px] font-black uppercase px-2 py-1 rounded shadow-md tracking-wider">
-                        Anime News
+                        Crunchyroll News
                     </div>
                 </div>
                 
