@@ -78,7 +78,11 @@
             
             <div id="home-view" class="w-full flex flex-col gap-6 animate-fade-in pb-8">
                 <div id="carousel-container"></div>
-                <div id="action-slider-container"></div> <!-- Added container for the new slider -->
+                
+                <!-- Added Top 10 Slider Container -->
+                <div id="top10-slider-container"></div> 
+                
+                <div id="action-slider-container"></div>
                 <div id="pill-slider-container" class="pl-4 mt-2"></div>
                 <div id="history-container" class="pl-4"></div>
                 <div id="recent-container" class="pl-4"></div>
@@ -126,7 +130,6 @@
             
             components: {}, 
             
-            // Fixed Sequencer: Recursively handles delayed module loading safely
             init: () => {
                 const savedUser = localStorage.getItem('blazex_user_profile');
                 if (savedUser) {
@@ -137,13 +140,11 @@
                     }
                 }
 
-                // If modules haven't registered components yet, wait 50ms and check again
                 if (!window.app.components.header) {
                     setTimeout(window.app.init, 50);
                     return;
                 }
 
-                // Hide loader and activate application shell layers smoothly
                 document.getElementById('boot-loader').style.opacity = '0';
                 setTimeout(() => {
                     document.getElementById('boot-loader').style.display = 'none';
@@ -159,16 +160,21 @@
 
                 if(window.app.components.header) window.app.components.header();
                 if(window.app.components.carousel) window.app.components.carousel();
-                // Initialize the action slider here as well to ensure it loads when rendering home view
+                
+                // Initialize BOTH sliders
+                if(window.app.components.topTenSlider) window.app.components.topTenSlider(); 
                 if(window.app.components.actionSlider) window.app.components.actionSlider(); 
+                
                 if(window.app.components.bottomnav) window.app.components.bottomnav();
             }
         };
     </script>
 
+    <!-- Cleaned up script tags -->
     <script type="module" src="header.js"></script>
     <script src="carousel.js"></script>
-    <script src="action_slider.js"></script>     <script src="top10_slider.js"></script><!-- Included action_slider.js here -->
+    <script src="top10_slider.js"></script> 
+    <script src="action_slider.js"></script> 
     <script src="auth.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
