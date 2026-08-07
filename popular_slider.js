@@ -1,26 +1,28 @@
-// popular_slider.js - Cinematic One-Card-At-A-Time Slider for All-Time Popular Anime
+// popular_slider.js - "Super Rich" One-Card-At-A-Time Slider (Orange Theme)
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
 
 window.app.components.popularSlider = async () => {
-    // Hooks into the <div id="popular-container"> in your index.html
     const container = document.getElementById('popular-container');
     if (!container) return;
 
-    // 1. SHOW CINEMATIC LOADING SKELETON
+    // 1. SHOW SKELETON (Wide format for 1-card + glance)
     container.innerHTML = `
-        <div class="px-4 md:px-8 py-6 relative max-w-[1200px] mx-auto">
-            <h2 class="text-xl md:text-2xl font-black text-white mb-4 border-l-4 border-yellow-500 pl-3 uppercase tracking-wider drop-shadow-md">All-Time Popular</h2>
-            <div class="w-full h-[220px] md:h-[300px] bg-white/5 animate-pulse rounded-2xl border border-white/5"></div>
+        <div class="px-4 md:px-8 py-6 relative">
+            <h2 class="text-xl md:text-2xl font-black text-white mb-4 border-l-4 border-[#F47521] pl-3 uppercase tracking-wider drop-shadow-md">All-Time Popular</h2>
+            <div class="flex gap-4 overflow-hidden">
+                <div class="min-w-[85vw] md:min-w-[600px] h-[180px] md:h-[240px] bg-white/5 animate-pulse rounded-lg border border-white/5"></div>
+                <div class="min-w-[85vw] md:min-w-[600px] h-[180px] md:h-[240px] bg-white/5 animate-pulse rounded-lg border border-white/5"></div>
+            </div>
         </div>
     `;
 
     try {
-        // 2. FETCH ALL-TIME POPULAR FROM ANILIST
+        // 2. FETCH ALL-TIME POPULAR & DESCRIPTIONS FROM ANILIST
         const aniQuery = `
             query { 
-                Page(page: 1, perPage: 20) { 
+                Page(page: 1, perPage: 15) { 
                     media(type: ANIME, sort: POPULARITY_DESC) { 
                         id
                         title { english romaji } 
@@ -28,6 +30,7 @@ window.app.components.popularSlider = async () => {
                         bannerImage
                         averageScore
                         format
+                        description(asHtml: false)
                     } 
                 } 
             }
@@ -45,6 +48,8 @@ window.app.components.popularSlider = async () => {
         
         const crossReferenced = await Promise.all(popularList.map(async (ani) => {
             const title = ani.title.english || ani.title.romaji;
+            const cleanDesc = ani.description ? ani.description.replace(/<[^>]*>?/gm, '').trim() : 'No description available for this series.';
+            
             try {
                 const searchRes = await fetch(`${baseUrl}/api/search?keyword=${encodeURIComponent(title)}`);
                 const searchJson = await searchRes.json();
@@ -56,8 +61,9 @@ window.app.components.popularSlider = async () => {
                         id: match.id,
                         title: title, 
                         image: ani.coverImage.extraLarge || match.image || match.poster, 
-                        banner: ani.bannerImage || ani.coverImage.extraLarge, // Fallback to cover if no banner
+                        banner: ani.bannerImage || ani.coverImage.extraLarge,
                         score: ani.averageScore || 'N/A',
+                        desc: cleanDesc,
                         type: match.type || ani.format || 'TV',
                         sub: match.tvInfo?.sub || match.sub || '?',
                         dub: match.tvInfo?.dub || match.dub || 0
@@ -74,7 +80,7 @@ window.app.components.popularSlider = async () => {
             return;
         }
 
-        // 4. RENDER WIDE CINEMATIC CARDS
+        // 4. RENDER "SUPER RICH" CARDS (Orange Theme, No heavy gradients)
         let cardsHtml = finalSliderItems.map(anime => {
             const safeTitle = anime.title.replace(/'/g, "\\'");
             const docIdStr = String(anime.id);
@@ -84,98 +90,103 @@ window.app.components.popularSlider = async () => {
             const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
 
             const scoreHtml = anime.score !== 'N/A' 
-                ? `<div class="flex items-center gap-1.5 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-2 py-1 md:px-3 md:py-1.5 rounded-lg w-fit mb-2 shadow-lg backdrop-blur-md">
-                       <i class="fas fa-star text-[10px] md:text-sm"></i>
-                       <span class="text-[11px] md:text-[13px] font-black tracking-widest uppercase">${anime.score}% Rating</span>
+                ? `<div class="flex items-center gap-1 text-[#F47521] mb-1 md:mb-2">
+                       <i class="fas fa-star text-[10px] md:text-xs"></i>
+                       <span class="text-[10px] md:text-xs font-black tracking-widest uppercase">${anime.score}% Score</span>
                    </div>`
                 : '';
 
             return `
-            <div class="snap-center shrink-0 w-full relative rounded-2xl overflow-hidden shadow-[0_10px_40px_rgba(0,0,0,0.5)] border border-white/10 group cursor-pointer transition-transform duration-300 hover:border-yellow-500/50"
+            <div class="pop-card snap-start shrink-0 w-[85vw] max-w-[600px] md:max-w-[700px] relative group cursor-pointer transition-transform duration-300 hover:scale-[1.02] hover:z-20"
                  onclick="window.app.sliderNavigate('${anime.id}', '${safeTitle}', '${anime.image}', '${anime.type}', '${anime.sub}', '${anime.dub}')">
                 
-                <!-- Background Banner Image -->
-                <div class="absolute inset-0 z-0 bg-black">
-                    <img src="${anime.banner}" loading="lazy" class="w-full h-full object-cover opacity-30 group-hover:opacity-50 transition-opacity duration-700 object-center">
+                <div class="w-full h-[180px] md:h-[240px] rounded-lg overflow-hidden shadow-lg border border-white/10 group-hover:border-[#F47521]/70 transition-colors bg-[#111] flex relative">
                     
-                    <!-- Heavy Gradients to ensure text readability -->
-                    <div class="absolute inset-0 bg-gradient-to-r from-[#050505] via-[#050505]/90 to-transparent"></div>
-                    <div class="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent"></div>
-                </div>
-                
-                <!-- Content Container -->
-                <div class="relative z-10 flex p-4 md:p-6 h-[220px] md:h-[300px] gap-4 md:gap-8 items-center">
-                    
-                    <!-- Left: Cover Poster -->
-                    <img src="${anime.image}" class="w-[110px] md:w-[170px] h-full object-cover rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.8)] border border-white/10 shrink-0 group-hover:-translate-y-1 transition-transform duration-300">
-                    
-                    <!-- Right: Text Information -->
-                    <div class="flex flex-col flex-1 justify-center py-2 min-w-0 pr-10 md:pr-16">
+                    <!-- Faded watermark backdrop on the right side -->
+                    <div class="absolute inset-0 z-0 opacity-[0.08] pointer-events-none" style="mask-image: linear-gradient(to left, black 30%, transparent 80%); -webkit-mask-image: linear-gradient(to left, black 30%, transparent 80%);">
+                        <img src="${anime.banner}" class="w-full h-full object-cover">
+                    </div>
+
+                    <!-- Left: Poster Image -->
+                    <div class="w-[120px] md:w-[160px] h-full shrink-0 relative z-10 p-2 md:p-3">
+                        <img src="${anime.image}" class="w-full h-full object-cover rounded shadow-md border border-white/5">
                         
-                        <!-- Most Important: Rating -->
-                        ${scoreHtml}
-                        
-                        <!-- Title -->
-                        <h3 class="text-xl md:text-4xl font-black text-white line-clamp-2 md:line-clamp-3 leading-tight drop-shadow-md mb-3 md:mb-4 group-hover:text-yellow-500 transition-colors">${anime.title}</h3>
-                        
-                        <!-- Sub/Dub & Type Badges -->
-                        <div class="flex flex-wrap items-center gap-2 mt-auto">
-                            <span class="bg-black/60 backdrop-blur-md text-white text-[10px] md:text-xs px-2.5 py-1 rounded font-bold uppercase border border-white/10 shadow-sm">${anime.type}</span>
-                            <span class="bg-[#F47521] text-black text-[10px] md:text-xs px-2.5 py-1 rounded shadow-sm font-black tracking-wider border border-[#F47521]">CC ${anime.sub}</span>
-                            ${anime.dub > 0 ? `<span class="bg-purple-600 text-white text-[10px] md:text-xs px-2.5 py-1 rounded shadow-sm font-black tracking-wider border border-purple-500"><i class="fas fa-microphone text-[9px] md:text-[11px]"></i> ${anime.dub}</span>` : ''}
+                        <!-- Top Left Format Badge -->
+                        <div class="absolute top-3 left-3 p-1 flex flex-col gap-1 items-start z-10 pointer-events-none">
+                            <span class="bg-black/80 backdrop-blur-sm text-white text-[9px] md:text-[10px] px-1.5 py-0.5 rounded border border-white/10 font-bold uppercase shadow-md">${anime.type}</span>
                         </div>
                     </div>
-                </div>
+                    
+                    <!-- Right: Super Rich Details -->
+                    <div class="flex-1 flex flex-col justify-start py-3 md:py-4 pr-12 md:pr-14 pl-1 md:pl-2 relative z-10 min-w-0">
+                        
+                        ${scoreHtml}
+                        
+                        <h3 class="text-base md:text-2xl font-black text-white line-clamp-1 md:line-clamp-2 drop-shadow-md mb-1.5 group-hover:text-[#F47521] transition-colors">${anime.title}</h3>
+                        
+                        <!-- Sub/Dub Badges -->
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[9px] md:text-[10px] px-1.5 py-0.5 rounded shadow-sm font-bold">CC ${anime.sub}</span>
+                            ${anime.dub > 0 ? `<span class="bg-purple-600/90 backdrop-blur-sm text-white text-[9px] md:text-[10px] px-1.5 py-0.5 rounded shadow-sm font-bold"><i class="fas fa-microphone text-[8px]"></i> ${anime.dub}</span>` : ''}
+                        </div>
+                        
+                        <!-- Description -->
+                        <p class="text-[10px] md:text-xs text-gray-400 line-clamp-3 md:line-clamp-4 leading-relaxed font-medium pr-2 mt-1">
+                            ${anime.desc}
+                        </p>
+                    </div>
 
-                <!-- Save Button (Top Right) -->
-                <button onclick="window.app.toggleSliderLibrary(event, this, '${anime.id}', '${safeTitle}', '${anime.image}')" 
-                        data-added="${isAdded}"
-                        class="absolute top-4 right-4 z-30 p-2 rounded-lg bg-black/60 backdrop-blur-md border border-white/10 shadow-lg hover:bg-black transition-all flex items-center justify-center">
-                    ${isAdded ? savedSvg : unsavedSvg}
-                </button>
+                    <!-- Permanent Save Button SVG -->
+                    <button onclick="window.app.toggleSliderLibrary(event, this, '${anime.id}', '${safeTitle}', '${anime.image}')" 
+                            data-added="${isAdded}"
+                            class="absolute top-2 right-2 z-30 p-2 rounded bg-black/70 backdrop-blur-md border border-white/10 shadow-lg hover:bg-black transition-all flex items-center justify-center">
+                        ${isAdded ? savedSvg : unsavedSvg}
+                    </button>
+                </div>
             </div>
             `;
         }).join('');
 
         container.innerHTML = `
-            <div class="px-4 md:px-8 py-6 relative max-w-[1200px] mx-auto">
+            <div class="px-4 md:px-8 py-6 relative">
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-xl md:text-2xl font-black text-white border-l-4 border-yellow-500 pl-3 uppercase tracking-wider drop-shadow-md">
+                    <h2 class="text-xl md:text-2xl font-black text-white border-l-4 border-[#F47521] pl-3 uppercase tracking-wider drop-shadow-md">
                         All-Time Popular
                     </h2>
                 </div>
                 
-                <div class="relative group/slider rounded-2xl">
-                    <button id="pop-slide-left-btn" class="hidden md:flex absolute -left-5 top-[50%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-yellow-500 hover:text-black border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0">
+                <div class="relative group/slider">
+                    <button id="pop-slide-left-btn" class="hidden md:flex absolute -left-5 top-[50%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0">
                         <i class="fas fa-chevron-left text-lg"></i>
                     </button>
                     
-                    <!-- Track handles sliding 1 card at a time perfectly -->
-                    <div id="popular-slider-track" class="flex gap-4 overflow-x-auto snap-x snap-mandatory hide-scrollbar pb-2">
+                    <!-- Track handles sliding 1 card at a time. The right padding ensures the last card doesn't get cut off. -->
+                    <div id="popular-slider-track" class="flex gap-4 md:gap-5 overflow-x-auto snap-x snap-mandatory hide-scrollbar pb-4 pt-2 -mx-4 px-4 md:mx-0 md:px-0 pr-8 md:pr-16">
                         ${cardsHtml}
                     </div>
                     
-                    <button id="pop-slide-right-btn" class="hidden md:flex absolute -right-5 top-[50%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-yellow-500 hover:text-black border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0">
+                    <button id="pop-slide-right-btn" class="hidden md:flex absolute -right-5 top-[50%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0">
                         <i class="fas fa-chevron-right text-lg"></i>
                     </button>
                 </div>
             </div>
         `;
 
-        // 5. ATTACH SCROLL LOGIC
+        // 5. ATTACH EXACT 1-CARD SCROLL LOGIC
         const track = document.getElementById('popular-slider-track');
         const leftBtn = document.getElementById('pop-slide-left-btn');
         const rightBtn = document.getElementById('pop-slide-right-btn');
         
         if (track && leftBtn && rightBtn) {
-            // Scroll by exactly one card width + gap
             leftBtn.addEventListener('click', () => { 
-                const cardWidth = track.clientWidth;
-                track.scrollBy({ left: -cardWidth, behavior: 'smooth' }); 
+                const card = track.querySelector('.pop-card');
+                const scrollAmount = card ? card.clientWidth + 16 : window.innerWidth * 0.85; // 16px is the gap
+                track.scrollBy({ left: -scrollAmount, behavior: 'smooth' }); 
             });
             rightBtn.addEventListener('click', () => { 
-                const cardWidth = track.clientWidth;
-                track.scrollBy({ left: cardWidth, behavior: 'smooth' }); 
+                const card = track.querySelector('.pop-card');
+                const scrollAmount = card ? card.clientWidth + 16 : window.innerWidth * 0.85; 
+                track.scrollBy({ left: scrollAmount, behavior: 'smooth' }); 
             });
             
             track.addEventListener('scroll', () => {
