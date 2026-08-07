@@ -1,7 +1,14 @@
-// genre_sliders.js - 10 Pre-Defined Categories (Sequential Lazy Load, No Glow)
+// genre_sliders.js - 10 Pre-Defined Categories (Fixed Margins, Proxied Images, Lazy Load)
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
+
+// Global image proxy to prevent rate limits and optimize loading speed
+window.app.getProxiedImage = (url) => {
+    if (!url) return 'https://via.placeholder.com/300x450/111/fff';
+    // Uses Weserv CDN to cache, resize, and convert to WebP to save bandwidth
+    return `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=300&output=webp`;
+};
 
 // Global scroll helper for dynamically generated tracks
 window.app.scrollGenreTrack = (trackId, direction) => {
@@ -42,7 +49,7 @@ window.app.components.genreSliders = async () => {
             'Thriller', 
             'Mystery', 
             'Sports', 
-            'Hentai' // Included to demonstrate your custom 18+ red UI
+            'Hentai' 
         ];
 
         // 3. INITIALIZE QUEUE
@@ -87,7 +94,7 @@ window.app.processNextGenreInQueue = async () => {
         try {
             const aniQuery = `
                 query ($genre: String) { 
-                    Page(page: 1, perPage: 12) { 
+                    Page(page: 1, perPage: 15) { 
                         media(type: ANIME, genre_in: [$genre], sort: TRENDING_DESC) { 
                             id
                             title { english romaji } 
@@ -183,6 +190,9 @@ window.app.buildGenreRowHtml = (genre, items, is18) => {
         const docIdStr = String(anime.id);
         const isAdded = window.app.state.carouselLibrarySet && window.app.state.carouselLibrarySet.has(docIdStr);
         
+        // Pass original image to the proxier helper
+        const proxiedImg = window.app.getProxiedImage(anime.image);
+
         const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ${savedSvgColor}" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
         const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
 
@@ -191,7 +201,7 @@ window.app.buildGenreRowHtml = (genre, items, is18) => {
              onclick="window.app.sliderNavigate('${anime.id}', '${safeTitle}', '${anime.image}', '${anime.type}', '${anime.sub}', '${anime.dub}')">
             
             <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden border border-white/10 ${hoverBorder} transition-colors bg-[#111]">
-                <img src="${anime.image}" loading="lazy" class="w-full h-full object-cover">
+                <img src="${proxiedImg}" loading="lazy" class="w-full h-full object-cover">
                 
                 <!-- Save Button (Flat, no glow) -->
                 <button onclick="window.app.toggleSliderLibrary(event, this, '${anime.id}', '${safeTitle}', '${anime.image}')" 
@@ -220,14 +230,17 @@ window.app.buildGenreRowHtml = (genre, items, is18) => {
             </div>
             
             <div class="relative w-full">
+                <!-- Left Button -->
                 <button id="${leftBtnId}" class="hidden md:flex absolute -left-5 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 ${btnColor} border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all disabled:opacity-0" onclick="window.app.scrollGenreTrack('${trackId}', -1)">
                     <i class="fas fa-chevron-left text-lg"></i>
                 </button>
                 
-                <div id="${trackId}" class="flex gap-4 md:gap-5 overflow-x-auto snap-x snap-mandatory hide-scrollbar pb-4 pt-2 -mx-4 px-4 md:mx-0 md:px-8">
+                <!-- Fixed Padding: pl-4 md:pl-8 ensures the first image safely clears the left edge -->
+                <div id="${trackId}" class="flex gap-4 md:gap-5 overflow-x-auto snap-x snap-mandatory hide-scrollbar pb-4 pt-2 pl-4 md:pl-8 pr-12">
                     ${cardsHtml}
                 </div>
                 
+                <!-- Right Button -->
                 <button id="${rightBtnId}" class="hidden md:flex absolute -right-5 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 ${btnColor} border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all disabled:opacity-0" onclick="window.app.scrollGenreTrack('${trackId}', 1)">
                     <i class="fas fa-chevron-right text-lg"></i>
                 </button>
