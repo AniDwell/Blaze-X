@@ -1,45 +1,97 @@
-// continue_watching.js - Horizontal Continue Watching Slider with Deletion & Progress
+// continue_watching.js - Horizontal Continue Watching Slider with Custom Modals
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
 
+// --- CUSTOM CSS MODAL LOGIC ---
+window.app.showConfirmModal = (title, message, confirmCallback) => {
+    const overlay = document.getElementById('modal-overlay');
+    const content = document.getElementById('modal-content');
+    
+    if (!overlay || !content) return;
+
+    // Build the modal UI
+    content.innerHTML = `
+        <div class="text-center">
+            <div class="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20">
+                <i class="fas fa-exclamation-triangle text-2xl text-red-500"></i>
+            </div>
+            <h3 class="text-white font-black text-lg uppercase tracking-wider mb-2 drop-shadow-md">${title}</h3>
+            <p class="text-gray-400 text-sm mb-6 leading-relaxed">${message}</p>
+            <div class="flex gap-3 justify-center">
+                <button id="modal-cancel-btn" class="flex-1 bg-white/10 hover:bg-white/20 text-white font-bold py-2.5 rounded-lg transition-colors border border-white/10 text-sm tracking-wide">Cancel</button>
+                <button id="modal-confirm-btn" class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 rounded-lg transition-colors shadow-lg shadow-red-600/20 text-sm tracking-wide">Confirm</button>
+            </div>
+        </div>
+    `;
+
+    // Animation and Close Logic
+    const closeModal = () => {
+        content.classList.remove('scale-100', 'opacity-100');
+        content.classList.add('scale-95', 'opacity-0');
+        setTimeout(() => { 
+            overlay.classList.add('hidden'); 
+        }, 300); // Matches transition duration
+    };
+
+    document.getElementById('modal-cancel-btn').onclick = closeModal;
+    document.getElementById('modal-confirm-btn').onclick = () => {
+        closeModal();
+        if(confirmCallback) confirmCallback();
+    };
+
+    // Open Modal smoothly
+    overlay.classList.remove('hidden');
+    void overlay.offsetWidth; // Trigger reflow to ensure animation plays
+    content.classList.remove('scale-95', 'opacity-0');
+    content.classList.add('scale-100', 'opacity-100');
+};
+
 // --- DELETION LOGIC ---
-window.app.deleteContinueWatching = (event, animeId) => {
-    event.stopPropagation(); 
-    const profile = window.app.state?.activeProfile || JSON.parse(localStorage.getItem('blazex_user_profile') || '{}');
-    const uid = profile.uid || 'guest';
+window.app.deleteContinueWatching = (event, animeId, animeTitle) => {
+    event.stopPropagation(); // Stop click from redirecting to player
     
-    // Scan and remove all history/time keys for this specific anime
-    const keysToDelete = [];
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && (key.startsWith(`blazex_progress_${uid}_${animeId}`) || key.startsWith(`blazex_time_${uid}_${animeId}`))) {
-            keysToDelete.push(key);
+    window.app.showConfirmModal(
+        "Remove Anime",
+        `Are you sure you want to remove <span class="text-white font-bold">${animeTitle}</span> from your continue watching list?`,
+        () => {
+            const profile = window.app.state?.activeProfile || JSON.parse(localStorage.getItem('blazex_user_profile') || '{}');
+            const uid = profile.uid || 'guest';
+            
+            const keysToDelete = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && (key.startsWith(`blazex_progress_${uid}_${animeId}`) || key.startsWith(`blazex_time_${uid}_${animeId}`))) {
+                    keysToDelete.push(key);
+                }
+            }
+            keysToDelete.forEach(k => localStorage.removeItem(k));
+            
+            if (window.app.components.continueWatching) window.app.components.continueWatching();
         }
-    }
-    keysToDelete.forEach(k => localStorage.removeItem(k));
-    
-    // Re-render the slider instantly
-    if (window.app.components.continueWatching) window.app.components.continueWatching();
+    );
 };
 
 window.app.clearAllContinueWatching = () => {
-    if (!confirm("Are you sure you want to clear all your watch history?")) return;
-    
-    const profile = window.app.state?.activeProfile || JSON.parse(localStorage.getItem('blazex_user_profile') || '{}');
-    const uid = profile.uid || 'guest';
-    
-    const keysToDelete = [];
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && (key.startsWith(`blazex_progress_${uid}_`) || key.startsWith(`blazex_time_${uid}_`))) {
-            keysToDelete.push(key);
+    window.app.showConfirmModal(
+        "Clear History",
+        "Are you sure you want to permanently clear all your continue watching progress? This cannot be undone.",
+        () => {
+            const profile = window.app.state?.activeProfile || JSON.parse(localStorage.getItem('blazex_user_profile') || '{}');
+            const uid = profile.uid || 'guest';
+            
+            const keysToDelete = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && (key.startsWith(`blazex_progress_${uid}_`) || key.startsWith(`blazex_time_${uid}_`))) {
+                    keysToDelete.push(key);
+                }
+            }
+            keysToDelete.forEach(k => localStorage.removeItem(k));
+            
+            if (window.app.components.continueWatching) window.app.components.continueWatching();
         }
-    }
-    keysToDelete.forEach(k => localStorage.removeItem(k));
-    
-    // Re-render the slider instantly
-    if (window.app.components.continueWatching) window.app.components.continueWatching();
+    );
 };
 
 
@@ -85,7 +137,7 @@ window.app.components.continueWatching = async () => {
 
     historyItems = historyItems.reverse().slice(0, 10);
 
-    // 2. SHOW HORIZONTAL LOADING SKELETON (WITH PROPER SPACING)
+    // 2. SHOW HORIZONTAL LOADING SKELETON
     container.innerHTML = `
         <div class="py-6 relative overflow-visible">
             <div class="px-4 md:px-8 mb-4 flex items-center justify-between">
@@ -121,12 +173,15 @@ window.app.components.continueWatching = async () => {
             return;
         }
 
-        // 4. RENDER HORIZONTAL CARDS WITH BUTTONS
+        // 4. RENDER HORIZONTAL CARDS WITH SLIM PROGRESS BARS
         let cardsHtml = enrichedItems.map(item => {
             const targetUrl = `play.html?id=${encodeURIComponent(item.slug)}&anime=${item.animeId}&ep=${item.epNum}&type=sub`;
             let progressPct = (item.time / 1440) * 100;
             if (progressPct > 100) progressPct = 100;
             if (progressPct < 2) progressPct = 2; 
+
+            // Escape quotes for the onclick function
+            const safeTitleForFunc = item.title.replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
             return `
             <div class="snap-start shrink-0 w-[240px] md:w-[320px] relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-20"
@@ -139,7 +194,7 @@ window.app.components.continueWatching = async () => {
                     <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none"></div>
 
                     <!-- Individual Delete Button -->
-                    <button onclick="window.app.deleteContinueWatching(event, '${item.animeId}')" 
+                    <button onclick="window.app.deleteContinueWatching(event, '${item.animeId}', '${safeTitleForFunc}')" 
                             class="absolute top-2 right-2 z-[40] w-7 h-7 bg-black/60 hover:bg-red-600 backdrop-blur-md rounded-full text-white flex items-center justify-center transition-colors border border-white/10 shadow-lg">
                         <i class="fas fa-times text-xs"></i>
                     </button>
@@ -157,9 +212,9 @@ window.app.components.continueWatching = async () => {
                         <p class="text-[10px] md:text-xs text-gray-300 font-bold tracking-wide drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">Episode ${item.epNum}</p>
                     </div>
                     
-                    <!-- Progress Bar -->
-                    <div class="absolute bottom-0 left-0 w-full h-1.5 bg-white/20 z-30">
-                        <div class="h-full bg-[#F47521] shadow-[0_0_10px_#F47521] transition-all duration-500 ease-out" style="width: ${progressPct}%"></div>
+                    <!-- SLIM PROGRESS BAR (No Glow, 2px Height) -->
+                    <div class="absolute bottom-0 left-0 w-full h-[2px] bg-white/20 z-30">
+                        <div class="h-full bg-[#F47521] transition-all duration-500 ease-out" style="width: ${progressPct}%"></div>
                     </div>
 
                 </div>
@@ -167,7 +222,6 @@ window.app.components.continueWatching = async () => {
             `;
         }).join('');
 
-        // Adjusted structure so padding is handled like the Top 10 slider (away from the edge)
         container.innerHTML = `
             <div class="py-6 relative overflow-visible">
                 <div class="px-4 md:px-8 flex items-center justify-between mb-4">
@@ -189,7 +243,6 @@ window.app.components.continueWatching = async () => {
                         <i class="fas fa-chevron-left text-lg"></i>
                     </button>
                     
-                    <!-- Track padding set to match titles, keeping it off the exact left edge -->
                     <div id="cw-slider-track" class="flex gap-4 md:gap-5 overflow-x-auto snap-x snap-mandatory hide-scrollbar pb-6 pt-2 pl-4 md:pl-8 pr-12">
                         ${cardsHtml}
                     </div>
@@ -219,6 +272,7 @@ window.app.components.continueWatching = async () => {
         }
 
     } catch (error) {
+        console.error("Continue Watching Slider Error:", error);
         container.innerHTML = ''; 
     }
 };
