@@ -1,4 +1,4 @@
-// auth.js - REBUILT WITH FIRESTORE FIXES & NO LOCAL STORAGE (EXCEPT GUEST)
+// auth.js - REBUILT WITH FIRESTORE FIXES & SCHEMA ALIGNMENT
 
 // Dynamically load Cropper.js CSS and JS if not already loaded
 if (!document.getElementById('cropperjs-css')) {
@@ -66,7 +66,6 @@ window.app.showCustomAlert = (message, type = 'error', actionText = null, action
 
 // --- MODAL INITIALIZATION ---
 window.app.components.auth = () => {
-    // Basic check to see if user is in memory
     if (window.app.state && window.app.state.activeProfile && window.app.state.activeProfile.uid && !window.app.state.activeProfile.uid.startsWith('anon_')) {
         window.location.href = 'profile.html';
         return;
@@ -75,7 +74,7 @@ window.app.components.auth = () => {
     const existingModal = document.getElementById('auth-modal');
     if (existingModal) existingModal.remove();
 
-    window.app.state.authSelectedPfp = `pfp${Math.floor(Math.random() * 10) + 1}.jpeg`;
+    window.app.state.authSelectedPfp = `https://ui-avatars.com/api/?name=User&background=111&color=F47521`;
 
     const modal = document.createElement('div');
     modal.id = 'auth-modal';
@@ -118,7 +117,7 @@ window.app.components.auth = () => {
 
             <div class="text-center pt-10 pb-6 flex flex-col items-center justify-center">
                 <div class="flex items-center justify-center gap-3 text-2xl font-black text-white tracking-tight">
-                    Welcome to <img src="logo.png" class="h-8 md:h-10 object-contain pointer-events-none">
+                    Welcome to <span class="text-[#F47521]">AniKoto</span>
                 </div>
             </div>
 
@@ -320,7 +319,7 @@ window.app.switchAuthView = (view) => {
 // Helper to initialize Firestore safely
 const getDb = async () => {
     const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-    return window.app.db || firestore.getFirestore(window.app.firebaseApp);
+    return window.app.db || firestore.getFirestore(); 
 };
 
 window.app.handleLogin = async (e) => {
@@ -335,7 +334,7 @@ window.app.handleLogin = async (e) => {
         const password = document.getElementById('login-password').value;
 
         const { getAuth, signInWithEmailAndPassword } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
-        const auth = getAuth(window.app.firebaseApp);
+        const auth = getAuth();
         
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         await window.app.syncProfileAfterAuth(userCredential.user);
@@ -369,23 +368,24 @@ window.app.handleRegister = async (e) => {
 
         // 1. Create Auth Account
         const { getAuth, createUserWithEmailAndPassword, updateProfile } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
-        const auth = getAuth(window.app.firebaseApp);
+        const auth = getAuth();
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
         // Update Auth Profile for Google/Auth sync
         await updateProfile(user, { displayName: name, photoURL: pfp });
 
-        // 2. Prepare Structured Profile Data
+        // 2. Prepare Structured Profile Data aligned with Profile.html schema expectations
         const newProfile = {
             uid: user.uid,
-            name: name,
+            username: name,       // Profile.html reads 'username' or 'displayName'
             email: email,
-            pfpLink: pfp, 
-            library: [], 
-            watchProgress: {}, 
-            history: [], 
+            photoURL: pfp,        // Profile.html reads 'photoURL'
+            hideLibrary: false,   // Profile.html toggle uses this
+            likesCount: 0,        // Tracking profile likes
+            likedByArray: [],     // Prevents multi-like bugs
             createdAt: new Date().toISOString()
+            // Removed library/history arrays from root. Profile.html correctly expects them as Subcollections.
         };
 
         // 3. Create Dedicated Document inside 'users' collection
@@ -419,7 +419,7 @@ window.app.handleRegister = async (e) => {
 window.app.handleGoogleLogin = async () => {
     try {
         const { getAuth, signInWithPopup, GoogleAuthProvider } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
-        const auth = getAuth(window.app.firebaseApp);
+        const auth = getAuth();
         const provider = new GoogleAuthProvider();
         
         const result = await signInWithPopup(auth, provider);
@@ -446,12 +446,12 @@ window.app.handleGuestCreation = (e) => {
     
     const guestProfile = {
         uid: guestUid,
-        name: "Guest User",
+        username: "Guest User",
         email: "Guest Mode",
-        pfpLink: `pfp${Math.floor(Math.random() * 10) + 1}.jpeg`,
-        library: [],
-        watchProgress: {},
-        history: [],
+        photoURL: `https://ui-avatars.com/api/?name=Guest&background=111&color=F47521`,
+        hideLibrary: false,
+        likesCount: 0,
+        likedByArray: [],
         createdAt: new Date().toISOString()
     };
 
@@ -475,7 +475,7 @@ window.app.handlePasswordReset = async (e) => {
 
     try {
         const { getAuth, sendPasswordResetEmail } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
-        const auth = getAuth(window.app.firebaseApp);
+        const auth = getAuth();
         await sendPasswordResetEmail(auth, email);
         
         window.app.showCustomAlert(`Reset link sent to ${email}`, 'success');
@@ -504,12 +504,12 @@ window.app.syncProfileAfterAuth = async (firebaseUser) => {
             // FORCE RE-CREATION: Auth exists, but DB is empty
             const newProfile = {
                 uid: firebaseUser.uid,
-                name: firebaseUser.displayName || "User",
+                username: firebaseUser.displayName || "User",
                 email: firebaseUser.email,
-                pfpLink: firebaseUser.photoURL || `pfp${Math.floor(Math.random() * 10) + 1}.jpeg`,
-                library: [],
-                watchProgress: {},
-                history: [],
+                photoURL: firebaseUser.photoURL || `https://ui-avatars.com/api/?name=${firebaseUser.displayName || 'User'}&background=111&color=F47521`,
+                hideLibrary: false,
+                likesCount: 0,
+                likedByArray: [],
                 createdAt: new Date().toISOString()
             };
             
