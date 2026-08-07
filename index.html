@@ -66,7 +66,8 @@
         </div>
     </div>
 
-    <div id="modal-overlay" class="fixed inset-0 z-[70] hidden bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <!-- Modal Overlay used by Continue Watching & App functions -->
+    <div id="modal-overlay" class="fixed inset-0 z-[70] hidden bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-300">
         <div id="modal-content" class="glass-modal w-full max-w-sm rounded-xl p-6 transform transition-all scale-95 opacity-0 shadow-2xl"></div>
     </div>
 
@@ -95,10 +96,12 @@
                 <!-- 6. Action Anime Slider -->
                 <div id="action-slider-container"></div>
                 
-                <!-- 7. Others (Top Rated, Must Watch, Popular, etc.) -->
+                <!-- 7. All Time Popular (Cinematic Wide Cards) -->
+                <div id="popular-container"></div>
+                
+                <!-- 8. Others (Top Rated, Must Watch, etc.) -->
                 <div id="top-rated-slider-container"></div>
                 <div id="must-watch-slider-container"></div>
-                <div id="popular-container"></div>
                 <div id="newep-container"></div>
                 <div id="movies-container"></div>
                 <div id="series-container"></div>
@@ -175,15 +178,18 @@
                 if(window.app.components.header) window.app.components.header();
                 if(window.app.components.bottomnav) window.app.components.bottomnav();
                 
-                                // --- Featured Sliders (Active Scripts) ---
+                // --- Ordered Sliders ---
                 if(window.app.components.carousel) window.app.components.carousel();
                 if(window.app.components.continueWatching) window.app.components.continueWatching();
                 if(window.app.components.recentSlider) window.app.components.recentSlider(); 
                 if(window.app.components.topTenSlider) window.app.components.topTenSlider(); 
                 if(window.app.components.upcomingSlider) window.app.components.upcomingSlider(); 
                 if(window.app.components.actionSlider) window.app.components.actionSlider(); 
-                if(window.app.components.popularSlider) window.app.components.popularSlider(); // ADD THIS LINE
-
+                if(window.app.components.popularSlider) window.app.components.popularSlider(); 
+                
+                // --- Future Placeholder Initializers ---
+                if(window.app.components.topRatedSlider) window.app.components.topRatedSlider();
+                if(window.app.components.mustWatchSlider) window.app.components.mustWatchSlider();
             }
         };
     </script>
@@ -199,8 +205,8 @@
     <script src="top10_slider.js"></script> 
     <script src="upcoming_slider.js"></script>
     <script src="action_slider.js"></script> 
-    <script src="popular_slider.js"></script> <!-- ADD THIS LINE -->
-
+    <script src="popular_slider.js"></script>
+    
     <!-- Initialization -->
     <script>
         document.addEventListener('DOMContentLoaded', () => {
