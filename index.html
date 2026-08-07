@@ -175,17 +175,15 @@
                 if(window.app.components.header) window.app.components.header();
                 if(window.app.components.bottomnav) window.app.components.bottomnav();
                 
-                // --- Ordered Sliders ---
+                                // --- Featured Sliders (Active Scripts) ---
                 if(window.app.components.carousel) window.app.components.carousel();
                 if(window.app.components.continueWatching) window.app.components.continueWatching();
                 if(window.app.components.recentSlider) window.app.components.recentSlider(); 
                 if(window.app.components.topTenSlider) window.app.components.topTenSlider(); 
                 if(window.app.components.upcomingSlider) window.app.components.upcomingSlider(); 
                 if(window.app.components.actionSlider) window.app.components.actionSlider(); 
-                
-                // --- Future Placeholder Initializers ---
-                if(window.app.components.topRatedSlider) window.app.components.topRatedSlider();
-                if(window.app.components.mustWatchSlider) window.app.components.mustWatchSlider();
+                if(window.app.components.popularSlider) window.app.components.popularSlider(); // ADD THIS LINE
+
             }
         };
     </script>
@@ -201,7 +199,8 @@
     <script src="top10_slider.js"></script> 
     <script src="upcoming_slider.js"></script>
     <script src="action_slider.js"></script> 
-    
+    <script src="popular_slider.js"></script> <!-- ADD THIS LINE -->
+
     <!-- Initialization -->
     <script>
         document.addEventListener('DOMContentLoaded', () => {
