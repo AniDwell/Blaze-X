@@ -1,4 +1,4 @@
-// action_slider.js - Larger Action Anime Slider (Permanent UI, No Gradient/Play Button)
+// action_slider.js - Action Anime Slider (Slightly Smaller)
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
@@ -93,18 +93,17 @@ window.app.toggleSliderLibrary = async (event, btn, id, title, img) => {
     }
 };
 
-// --- SLIDER RENDERING ---
 window.app.components.actionSlider = async () => {
     const container = document.getElementById('action-slider-container');
     if (!container) return;
 
-    // 1. SHOW LOADING SKELETON (Larger Dimensions)
+    // SCALED DOWN SKELETON
     container.innerHTML = `
         <div class="px-4 md:px-8 py-4">
             <h2 class="text-xl md:text-2xl font-black text-white mb-4 border-l-4 border-[#F47521] pl-3 uppercase tracking-wider">Top Action Anime</h2>
             <div class="flex gap-4 md:gap-5 overflow-hidden">
                 ${[1, 2, 3, 4, 5, 6].map(() => `
-                    <div class="min-w-[160px] md:min-w-[220px] aspect-[2/3] bg-white/5 animate-pulse rounded-lg border border-white/5"></div>
+                    <div class="min-w-[140px] md:min-w-[190px] aspect-[2/3] bg-white/5 animate-pulse rounded-lg border border-white/5"></div>
                 `).join('')}
             </div>
         </div>
@@ -160,31 +159,28 @@ window.app.components.actionSlider = async () => {
             return;
         }
 
-        // 4. RENDER UI CARDS
         let cardsHtml = finalSliderItems.map(anime => {
             const safeTitle = anime.title.replace(/'/g, "\\'");
             const docIdStr = String(anime.id);
-            
             const isAdded = window.app.state.carouselLibrarySet && window.app.state.carouselLibrarySet.has(docIdStr);
             
             const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
             const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
 
+            // SCALED DOWN CARD SIZES (140px & 190px)
             return `
-            <div class="snap-start shrink-0 w-[160px] md:w-[220px] relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-10"
+            <div class="snap-start shrink-0 w-[140px] md:w-[190px] relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-10"
                  onclick="window.app.sliderNavigate('${anime.id}', '${safeTitle}', '${anime.image}', '${anime.type}', '${anime.sub}', '${anime.dub}')">
                 
                 <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden shadow-lg border border-white/10 group-hover:border-[#F47521]/70 transition-colors">
                     <img src="${anime.image}" loading="lazy" class="w-full h-full object-cover">
                     
-                    <!-- Permanent Save Button SVG (No Gradient, No Play Button) -->
                     <button onclick="window.app.toggleSliderLibrary(event, this, '${anime.id}', '${safeTitle}', '${anime.image}')" 
                             data-added="${isAdded}"
                             class="absolute top-2 right-2 z-30 p-2 rounded bg-black/70 backdrop-blur-md border border-white/10 shadow-lg hover:bg-black transition-all flex items-center justify-center">
                         ${isAdded ? savedSvg : unsavedSvg}
                     </button>
                     
-                    <!-- Permanent Top Left Info Badges -->
                     <div class="absolute top-0 left-0 p-2 flex flex-col gap-1.5 items-start z-10 pointer-events-none">
                         <span class="bg-black/80 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded border border-white/10 font-bold uppercase shadow-md">${anime.type}</span>
                         <span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-md font-bold">CC ${anime.sub}</span>
@@ -226,8 +222,7 @@ window.app.components.actionSlider = async () => {
         const rightBtn = document.getElementById('slide-right-btn');
         
         if (track && leftBtn && rightBtn) {
-            const scrollAmount = window.innerWidth > 768 ? 700 : 350;
-            
+            const scrollAmount = window.innerWidth > 768 ? 600 : 300;
             leftBtn.addEventListener('click', () => { track.scrollBy({ left: -scrollAmount, behavior: 'smooth' }); });
             rightBtn.addEventListener('click', () => { track.scrollBy({ left: scrollAmount, behavior: 'smooth' }); });
             
@@ -242,9 +237,3 @@ window.app.components.actionSlider = async () => {
         container.innerHTML = ''; 
     }
 };
-
-document.addEventListener('DOMContentLoaded', () => {
-    if (window.app.components.actionSlider) {
-        window.app.components.actionSlider();
-    }
-});
