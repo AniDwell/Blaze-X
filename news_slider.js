@@ -23,8 +23,8 @@ window.app.components.newsSlider = async () => {
     `;
 
     try {
-        // 2. FETCH REAL NEWS FEED (Via RSS2JSON API)
-        const rssUrl = encodeURIComponent('https://myanimelist.net/rss.php?type=news');
+        // 2. FETCH REAL NEWS FEED (Using Anime Corner for reliable images + full articles)
+        const rssUrl = encodeURIComponent('https://animecorner.me/feed/');
         const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${rssUrl}`);
         const json = await res.json();
         
@@ -38,21 +38,21 @@ window.app.components.newsSlider = async () => {
         // Limit to 12 latest news items and cache them globally
         window.app.newsCache = newsItems.slice(0, 12);
 
-        // Helper function to extract and sanitize image URLs
+        // Helper function to extract and PROXY image URLs to bypass ALL blocking
         const extractImageUrl = (item) => {
-            let src = item.thumbnail || '';
+            let src = item.thumbnail || (item.enclosure && item.enclosure.link) || '';
             if (!src) {
-                const imgMatch = item.description ? item.description.match(/src=["'](.*?)["']/) : null;
+                const rawHtml = item.content || item.description || '';
+                const imgMatch = rawHtml.match(/<img[^>]+src=["'](https?:\/\/[^"']+)["']/i);
                 src = imgMatch ? imgMatch[1] : '';
             }
             if (!src) {
-                src = 'https://via.placeholder.com/800x450/111/F47521?text=Anime+News';
+                return 'https://via.placeholder.com/800x450/111/F47521?text=Anime+News';
             }
-            // Ensure HTTPS to prevent mixed content blocking
-            if (src.startsWith('http://')) {
-                src = src.replace('http://', 'https://');
-            }
-            return src;
+            
+            // Route through a free global image proxy to bypass 403 Forbidden & hotlinking blocks
+            // Converts to WebP automatically for faster loading
+            return `https://wsrv.nl/?url=${encodeURIComponent(src)}&w=800&output=webp`;
         };
 
         // 3. RENDER CARDS
@@ -71,7 +71,7 @@ window.app.components.newsSlider = async () => {
                 <div class="w-full aspect-[16/9] relative overflow-hidden bg-black">
                     <img src="${imgSrc}" 
                          loading="lazy" 
-                         referrerpolicy="no-referrer"
+                         crossorigin="anonymous"
                          onerror="this.onerror=null; this.src='https://via.placeholder.com/800x450/111/F47521?text=Anime+News';"
                          class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
                     
@@ -190,7 +190,7 @@ function setupNewsModal() {
                              class="w-full h-full object-cover" 
                              src="" 
                              alt="News Image"
-                             referrerpolicy="no-referrer"
+                             crossorigin="anonymous"
                              onerror="this.onerror=null; this.src='https://via.placeholder.com/800x450/111/F47521?text=Anime+News';">
                         <div class="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent"></div>
                     </div>
@@ -233,11 +233,14 @@ function setupNewsModal() {
             .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #F47521; }
             
             /* Typography & Layout adjustments for injected body content */
-            #news-modal-body img { border-radius: 12px; margin: 18px 0; max-width: 100%; border: 1px solid rgba(255,255,255,0.1); }
+            #news-modal-body img { border-radius: 12px; margin: 18px 0; max-width: 100%; border: 1px solid rgba(255,255,255,0.1); display: none; /* Hidden to prevent duplicate/broken inline images */ }
             #news-modal-body a { color: #F47521; font-weight: bold; text-decoration: underline; text-decoration-color: rgba(244,117,33,0.4); text-underline-offset: 4px; }
             #news-modal-body a:hover { text-decoration-color: #F47521; color: white; }
             #news-modal-body p { margin-bottom: 1.25rem; line-height: 1.7; }
             #news-modal-body iframe { max-width: 100%; border-radius: 12px; }
+            #news-modal-body h1, #news-modal-body h2, #news-modal-body h3 { color: white; font-weight: 900; margin-top: 1.5rem; margin-bottom: 1rem; }
+            #news-modal-body ul, #news-modal-body ol { margin-left: 1.5rem; margin-bottom: 1.25rem; }
+            #news-modal-body li { margin-bottom: 0.5rem; }
         </style>
     `;
     
@@ -256,7 +259,7 @@ window.app.openNewsModal = (index, imgSrc, dateStr) => {
     document.getElementById('news-modal-heading').innerText = item.title;
     document.getElementById('news-modal-link').href = item.link;
 
-    const rawContent = item.description || item.content || '';
+    const rawContent = item.content || item.description || '';
 
     // --- YOUTUBE VIDEO EXTRACTION LOGIC ---
     const ytVideoContainer = document.getElementById('news-modal-video-container');
@@ -292,19 +295,13 @@ window.app.openNewsModal = (index, imgSrc, dateStr) => {
         ytVideoContainer.classList.remove('hidden');
     }
 
-    // Clean up description content
+    // Clean up description content (removes images to avoid duplicates and strips embed codes to avoid breaking layout)
     let cleanHTML = rawContent
-        .replace(/<img[^>]*>/g, '') // Remove inline images if needed or keep cleaned up
-        .replace(/<a [^>]*href=["'](https?:\/\/(?:www\.)?(?:youtube\.com|youtu\.be)[^"']*)["'][^>]*>.*?<\/a>/gi, ''); // Remove raw YT links since we embed them nicely
+        .replace(/<img[^>]*>/gi, '') 
+        .replace(/<iframe[^>]*>.*?<\/iframe>/gi, '') 
+        .replace(/<a [^>]*href=["'](https?:\/\/(?:www\.)?(?:youtube\.com|youtu\.be)[^"']*)["'][^>]*>.*?<\/a>/gi, ''); 
 
     document.getElementById('news-modal-body').innerHTML = cleanHTML || '<p>No description available for this announcement.</p>';
-
-    // Fix referrerpolicy on any remaining images inside the rendered body
-    const bodyImages = document.querySelectorAll('#news-modal-body img');
-    bodyImages.forEach(img => {
-        img.setAttribute('referrerpolicy', 'no-referrer');
-        img.onerror = function() { this.style.display = 'none'; };
-    });
 
     // UI Animations
     const modal = document.getElementById('news-modal-overlay');
