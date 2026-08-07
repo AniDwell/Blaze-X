@@ -19,7 +19,7 @@
         html, body {
             height: 100%; width: 100%; margin: 0; padding: 0;
             background-color: var(--bg-dark); color: var(--text-light);
-            overflow: hidden; font-family: 'Lato', sans-serif;
+            overflow-x: hidden; font-family: 'Lato', sans-serif;
             -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
         }
 
@@ -38,8 +38,12 @@
         .glass-modal { background: rgba(20, 20, 20, 0.95); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
         .ani-input { background: #2a2a2a; border: 1px solid #444; color: white; padding: 10px; border-radius: 6px; width: 100%; outline: none; }
         .ani-input:focus { border-color: var(--primary); }
-        .blur-backdrop { filter: blur(20px) brightness(0.4); transform: scale(1.1); }
-        img { user-drag: none; -webkit-user-drag: none; pointer-events: auto; }
+        
+        /* GLOBAL SAFE EDGE PADDING: Keeps external sliders away from the left edge */
+        [id$="-track"], .genre-slider-track, .slider-track {
+            padding-left: max(1.5rem, env(safe-area-inset-left)) !important;
+            scroll-padding-left: max(1.5rem, env(safe-area-inset-left)) !important;
+        }
 
         /* TikTok-Style Loader Engine */
         .tk-loader { position: relative; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
@@ -66,7 +70,7 @@
         </div>
     </div>
 
-    <!-- Modal Overlay used by Continue Watching & App functions -->
+    <!-- Modal Overlay -->
     <div id="modal-overlay" class="fixed inset-0 z-[70] hidden bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-300">
         <div id="modal-content" class="glass-modal w-full max-w-sm rounded-xl p-6 transform transition-all scale-95 opacity-0 shadow-2xl"></div>
     </div>
@@ -75,40 +79,22 @@
         
         <div id="header-container" class="flex-none z-50 relative"></div>
 
-        <main id="main-content" class="flex-1 overflow-y-auto relative hide-scrollbar bg-black pb-20">
+        <main id="main-content" class="flex-1 overflow-y-auto overflow-x-hidden relative hide-scrollbar bg-black pb-20">
             
             <div id="home-view" class="w-full flex flex-col gap-6 animate-fade-in pb-8">
-                <!-- 1. Hero Carousel -->
+                <!-- Sliders sequence -->
                 <div id="carousel-container"></div>
-                
-                <!-- 2. Continue Watching (History) -->
                 <div id="history-container"></div>
-                
-                <!-- 3. Newest Releases (Recent) -->
                 <div id="recent-container"></div>
-                
-                <!-- 4. Top 10 of the Year Slider -->
                 <div id="top10-slider-container"></div> 
-                
-                <!-- 5. Upcoming Releases Slider -->
                 <div id="upcoming-slider-container"></div>
-                
-                <!-- 6. Action Anime Slider -->
                 <div id="action-slider-container"></div>
-                
-                <!-- 7. Anime News & Announcements Slider -->
                 <div id="news-container"></div>
-
-                <!-- 8. All Time Popular (Cinematic Wide Cards) -->
                 <div id="popular-container"></div>
-
-                <!-- 9. Release Schedule (Upcoming Episodes & Live Countdowns) -->
                 <div id="newep-container"></div>
-
-                <!-- 10. Dynamic Lazy-Loaded Genre Sliders -->
                 <div id="genrebased-container"></div>
                 
-                <!-- 11. Extras -->
+                <!-- Extras -->
                 <div id="top-rated-slider-container"></div>
                 <div id="must-watch-slider-container"></div>
                 <div id="movies-container"></div>
@@ -123,48 +109,83 @@
     </div>
 
     <script>
+        // ==========================================
+        // 1. GLOBAL CRASH PREVENTION & API MANAGER
+        // ==========================================
+        
+        // Suppress unhandled promise rejections so external JS failures don't white-screen the app
+        window.addEventListener('unhandledrejection', (event) => {
+            console.warn('[Blaze-X Guard] Suppressed external script rejection:', event.reason);
+            event.preventDefault();
+        });
+
+        // Advanced Fetch Interceptor: Automatically handles AniList Rate Limits (429) across ALL scripts
+        const originalFetch = window.fetch;
+        window.fetch = async function(...args) {
+            let retries = 4;
+            let delay = 1500; // Start with 1.5s delay
+            
+            while (retries > 0) {
+                try {
+                    const response = await originalFetch.apply(this, args);
+                    // If AniList says "Too Many Requests", intercept it before the script crashes
+                    if (response.status === 429) {
+                        console.warn(`[Blaze-X Network] Rate limit hit. Retrying in ${delay/1000}s...`);
+                        await new Promise(res => setTimeout(res, delay));
+                        delay *= 1.5; // Exponential backoff (1.5s -> 2.2s -> 3.3s)
+                        retries--;
+                        continue;
+                    }
+                    return response;
+                } catch (error) {
+                    // Network failure (offline, timeout)
+                    if (retries <= 1) throw error;
+                    console.warn(`[Blaze-X Network] Request failed. Retrying...`, error.message);
+                    await new Promise(res => setTimeout(res, delay));
+                    delay *= 1.5;
+                    retries--;
+                }
+            }
+        };
+
+        // ==========================================
+        // 2. CORE APPLICATION STATE
+        // ==========================================
         window.app = {
             config: {
                 anikotoBase: 'https://anikoto-api-xi.vercel.app', 
                 megaPlayBase: 'https://megaplay.buzz/stream/s-2', 
                 defaultAvatars: ["https://iili.io/fWydBMG.md.png", "https://iili.io/fWydqns.md.png"]
             },
-            
             state: { 
                 activeProfile: null, 
                 currentView: 'home',
                 carouselItems: [],
                 carouselInterval: null
             },
-            
             api: {
+                // Legacy fetch wrapper (now protected by the global interceptor above)
                 fetch: async (endpoint) => {
                     try {
-                        const target = `${window.app.config.anikotoBase}${endpoint}`;
-                        const res = await fetch(target);
-                        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                        const res = await fetch(`${window.app.config.anikotoBase}${endpoint}`);
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
                         return await res.json();
                     } catch (error) { 
-                        console.error("Blaze-X Fetch Error:", error); 
                         return null; 
                     }
                 }
             },
-            
             components: {}, 
             
             init: () => {
                 const savedUser = localStorage.getItem('blazex_user_profile');
                 if (savedUser) {
-                    try {
-                        window.app.state.activeProfile = JSON.parse(savedUser);
-                    } catch(e) {
-                        console.log("Local storage fallback configuration activated.");
-                    }
+                    try { window.app.state.activeProfile = JSON.parse(savedUser); } 
+                    catch(e) {}
                 }
 
                 if (!window.app.components.header) {
-                    setTimeout(window.app.init, 50);
+                    setTimeout(window.app.init, 100); // Retry boot if scripts haven't parsed yet
                     return;
                 }
 
@@ -181,32 +202,47 @@
                 document.getElementById('home-view').classList.remove('hidden');
                 window.app.state.currentView = 'home';
 
-                // --- Bulletproof Safe Execution Runner ---
-                const safeRun = (componentFn) => {
+                // ==========================================
+                // 3. SELF-HEALING COMPONENT RUNNER
+                // ==========================================
+                // This wrapper attempts to run a slider. If the slider crashes, it waits and tries again up to 4 times.
+                const safeRunAsync = async (componentFn, name, attempt = 1) => {
+                    if (typeof componentFn !== 'function') return;
                     try {
-                        if (typeof componentFn === 'function') componentFn();
+                        await componentFn();
                     } catch (err) {
-                        console.error("Component initialization error caught:", err);
+                        console.warn(`[Blaze-X Self-Heal] ${name} failed on attempt ${attempt}:`, err.message);
+                        if (attempt < 4) {
+                            const delay = Math.min(1500 * Math.pow(1.5, attempt), 8000); // Staggered retry
+                            setTimeout(() => safeRunAsync(componentFn, name, attempt + 1), delay);
+                        }
                     }
                 };
 
-                // --- Ordered Sliders & Component Initializers ---
-                safeRun(window.app.components.header);
-                safeRun(window.app.components.bottomnav);
-                safeRun(window.app.components.carousel);
-                safeRun(window.app.components.continueWatching);
-                safeRun(window.app.components.recentSlider);
-                safeRun(window.app.components.topTenSlider);
-                safeRun(window.app.components.upcomingSlider);
-                safeRun(window.app.components.actionSlider);
-                safeRun(window.app.components.newsSlider);
-                safeRun(window.app.components.popularSlider);
-                safeRun(window.app.components.newEpSlider);
-                safeRun(window.app.components.genreSliders);
+                // --- Execute UI Components ---
+                safeRunAsync(window.app.components.header, 'Header');
+                safeRunAsync(window.app.components.bottomnav, 'BottomNav');
                 
-                // --- Future Placeholders ---
-                safeRun(window.app.components.topRatedSlider);
-                safeRun(window.app.components.mustWatchSlider);
+                // --- Execute Sliders Sequentially ---
+                // Using a slight delay between initializations so the DOM doesn't freeze
+                const sliders = [
+                    { fn: window.app.components.carousel, name: 'Carousel' },
+                    { fn: window.app.components.continueWatching, name: 'ContinueWatching' },
+                    { fn: window.app.components.recentSlider, name: 'RecentSlider' },
+                    { fn: window.app.components.topTenSlider, name: 'TopTenSlider' },
+                    { fn: window.app.components.upcomingSlider, name: 'UpcomingSlider' },
+                    { fn: window.app.components.actionSlider, name: 'ActionSlider' },
+                    { fn: window.app.components.newsSlider, name: 'NewsSlider' },
+                    { fn: window.app.components.popularSlider, name: 'PopularSlider' },
+                    { fn: window.app.components.newEpSlider, name: 'NewEpSlider' },
+                    { fn: window.app.components.genreSliders, name: 'GenreSliders' }
+                ];
+
+                sliders.forEach((slider, index) => {
+                    setTimeout(() => {
+                        safeRunAsync(slider.fn, slider.name);
+                    }, index * 150); // Stagger each slider load by 150ms for buttery smooth performance
+                });
             }
         };
     </script>
@@ -216,7 +252,7 @@
     <script src="auth.js"></script>
     <script src="bottomnav.js"></script>
     
-    <!-- All Custom Slider Scripts (Loaded in Render Order) -->
+    <!-- All Custom Slider Scripts (Loaded safely at the bottom) -->
     <script src="carousel.js"></script>
     <script src="continue_watching.js"></script>
     <script src="recent_slider.js"></script> 
