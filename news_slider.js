@@ -1,4 +1,4 @@
-// news_slider.js - Crunchyroll RSS Feed + Custom Proxy + Bottom-Sheet Modal
+// news_slider.js - Crunchyroll RSS Feed + blaze-X news Layout Engine
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
@@ -10,13 +10,13 @@ window.app.components.newsSlider = async () => {
     const container = document.getElementById('news-container');
     if (!container) return;
 
-    // YOUR CUSTOM PROXY
+    // YOUR CUSTOM PROXY FROM PLAYER.JS
     const customProxyUrl = 'https://icy-wave-30d8.prashant-yash69.workers.dev/proxy?url=';
 
     // 1. SHOW SKELETON
     container.innerHTML = `
         <div class="px-4 md:px-8 py-6 relative">
-            <h2 class="text-xl md:text-2xl font-black text-white mb-4 border-l-4 border-[#F47521] pl-3 uppercase tracking-wider drop-shadow-md">Top Anime News</h2>
+            <h2 class="text-xl md:text-2xl font-black text-white mb-4 border-l-4 border-[#F47521] pl-3 uppercase tracking-wider drop-shadow-md">blaze-X news</h2>
             <div class="flex gap-4 md:gap-5 overflow-hidden">
                 ${[1, 2, 3, 4].map(() => `
                     <div class="min-w-[280px] md:min-w-[400px] h-[260px] bg-white/5 animate-pulse rounded-xl border border-white/5"></div>
@@ -26,7 +26,7 @@ window.app.components.newsSlider = async () => {
     `;
 
     try {
-        // 2. FETCH CRUNCHYROLL RSS VIA YOUR CUSTOM PROXY
+        // 2. FETCH RAW CRUNCHYROLL RSS VIA YOUR CUSTOM PROXY
         const targetRss = 'https://cr-news-api-service.prd.crunchyrollsvc.com/v1/en-US/rss';
         const res = await fetch(customProxyUrl + encodeURIComponent(targetRss));
         const xmlText = await res.text();
@@ -47,37 +47,39 @@ window.app.components.newsSlider = async () => {
             const link = item.querySelector("link")?.textContent || "";
             const pubDate = item.querySelector("pubDate")?.textContent || "";
             
-            // Handle content namespace for full articles
+            // Extract thumbnail if available in media tags or enclosure
+            let thumbnail = "";
+            const mediaThumb = item.getElementsByTagName("media:thumbnail")[0] || item.getElementsByTagName("thumbnail")[0];
+            if (mediaThumb && mediaThumb.getAttribute("url")) {
+                thumbnail = mediaThumb.getAttribute("url");
+            } else {
+                const enclosure = item.querySelector("enclosure");
+                if (enclosure && enclosure.getAttribute("url")) {
+                    thumbnail = enclosure.getAttribute("url");
+                }
+            }
+
             const contentEncoded = item.getElementsByTagName("content:encoded");
             const description = item.querySelector("description")?.textContent || "";
             const content = contentEncoded.length > 0 ? contentEncoded[0].textContent : description;
 
-            // Look for Crunchyroll's media namespaces for high-res thumbnails
-            let mediaUrl = "";
-            const mediaContent = item.getElementsByTagName("media:content")[0];
-            const mediaThumb = item.getElementsByTagName("media:thumbnail")[0];
-            if (mediaContent) mediaUrl = mediaContent.getAttribute("url") || "";
-            if (!mediaUrl && mediaThumb) mediaUrl = mediaThumb.getAttribute("url") || "";
-
-            return { title, link, pubDate, content, description, mediaUrl };
+            return { title, link, pubDate, content, description, thumbnail };
         }).slice(0, 12); // Limit to 12
 
         window.app.newsCache = newsItems;
 
-        // Helper function to extract and PROXY image URLs
+        // Helper function to extract and PROXY image URLs using your worker
         const extractImageUrl = (item) => {
-            let src = item.mediaUrl;
-            
-            // Fallback to searching the HTML body for an image
+            let src = item.thumbnail || '';
             if (!src) {
                 const rawHtml = item.content || item.description || '';
                 const imgMatch = rawHtml.match(/<img[^>]+src=["'](https?:\/\/[^"']+)["']/i);
                 src = imgMatch ? imgMatch[1] : '';
             }
             
-            if (!src) return 'https://via.placeholder.com/800x450/111/F47521?text=Crunchyroll+News';
+            if (!src) return 'https://via.placeholder.com/800x450/111/F47521?text=blaze-X+news';
             
-            // Route through your Cloudflare worker proxy
+            // Route through your Cloudflare worker proxy to bypass 403 Forbidden & hotlink blocks
             return customProxyUrl + encodeURIComponent(src);
         };
 
@@ -97,13 +99,13 @@ window.app.components.newsSlider = async () => {
                     <img src="${imgSrc}" 
                          loading="lazy" 
                          crossorigin="anonymous"
-                         onerror="this.onerror=null; this.src='https://via.placeholder.com/800x450/111/F47521?text=Anime+News';"
+                         onerror="this.onerror=null; this.src='https://via.placeholder.com/800x450/111/F47521?text=blaze-X+news';"
                          class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
                     
                     <div class="absolute inset-0 bg-gradient-to-t from-[#111] via-transparent to-transparent"></div>
                     
                     <div class="absolute top-3 left-3 bg-[#F47521] text-black text-[9px] md:text-[10px] font-black uppercase px-2 py-1 rounded shadow-md tracking-wider">
-                        Crunchyroll News
+                        blaze-X news
                     </div>
                 </div>
                 
@@ -131,7 +133,7 @@ window.app.components.newsSlider = async () => {
             <div class="px-4 md:px-8 py-6 relative">
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="text-xl md:text-2xl font-black text-white border-l-4 border-[#F47521] pl-3 uppercase tracking-wider drop-shadow-md">
-                        Latest Anime News
+                        blaze-X news
                     </h2>
                 </div>
                 
@@ -206,13 +208,13 @@ function setupNewsModal() {
                              src="" 
                              alt="News Image"
                              crossorigin="anonymous"
-                             onerror="this.onerror=null; this.src='https://via.placeholder.com/800x450/111/F47521?text=Anime+News';">
+                             onerror="this.onerror=null; this.src='https://via.placeholder.com/800x450/111/F47521?text=blaze-X+news';">
                         <div class="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent"></div>
                     </div>
                     
                     <div class="flex items-center gap-3 mb-4">
                         <span class="bg-[#F47521]/20 text-[#F47521] border border-[#F47521]/50 text-[10px] md:text-xs font-black uppercase px-3 py-1.5 rounded-md shadow-sm">
-                            Latest Announcement
+                            blaze-X news
                         </span>
                         <span id="news-modal-date" class="text-gray-400 text-xs md:text-sm font-bold flex items-center gap-1.5 uppercase tracking-wider"></span>
                     </div>
@@ -221,16 +223,10 @@ function setupNewsModal() {
                     
                     <div id="news-modal-video-container" class="hidden mb-6"></div>
 
-                    <div class="bg-[#111] p-5 md:p-8 rounded-2xl border border-white/5 shadow-inner mb-8">
+                    <div class="bg-[#111] p-5 md:p-8 rounded-2xl border border-white/5 shadow-inner pb-12 mb-8">
                         <div id="news-modal-body" class="text-gray-300 text-sm md:text-base leading-relaxed space-y-4">
                             <!-- Injected dynamically -->
                         </div>
-                    </div>
-                    
-                    <div class="pt-4 border-t border-white/10 flex justify-center pb-12">
-                        <a id="news-modal-link" href="#" target="_blank" class="inline-flex items-center justify-center gap-3 bg-[#F47521] text-black font-black uppercase tracking-widest px-8 py-4 rounded-xl hover:bg-white hover:text-black hover:scale-105 transition-all shadow-[0_4px_15px_rgba(244,117,33,0.4)] w-full md:w-auto">
-                            Read Original Source <i class="fas fa-external-link-alt"></i>
-                        </a>
                     </div>
                 </div>
             </div>
@@ -264,7 +260,6 @@ window.app.openNewsModal = (index, imgSrc, dateStr) => {
     document.getElementById('news-modal-img').src = imgSrc;
     document.getElementById('news-modal-date').innerHTML = `<i class="far fa-calendar-alt"></i> ${dateStr}`;
     document.getElementById('news-modal-heading').innerText = item.title;
-    document.getElementById('news-modal-link').href = item.link;
 
     const rawContent = item.content || item.description || '';
 
