@@ -1,4 +1,4 @@
-// action_slider.js - Netflix-style Action Anime Slider with Library Sync
+// slider.js - Netflix-style Action Anime Slider with Instant Library Sync
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
@@ -7,11 +7,11 @@ window.app.components.actionSlider = async () => {
     const container = document.getElementById('action-slider-container');
     if (!container) return;
 
-    // 1. SHOW LOADING SKELETON IMMEDIATELY
+    // 1. SHOW LOADING SKELETON (With margin fixed)
     container.innerHTML = `
-        <div class="px-4 md:px-8 py-4">
-            <h2 class="text-xl md:text-2xl font-black text-white mb-4 border-l-4 border-[#F47521] pl-3 uppercase tracking-wider">Top Action Anime</h2>
-            <div class="flex gap-3 md:gap-4 overflow-hidden">
+        <div class="py-6">
+            <h2 class="text-xl md:text-2xl font-black text-white mb-4 border-l-4 border-[#F47521] pl-3 ml-6 md:ml-8 uppercase tracking-wider">Top Action Anime</h2>
+            <div class="flex gap-3 md:gap-4 overflow-hidden px-6 md:px-8">
                 ${[1, 2, 3, 4, 5, 6].map(() => `
                     <div class="min-w-[130px] md:min-w-[180px] h-[195px] md:h-[270px] bg-white/5 animate-pulse rounded-lg border border-white/5"></div>
                 `).join('')}
@@ -55,7 +55,7 @@ window.app.components.actionSlider = async () => {
                     return {
                         id: match.id,
                         title: title, 
-                        image: ani.coverImage.extraLarge || match.image || match.poster, 
+                        image: ani.coverImage.extraLarge || match.image || match.poster,
                         type: match.type || 'TV',
                         sub: match.tvInfo?.sub || match.sub || '?',
                         dub: match.tvInfo?.dub || match.dub || 0
@@ -78,42 +78,42 @@ window.app.components.actionSlider = async () => {
         let cardsHtml = finalSliderItems.map(anime => {
             const safeTitle = anime.title.replace(/'/g, "\\'");
             
-            // Check library set (populated by carousel/search components on auth)
-            const isAdded = window.app.state.carouselLibrarySet ? window.app.state.carouselLibrarySet.has(String(anime.id)) : false;
+            // Check global memory set to see if already in library
+            const docIdStr = String(anime.id);
+            const isAdded = window.app.state.carouselLibrarySet && window.app.state.carouselLibrarySet.has(docIdStr);
             
-            // Re-using search.js exact button classes so the innerText toggle logic works seamlessly
+            // Library Button HTML (Changes based on whether it's saved)
             const libraryBtnHtml = isAdded 
-                ? `<button onclick="window.app.toggleSearchLibraryClick(event, '${anime.id}', '${safeTitle}', '${anime.image}')" class="text-[#F47521] bg-black/80 backdrop-blur-sm px-2.5 py-1.5 rounded text-[10px] font-bold hover:bg-[#F47521] hover:text-black transition flex items-center gap-1.5 border border-[#F47521]/50"><i class="fas fa-check"></i> Saved</button>`
-                : `<button onclick="window.app.toggleSearchLibraryClick(event, '${anime.id}', '${safeTitle}', '${anime.image}')" class="text-gray-200 bg-black/60 backdrop-blur-sm px-2.5 py-1.5 rounded text-[10px] font-bold hover:bg-white hover:text-black transition flex items-center gap-1.5 border border-white/20"><i class="fas fa-bookmark"></i> Save</button>`;
+                ? `<button onclick="window.app.toggleActionSliderLibrary(event, '${anime.id}', '${safeTitle}', '${anime.image}', this)" class="absolute top-2 right-2 z-30 bg-[#F47521] text-white w-7 h-7 rounded-full flex items-center justify-center shadow-lg transition-transform hover:scale-110 border border-[#F47521]"><i class="fas fa-check text-[11px]"></i></button>`
+                : `<button onclick="window.app.toggleActionSliderLibrary(event, '${anime.id}', '${safeTitle}', '${anime.image}', this)" class="absolute top-2 right-2 z-30 bg-black/60 backdrop-blur-sm text-white hover:text-[#F47521] w-7 h-7 rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-110 border border-white/20"><i class="fas fa-plus text-[11px]"></i></button>`;
 
             return `
-            <div class="snap-start shrink-0 w-[130px] md:w-[180px] relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-10"
+            <div class="snap-start shrink-0 w-[130px] md:w-[180px] relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-20"
                  onclick="window.saveAndGo('${anime.id}', '${safeTitle}', '${anime.image}', '${anime.type}', '${anime.sub}', '${anime.dub}')">
                 
                 <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden shadow-lg border border-white/5 group-hover:border-[#F47521]/70 transition-colors">
                     <img src="${anime.image}" loading="lazy" class="w-full h-full object-cover">
                     
-                    <!-- Hover Overlay -->
-                    <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-2 md:p-3 pointer-events-none">
+                    <!-- Permanent Top Right Library Button -->
+                    ${libraryBtnHtml}
+                    
+                    <!-- Hover Overlay for Play Button -->
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-2 md:p-3">
                         <button onclick="event.stopPropagation(); window.saveAndGo('${anime.id}', '${safeTitle}', '${anime.image}', '${anime.type}', '${anime.sub}', '${anime.dub}')" 
-                                class="bg-[#F47521] text-white w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(244,117,33,0.5)] hover:scale-110 transition-transform mb-1 pointer-events-auto">
+                                class="bg-[#F47521] text-white w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(244,117,33,0.5)] hover:scale-110 transition-transform mb-1">
                             <i class="fas fa-play text-xs md:text-sm pl-0.5"></i>
                         </button>
                     </div>
                     
-                    <!-- Top Info Badges & Library Button (Visible on Hover) -->
-                    <div class="absolute top-0 left-0 w-full p-2 flex justify-between items-start opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
-                        <!-- Left Side: Badges -->
-                        <div class="flex flex-col gap-1 items-start">
-                            <span class="bg-black/70 backdrop-blur-sm text-white text-[9px] md:text-[10px] px-1.5 py-0.5 rounded border border-white/10 font-bold uppercase shadow-md">${anime.type}</span>
-                            <span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[9px] px-1.5 py-0.5 rounded shadow-md font-bold">CC ${anime.sub}</span>
-                            ${anime.dub > 0 ? `<span class="bg-purple-600/90 backdrop-blur-sm text-white text-[9px] px-1.5 py-0.5 rounded shadow-md font-bold"><i class="fas fa-microphone text-[8px]"></i> ${anime.dub}</span>` : ''}
-                        </div>
-                        
-                        <!-- Right Side: Add to Library -->
-                        <div class="pointer-events-auto">
-                            ${libraryBtnHtml}
-                        </div>
+                    <!-- Top Left Info Badges -->
+                    <div class="absolute top-2 left-2 z-10 pointer-events-none">
+                        <span class="bg-black/80 backdrop-blur-sm text-white text-[9px] md:text-[10px] px-1.5 py-0.5 rounded border border-white/10 font-bold uppercase shadow-md">${anime.type}</span>
+                    </div>
+                    
+                    <!-- Bottom Info Badges (Visible on Hover) -->
+                    <div class="absolute bottom-2 right-2 flex flex-col gap-1 items-end opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
+                        <span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[9px] px-1.5 py-0.5 rounded shadow-md font-bold">CC ${anime.sub}</span>
+                        ${anime.dub > 0 ? `<span class="bg-purple-600/90 backdrop-blur-sm text-white text-[9px] px-1.5 py-0.5 rounded shadow-md font-bold"><i class="fas fa-microphone text-[8px]"></i> ${anime.dub}</span>` : ''}
                     </div>
                 </div>
                 
@@ -123,8 +123,8 @@ window.app.components.actionSlider = async () => {
         }).join('');
 
         container.innerHTML = `
-            <div class="px-4 md:px-8 py-6 relative">
-                <div class="flex items-center justify-between mb-4">
+            <div class="py-6 relative">
+                <div class="flex items-center justify-between mb-4 px-6 md:px-8">
                     <h2 class="text-xl md:text-2xl font-black text-white border-l-4 border-[#F47521] pl-3 uppercase tracking-wider drop-shadow-md">
                         Action Anime
                     </h2>
@@ -133,17 +133,17 @@ window.app.components.actionSlider = async () => {
                 <!-- Slider Container -->
                 <div class="relative group/slider">
                     <!-- Left scroll button (Desktop Only) -->
-                    <button id="slide-left-btn" class="hidden md:flex absolute -left-5 top-[40%] -translate-y-1/2 z-20 w-10 h-10 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0 pointer-events-auto">
+                    <button id="slide-left-btn" class="hidden md:flex absolute left-2 top-[40%] -translate-y-1/2 z-30 w-10 h-10 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0">
                         <i class="fas fa-chevron-left"></i>
                     </button>
                     
-                    <!-- Scrollable Track -->
-                    <div id="action-slider-track" class="flex gap-3 md:gap-4 overflow-x-auto snap-x snap-mandatory hide-scrollbar pb-4 pt-2 -mx-4 px-4 md:mx-0 md:px-0">
+                    <!-- Scrollable Track (Fixed Margins) -->
+                    <div id="action-slider-track" class="flex gap-3 md:gap-4 overflow-x-auto snap-x snap-mandatory hide-scrollbar pb-4 pt-2 px-6 md:px-8">
                         ${cardsHtml}
                     </div>
                     
                     <!-- Right scroll button (Desktop Only) -->
-                    <button id="slide-right-btn" class="hidden md:flex absolute -right-5 top-[40%] -translate-y-1/2 z-20 w-10 h-10 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0 pointer-events-auto">
+                    <button id="slide-right-btn" class="hidden md:flex absolute right-2 top-[40%] -translate-y-1/2 z-30 w-10 h-10 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0">
                         <i class="fas fa-chevron-right"></i>
                     </button>
                 </div>
@@ -179,6 +179,55 @@ window.app.components.actionSlider = async () => {
     }
 };
 
+// --- DYNAMIC SLIDER LIBRARY LOGIC (ADD & REMOVE) ---
+window.app.toggleActionSliderLibrary = async (event, id, title, img, btnElement) => {
+    event.stopPropagation(); 
+    
+    // Auth Check (Reusing Firebase setup from carousel)
+    try {
+        const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+        const auth = getAuth();
+        
+        if (!auth.currentUser || auth.currentUser.isAnonymous) {
+            if (window.app.components && window.app.components.auth) window.app.components.auth();
+            else if (window.app.showCustomAlert) window.app.showCustomAlert("Please log in to save to your Library!", "error");
+            return;
+        }
+
+        const docIdStr = String(id);
+        const isCurrentlyAdded = window.app.state.carouselLibrarySet.has(docIdStr);
+
+        const { doc, setDoc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        const libDocRef = doc(window.app.db, "users", auth.currentUser.uid, "library", docIdStr);
+
+        if (isCurrentlyAdded) {
+            // OPTIMISTIC UI UPDATE: Remove
+            window.app.state.carouselLibrarySet.delete(docIdStr);
+            btnElement.className = "absolute top-2 right-2 z-30 bg-black/60 backdrop-blur-sm text-white hover:text-[#F47521] w-7 h-7 rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-110 border border-white/20";
+            btnElement.innerHTML = '<i class="fas fa-plus text-[11px]"></i>';
+
+            // Sync with Firestore
+            await deleteDoc(libDocRef);
+            if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
+
+        } else {
+            // OPTIMISTIC UI UPDATE: Add
+            window.app.state.carouselLibrarySet.add(docIdStr);
+            btnElement.className = "absolute top-2 right-2 z-30 bg-[#F47521] text-white w-7 h-7 rounded-full flex items-center justify-center shadow-lg transition-transform hover:scale-110 border border-[#F47521]";
+            btnElement.innerHTML = '<i class="fas fa-check text-[11px]"></i>';
+
+            // Sync with Firestore
+            const formattedAnime = { id: docIdStr, title: title, img: img, timestamp: Date.now() };
+            await setDoc(libDocRef, formattedAnime);
+            if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
+        }
+    } catch (error) { 
+        console.error("Firebase update failed in Slider:", error); 
+        if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to sync with cloud.", "error");
+    }
+};
+
+// Initialize the component when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     if (window.app.components.actionSlider) {
         window.app.components.actionSlider();
