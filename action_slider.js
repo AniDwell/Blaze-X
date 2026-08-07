@@ -1,113 +1,125 @@
-// action_slider.js - Netflix-style Action Anime Slider with Library & Loading Transitions
+// action_slider.js - Netflix-style Action Anime Slider with Instant Save & Transitions
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
 
-// Ensure the library set exists (in case slider loads before carousel)
-window.app.state = window.app.state || {};
-window.app.state.carouselLibrarySet = window.app.state.carouselLibrarySet || new Set();
+// --- GLOBAL PAGE TRANSITION EFFECT ---
+// Removes the loader if the user navigates back to this page
+window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+        const overlay = document.getElementById('page-transition-overlay');
+        if (overlay) overlay.remove();
+    }
+});
 
-// --- 1. PAGE TRANSITION & LOADING ANIMATION ---
-window.app.openAnimeInfo = (id) => {
-    // Inject the CSS for the looping orange bar if it doesn't exist
-    if (!document.getElementById('slider-loader-style')) {
+window.app.sliderNavigate = (id, title, image, type, sub, dub) => {
+    // 1. Inject Styles for the Loading Bar if they don't exist
+    if (!document.getElementById('slider-transition-styles')) {
         const style = document.createElement('style');
-        style.id = 'slider-loader-style';
-        style.textContent = `
-            @keyframes sliderLoadingBar {
+        style.id = 'slider-transition-styles';
+        style.innerHTML = `
+            @keyframes loadingSlide {
                 0% { transform: translateX(-100%); }
-                100% { transform: translateX(200vw); }
-            }
-            .slider-loading-bar {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 50vw;
-                height: 3px;
-                background-color: #F47521;
-                z-index: 100000;
-                animation: sliderLoadingBar 0.8s infinite linear;
-                box-shadow: 0 0 10px #F47521, 0 0 5px #F47521;
+                100% { transform: translateX(200%); }
             }
         `;
         document.head.appendChild(style);
     }
 
-    // Create the dark screen overlay
-    const overlay = document.createElement('div');
-    overlay.className = 'fixed inset-0 bg-black/85 backdrop-blur-md z-[99999] transition-opacity duration-300 opacity-0';
-    document.body.appendChild(overlay);
+    // 2. Create and Append the Dulling Overlay & Orange Bar
+    const overlayHtml = `
+        <div id="page-transition-overlay" class="fixed inset-0 z-[9999] flex flex-col transition-opacity duration-300 opacity-0">
+            <!-- Dulling Backdrop -->
+            <div class="absolute inset-0 bg-black/80 backdrop-blur-sm"></div>
+            
+            <!-- Slim Orange Progress Bar at Top -->
+            <div class="w-full h-1 bg-black/50 relative overflow-hidden z-10">
+                <div class="w-1/2 h-full bg-[#F47521] rounded-r-full shadow-[0_0_10px_#F47521] animate-[loadingSlide_1s_infinite_ease-in-out]"></div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', overlayHtml);
     
-    // Create the moving orange bar
-    const loader = document.createElement('div');
-    loader.className = 'slider-loading-bar';
-    document.body.appendChild(loader);
-
     // Trigger the fade-in effect smoothly
+    const overlayEl = document.getElementById('page-transition-overlay');
     requestAnimationFrame(() => {
-        overlay.classList.remove('opacity-0');
-        overlay.classList.add('opacity-100');
+        overlayEl.classList.remove('opacity-0');
+        overlayEl.classList.add('opacity-100');
     });
 
-    // Navigate to info.html after a tiny delay so the user sees the animation
+    // 3. Wait slightly for animation, then Navigate
     setTimeout(() => {
-        window.location.href = `info.html?id=${id}`;
-    }, 150);
+        // Reuse search.js saveAndGo history function if it's loaded, else direct redirect like carousel
+        if (typeof window.saveAndGo === 'function') {
+            window.saveAndGo(id, title, image, type, sub, dub);
+        } else {
+            window.location.href = `info.html?id=${id}`;
+        }
+    }, 300);
 };
 
-// --- 2. INSTANT LIBRARY SYNC (Just like carousel.js) ---
-window.app.handleSliderLibraryClick = async (event, id, title, img) => {
-    event.stopPropagation(); // Prevent the card click from opening info.html
-    const btn = event.currentTarget;
-    const docIdStr = String(id);
-    const isAdded = btn.dataset.added === "true";
-
+// --- INSTANT SAVE / LIBRARY SYNC LOGIC ---
+window.app.toggleSliderLibrary = async (event, btn, id, title, img) => {
+    event.stopPropagation(); // Prevent the click from triggering navigation
+    
     try {
+        // Ensure Firebase is initialized
         const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
-        const auth = getAuth();
+        const { doc, setDoc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         
-        // Ensure user is logged in
+        const auth = window.app.auth || getAuth();
+        const db = window.app.db;
+        
         if (!auth.currentUser || auth.currentUser.isAnonymous) {
             if (window.app.components && window.app.components.auth) window.app.components.auth();
             else if (window.app.showCustomAlert) window.app.showCustomAlert("Please log in to save to your Library!", "error");
             return;
         }
 
-        const { getFirestore, doc, setDoc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-        const db = window.app.db || getFirestore();
+        const docIdStr = String(id);
+        const isAdded = btn.dataset.added === "true";
         const libDocRef = doc(db, "users", auth.currentUser.uid, "library", docIdStr);
 
+        // SVGs for both states
+        const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
+        const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
+
         if (isAdded) {
-            // OPTIMISTIC UI: Instantly remove
-            window.app.state.carouselLibrarySet.delete(docIdStr);
+            // Optimistic UI Remove
             btn.dataset.added = "false";
-            btn.innerHTML = '<i class="fas fa-plus text-white text-sm"></i>';
+            btn.innerHTML = unsavedSvg;
+            btn.classList.replace('bg-black/80', 'bg-black/50');
             
-            // Sync with Firestore
+            // Sync with Carousel global state if it exists
+            if (window.app.state.carouselLibrarySet) window.app.state.carouselLibrarySet.delete(docIdStr);
+
             await deleteDoc(libDocRef);
             if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
         } else {
-            // OPTIMISTIC UI: Instantly add
-            window.app.state.carouselLibrarySet.add(docIdStr);
+            // Optimistic UI Add
             btn.dataset.added = "true";
-            btn.innerHTML = '<i class="fas fa-check text-green-500 text-sm drop-shadow-md"></i>';
+            btn.innerHTML = savedSvg;
+            btn.classList.replace('bg-black/50', 'bg-black/80');
 
-            // Sync with Firestore
+            // Sync with Carousel global state
+            if (window.app.state.carouselLibrarySet) window.app.state.carouselLibrarySet.add(docIdStr);
+
             await setDoc(libDocRef, { id: docIdStr, title, img, timestamp: Date.now() });
             if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
         }
-    } catch (err) {
-        console.error("Slider Library Sync Error:", err);
+    } catch (error) { 
+        console.error("Firebase update failed in slider:", error); 
         if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to sync with cloud.", "error");
     }
 };
 
-// --- 3. SLIDER RENDERING COMPONENT ---
+
+// --- SLIDER RENDERING ---
 window.app.components.actionSlider = async () => {
     const container = document.getElementById('action-slider-container');
     if (!container) return;
 
-    // Show Loading Skeleton Immediately
+    // 1. SHOW LOADING SKELETON IMMEDIATELY
     container.innerHTML = `
         <div class="px-4 md:px-8 py-4">
             <h2 class="text-xl md:text-2xl font-black text-white mb-4 border-l-4 border-[#F47521] pl-3 uppercase tracking-wider">Top Action Anime</h2>
@@ -120,7 +132,7 @@ window.app.components.actionSlider = async () => {
     `;
 
     try {
-        // Fetch top Action anime from AniList
+        // 2. FETCH TOP ACTION ANIME FROM ANILIST
         const aniQuery = `
             query { 
                 Page(page: 1, perPage: 15) { 
@@ -139,7 +151,7 @@ window.app.components.actionSlider = async () => {
         const aniData = await aniRes.json();
         const actionAnimeList = aniData?.data?.Page?.media || [];
 
-        // Cross-reference with your custom API
+        // 3. CROSS-REFERENCE WITH YOUR CUSTOM API
         const baseUrl = 'https://anikoto-api-xi.vercel.app';
         
         const crossReferenced = await Promise.all(actionAnimeList.map(async (ani) => {
@@ -149,6 +161,7 @@ window.app.components.actionSlider = async () => {
                 const searchJson = await searchRes.json();
                 
                 const results = searchJson.data || searchJson.results || [];
+                
                 if (results.length > 0) {
                     const match = results[0]; 
                     return {
@@ -160,9 +173,7 @@ window.app.components.actionSlider = async () => {
                         dub: match.tvInfo?.dub || match.dub || 0
                     };
                 }
-            } catch(e) {
-                console.log("Slider: API match failed for", title);
-            }
+            } catch(e) {}
             return null; 
         }));
 
@@ -173,43 +184,42 @@ window.app.components.actionSlider = async () => {
             return;
         }
 
-        // Render Cards
+        // 4. RENDER THE NETFLIX-STYLE UI
         let cardsHtml = finalSliderItems.map(anime => {
             const safeTitle = anime.title.replace(/'/g, "\\'");
+            const docIdStr = String(anime.id);
             
-            // Check memory set to see if already in library
-            const isAdded = window.app.state.carouselLibrarySet.has(String(anime.id));
-            const btnIcon = isAdded ? '<i class="fas fa-check text-green-500 text-sm drop-shadow-md"></i>' : '<i class="fas fa-plus text-white text-sm"></i>';
+            // Check memory state globally maintained by Carousel/Search
+            const isAdded = window.app.state.carouselLibrarySet && window.app.state.carouselLibrarySet.has(docIdStr);
             
+            const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
+            const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
+
             return `
             <div class="snap-start shrink-0 w-[130px] md:w-[180px] relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-10"
-                 onclick="window.app.openAnimeInfo('${anime.id}')">
+                 onclick="window.app.sliderNavigate('${anime.id}', '${safeTitle}', '${anime.image}', '${anime.type}', '${anime.sub}', '${anime.dub}')">
                 
                 <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden shadow-lg border border-white/5 group-hover:border-[#F47521]/70 transition-colors">
                     <img src="${anime.image}" loading="lazy" class="w-full h-full object-cover">
                     
-                    <!-- Permanent Top-Right Library Button -->
-                    <button onclick="window.app.handleSliderLibraryClick(event, '${anime.id}', '${safeTitle}', '${anime.image}')"
-                            class="absolute top-2 right-2 z-20 w-8 h-8 md:w-9 md:h-9 rounded-full bg-black/60 backdrop-blur-md border border-white/20 flex items-center justify-center transition-all hover:bg-white/20 hover:scale-110 shadow-[0_4px_10px_rgba(0,0,0,0.5)]"
-                            data-added="${isAdded ? 'true' : 'false'}">
-                        ${btnIcon}
+                    <!-- Permanent Save Button SVG -->
+                    <button onclick="window.app.toggleSliderLibrary(event, this, '${anime.id}', '${safeTitle}', '${anime.image}')" 
+                            data-added="${isAdded}"
+                            class="absolute top-2 right-2 z-30 p-1.5 rounded ${isAdded ? 'bg-black/80' : 'bg-black/50'} backdrop-blur-md border border-white/10 shadow-lg hover:bg-black/90 hover:scale-110 transition-all flex items-center justify-center">
+                        ${isAdded ? savedSvg : unsavedSvg}
                     </button>
                     
-                    <!-- Hover Overlay (Play Button) -->
-                    <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-2 md:p-3 pointer-events-none">
-                        <div class="bg-[#F47521] text-white w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(244,117,33,0.5)] mb-1">
+                    <!-- Hover Overlay (Play Button & Dark Gradient) -->
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-2 md:p-3">
+                        <button onclick="event.stopPropagation(); window.app.sliderNavigate('${anime.id}', '${safeTitle}', '${anime.image}', '${anime.type}', '${anime.sub}', '${anime.dub}')" 
+                                class="bg-[#F47521] text-white w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(244,117,33,0.5)] hover:scale-110 transition-transform mb-1">
                             <i class="fas fa-play text-xs md:text-sm pl-0.5"></i>
-                        </div>
+                        </button>
                     </div>
                     
-                    <!-- Top Info Badges -->
-                    <div class="absolute top-0 left-0 w-full p-2 flex justify-between items-start opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
+                    <!-- Top Left Info Badges (Visible on Hover so they don't block the cover image normally) -->
+                    <div class="absolute top-0 left-0 p-2 flex flex-col gap-1 items-start opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
                         <span class="bg-black/70 backdrop-blur-sm text-white text-[9px] md:text-[10px] px-1.5 py-0.5 rounded border border-white/10 font-bold uppercase shadow-md">${anime.type}</span>
-                        <!-- Space left so it doesn't overlap the library button -->
-                    </div>
-
-                    <!-- Bottom Info Badges -->
-                    <div class="absolute bottom-0 right-0 p-2 flex flex-col gap-1 items-end opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
                         <span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[9px] px-1.5 py-0.5 rounded shadow-md font-bold">CC ${anime.sub}</span>
                         ${anime.dub > 0 ? `<span class="bg-purple-600/90 backdrop-blur-sm text-white text-[9px] px-1.5 py-0.5 rounded shadow-md font-bold"><i class="fas fa-microphone text-[8px]"></i> ${anime.dub}</span>` : ''}
                     </div>
@@ -228,9 +238,10 @@ window.app.components.actionSlider = async () => {
                     </h2>
                 </div>
                 
+                <!-- Slider Container -->
                 <div class="relative group/slider">
-                    <!-- Left scroll button -->
-                    <button id="slide-left-btn" class="hidden md:flex absolute -left-5 top-[40%] -translate-y-1/2 z-30 w-10 h-10 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0">
+                    <!-- Left scroll button (Desktop Only) -->
+                    <button id="slide-left-btn" class="hidden md:flex absolute -left-5 top-[40%] -translate-y-1/2 z-20 w-10 h-10 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0">
                         <i class="fas fa-chevron-left"></i>
                     </button>
                     
@@ -239,15 +250,15 @@ window.app.components.actionSlider = async () => {
                         ${cardsHtml}
                     </div>
                     
-                    <!-- Right scroll button -->
-                    <button id="slide-right-btn" class="hidden md:flex absolute -right-5 top-[40%] -translate-y-1/2 z-30 w-10 h-10 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0">
+                    <!-- Right scroll button (Desktop Only) -->
+                    <button id="slide-right-btn" class="hidden md:flex absolute -right-5 top-[40%] -translate-y-1/2 z-20 w-10 h-10 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0">
                         <i class="fas fa-chevron-right"></i>
                     </button>
                 </div>
             </div>
         `;
 
-        // Attach Horizontal Scroll Logic
+        // 5. ATTACH SCROLL LOGIC FOR BUTTONS
         const track = document.getElementById('action-slider-track');
         const leftBtn = document.getElementById('slide-left-btn');
         const rightBtn = document.getElementById('slide-right-btn');
@@ -276,7 +287,7 @@ window.app.components.actionSlider = async () => {
     }
 };
 
-// Initialize if scripts load late
+// Initialize the component when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     if (window.app.components.actionSlider) {
         window.app.components.actionSlider();
