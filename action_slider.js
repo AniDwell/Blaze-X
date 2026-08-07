@@ -1,10 +1,9 @@
-// slider.js - Netflix-style Action Anime Slider
+// action_slider.js - Netflix-style Action Anime Slider with Library Sync
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
 
 window.app.components.actionSlider = async () => {
-    // Requires a div with id="action-slider-container" in your HTML
     const container = document.getElementById('action-slider-container');
     if (!container) return;
 
@@ -46,19 +45,17 @@ window.app.components.actionSlider = async () => {
         const crossReferenced = await Promise.all(actionAnimeList.map(async (ani) => {
             const title = ani.title.english || ani.title.romaji;
             try {
-                // Search your database for the Anilist title
                 const searchRes = await fetch(`${baseUrl}/api/search?keyword=${encodeURIComponent(title)}`);
                 const searchJson = await searchRes.json();
                 
-                // Account for both possible JSON response structures from your API
                 const results = searchJson.data || searchJson.results || [];
                 
                 if (results.length > 0) {
-                    const match = results[0]; // Grab the best match
+                    const match = results[0]; 
                     return {
                         id: match.id,
-                        title: title, // Use Anilist title for cleaner UI
-                        image: ani.coverImage.extraLarge || match.image || match.poster, // Prefer HQ Anilist poster
+                        title: title, 
+                        image: ani.coverImage.extraLarge || match.image || match.poster, 
                         type: match.type || 'TV',
                         sub: match.tvInfo?.sub || match.sub || '?',
                         dub: match.tvInfo?.dub || match.dub || 0
@@ -67,14 +64,13 @@ window.app.components.actionSlider = async () => {
             } catch(e) {
                 console.log("Slider: API match failed for", title);
             }
-            return null; // Return null if not found in your API
+            return null; 
         }));
 
-        // Filter out anime that don't exist on your API
         const finalSliderItems = crossReferenced.filter(item => item !== null);
 
         if (finalSliderItems.length === 0) {
-            container.innerHTML = ''; // Hide component if completely empty
+            container.innerHTML = ''; 
             return;
         }
 
@@ -82,7 +78,14 @@ window.app.components.actionSlider = async () => {
         let cardsHtml = finalSliderItems.map(anime => {
             const safeTitle = anime.title.replace(/'/g, "\\'");
             
-            // Reusing window.saveAndGo() from search.js for unified history tracking & routing
+            // Check library set (populated by carousel/search components on auth)
+            const isAdded = window.app.state.carouselLibrarySet ? window.app.state.carouselLibrarySet.has(String(anime.id)) : false;
+            
+            // Re-using search.js exact button classes so the innerText toggle logic works seamlessly
+            const libraryBtnHtml = isAdded 
+                ? `<button onclick="window.app.toggleSearchLibraryClick(event, '${anime.id}', '${safeTitle}', '${anime.image}')" class="text-[#F47521] bg-black/80 backdrop-blur-sm px-2.5 py-1.5 rounded text-[10px] font-bold hover:bg-[#F47521] hover:text-black transition flex items-center gap-1.5 border border-[#F47521]/50"><i class="fas fa-check"></i> Saved</button>`
+                : `<button onclick="window.app.toggleSearchLibraryClick(event, '${anime.id}', '${safeTitle}', '${anime.image}')" class="text-gray-200 bg-black/60 backdrop-blur-sm px-2.5 py-1.5 rounded text-[10px] font-bold hover:bg-white hover:text-black transition flex items-center gap-1.5 border border-white/20"><i class="fas fa-bookmark"></i> Save</button>`;
+
             return `
             <div class="snap-start shrink-0 w-[130px] md:w-[180px] relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-10"
                  onclick="window.saveAndGo('${anime.id}', '${safeTitle}', '${anime.image}', '${anime.type}', '${anime.sub}', '${anime.dub}')">
@@ -91,19 +94,25 @@ window.app.components.actionSlider = async () => {
                     <img src="${anime.image}" loading="lazy" class="w-full h-full object-cover">
                     
                     <!-- Hover Overlay -->
-                    <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-2 md:p-3">
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-2 md:p-3 pointer-events-none">
                         <button onclick="event.stopPropagation(); window.saveAndGo('${anime.id}', '${safeTitle}', '${anime.image}', '${anime.type}', '${anime.sub}', '${anime.dub}')" 
-                                class="bg-[#F47521] text-white w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(244,117,33,0.5)] hover:scale-110 transition-transform mb-1">
+                                class="bg-[#F47521] text-white w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(244,117,33,0.5)] hover:scale-110 transition-transform mb-1 pointer-events-auto">
                             <i class="fas fa-play text-xs md:text-sm pl-0.5"></i>
                         </button>
                     </div>
                     
-                    <!-- Top Info Badges (Visible on Hover) -->
+                    <!-- Top Info Badges & Library Button (Visible on Hover) -->
                     <div class="absolute top-0 left-0 w-full p-2 flex justify-between items-start opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
-                        <span class="bg-black/70 backdrop-blur-sm text-white text-[9px] md:text-[10px] px-1.5 py-0.5 rounded border border-white/10 font-bold uppercase shadow-md">${anime.type}</span>
-                        <div class="flex flex-col gap-1 items-end">
+                        <!-- Left Side: Badges -->
+                        <div class="flex flex-col gap-1 items-start">
+                            <span class="bg-black/70 backdrop-blur-sm text-white text-[9px] md:text-[10px] px-1.5 py-0.5 rounded border border-white/10 font-bold uppercase shadow-md">${anime.type}</span>
                             <span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[9px] px-1.5 py-0.5 rounded shadow-md font-bold">CC ${anime.sub}</span>
                             ${anime.dub > 0 ? `<span class="bg-purple-600/90 backdrop-blur-sm text-white text-[9px] px-1.5 py-0.5 rounded shadow-md font-bold"><i class="fas fa-microphone text-[8px]"></i> ${anime.dub}</span>` : ''}
+                        </div>
+                        
+                        <!-- Right Side: Add to Library -->
+                        <div class="pointer-events-auto">
+                            ${libraryBtnHtml}
                         </div>
                     </div>
                 </div>
@@ -124,7 +133,7 @@ window.app.components.actionSlider = async () => {
                 <!-- Slider Container -->
                 <div class="relative group/slider">
                     <!-- Left scroll button (Desktop Only) -->
-                    <button id="slide-left-btn" class="hidden md:flex absolute -left-5 top-[40%] -translate-y-1/2 z-20 w-10 h-10 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0">
+                    <button id="slide-left-btn" class="hidden md:flex absolute -left-5 top-[40%] -translate-y-1/2 z-20 w-10 h-10 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0 pointer-events-auto">
                         <i class="fas fa-chevron-left"></i>
                     </button>
                     
@@ -134,7 +143,7 @@ window.app.components.actionSlider = async () => {
                     </div>
                     
                     <!-- Right scroll button (Desktop Only) -->
-                    <button id="slide-right-btn" class="hidden md:flex absolute -right-5 top-[40%] -translate-y-1/2 z-20 w-10 h-10 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0">
+                    <button id="slide-right-btn" class="hidden md:flex absolute -right-5 top-[40%] -translate-y-1/2 z-20 w-10 h-10 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0 pointer-events-auto">
                         <i class="fas fa-chevron-right"></i>
                     </button>
                 </div>
@@ -157,12 +166,11 @@ window.app.components.actionSlider = async () => {
                 track.scrollBy({ left: scrollAmount, behavior: 'smooth' });
             });
             
-            // Auto-hide buttons when at the edges
             track.addEventListener('scroll', () => {
                 leftBtn.disabled = track.scrollLeft <= 0;
                 rightBtn.disabled = Math.ceil(track.scrollLeft) >= (track.scrollWidth - track.clientWidth - 10);
             });
-            leftBtn.disabled = true; // Hidden initially since we're at left edge
+            leftBtn.disabled = true; 
         }
 
     } catch (error) {
@@ -171,7 +179,6 @@ window.app.components.actionSlider = async () => {
     }
 };
 
-// Initialize the component when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     if (window.app.components.actionSlider) {
         window.app.components.actionSlider();
