@@ -181,25 +181,32 @@
                 document.getElementById('home-view').classList.remove('hidden');
                 window.app.state.currentView = 'home';
 
-                // --- Core UI Components ---
-                if(window.app.components.header) window.app.components.header();
-                if(window.app.components.bottomnav) window.app.components.bottomnav();
-                
+                // --- Bulletproof Safe Execution Runner ---
+                const safeRun = (componentFn) => {
+                    try {
+                        if (typeof componentFn === 'function') componentFn();
+                    } catch (err) {
+                        console.error("Component initialization error caught:", err);
+                    }
+                };
+
                 // --- Ordered Sliders & Component Initializers ---
-                if(window.app.components.carousel) window.app.components.carousel();
-                if(window.app.components.continueWatching) window.app.components.continueWatching();
-                if(window.app.components.recentSlider) window.app.components.recentSlider(); 
-                if(window.app.components.topTenSlider) window.app.components.topTenSlider(); 
-                if(window.app.components.upcomingSlider) window.app.components.upcomingSlider(); 
-                if(window.app.components.actionSlider) window.app.components.actionSlider(); 
-                if(window.app.components.newsSlider) window.app.components.newsSlider(); 
-                if(window.app.components.popularSlider) window.app.components.popularSlider(); 
-                if(window.app.components.newEpSlider) window.app.components.newEpSlider(); 
-                if(window.app.components.genreSliders) window.app.components.genreSliders(); 
+                safeRun(window.app.components.header);
+                safeRun(window.app.components.bottomnav);
+                safeRun(window.app.components.carousel);
+                safeRun(window.app.components.continueWatching);
+                safeRun(window.app.components.recentSlider);
+                safeRun(window.app.components.topTenSlider);
+                safeRun(window.app.components.upcomingSlider);
+                safeRun(window.app.components.actionSlider);
+                safeRun(window.app.components.newsSlider);
+                safeRun(window.app.components.popularSlider);
+                safeRun(window.app.components.newEpSlider);
+                safeRun(window.app.components.genreSliders);
                 
                 // --- Future Placeholders ---
-                if(window.app.components.topRatedSlider) window.app.components.topRatedSlider();
-                if(window.app.components.mustWatchSlider) window.app.components.mustWatchSlider();
+                safeRun(window.app.components.topRatedSlider);
+                safeRun(window.app.components.mustWatchSlider);
             }
         };
     </script>
