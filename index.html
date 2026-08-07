@@ -96,16 +96,23 @@
                 <!-- 6. Action Anime Slider -->
                 <div id="action-slider-container"></div>
                 
-                <!-- 7. All Time Popular (Cinematic Wide Cards) -->
+                <!-- 7. Anime News & Announcements Slider -->
+                <div id="news-container"></div>
+
+                <!-- 8. All Time Popular (Cinematic Wide Cards) -->
                 <div id="popular-container"></div>
+
+                <!-- 9. Release Schedule (Upcoming Episodes & Live Countdowns) -->
+                <div id="newep-container"></div>
+
+                <!-- 10. Dynamic Lazy-Loaded Genre Sliders -->
+                <div id="genrebased-container"></div>
                 
-                <!-- 8. Others (Top Rated, Must Watch, etc.) -->
+                <!-- 11. Extras -->
                 <div id="top-rated-slider-container"></div>
                 <div id="must-watch-slider-container"></div>
-                <div id="newep-container"></div>
                 <div id="movies-container"></div>
                 <div id="series-container"></div>
-                <div id="genrebased-container"></div>
                 <div id="pill-slider-container" class="pl-4 mt-2"></div>
             </div>
 
@@ -178,36 +185,43 @@
                 if(window.app.components.header) window.app.components.header();
                 if(window.app.components.bottomnav) window.app.components.bottomnav();
                 
-                // --- Ordered Sliders ---
+                // --- Ordered Sliders & Component Initializers ---
                 if(window.app.components.carousel) window.app.components.carousel();
                 if(window.app.components.continueWatching) window.app.components.continueWatching();
                 if(window.app.components.recentSlider) window.app.components.recentSlider(); 
                 if(window.app.components.topTenSlider) window.app.components.topTenSlider(); 
                 if(window.app.components.upcomingSlider) window.app.components.upcomingSlider(); 
                 if(window.app.components.actionSlider) window.app.components.actionSlider(); 
+                if(window.app.components.newsSlider) window.app.components.newsSlider(); 
                 if(window.app.components.popularSlider) window.app.components.popularSlider(); 
+                if(window.app.components.newEpSlider) window.app.components.newEpSlider(); 
+                if(window.app.components.genreSliders) window.app.components.genreSliders(); 
                 
-                // --- Future Placeholder Initializers ---
+                // --- Future Placeholders ---
                 if(window.app.components.topRatedSlider) window.app.components.topRatedSlider();
                 if(window.app.components.mustWatchSlider) window.app.components.mustWatchSlider();
             }
         };
     </script>
 
-    <!-- App Scripts -->
+    <!-- App System Scripts -->
     <script type="module" src="header.js"></script>
     <script src="auth.js"></script>
+    <script src="bottomnav.js"></script>
     
-    <!-- Hero & Custom Sliders (In Order of Appearance) -->
+    <!-- All Custom Slider Scripts (Loaded in Render Order) -->
     <script src="carousel.js"></script>
     <script src="continue_watching.js"></script>
     <script src="recent_slider.js"></script> 
     <script src="top10_slider.js"></script> 
     <script src="upcoming_slider.js"></script>
     <script src="action_slider.js"></script> 
+    <script src="news_slider.js"></script>
     <script src="popular_slider.js"></script>
+    <script src="newep_slider.js"></script>
+    <script src="genre_sliders.js"></script>
     
-    <!-- Initialization -->
+    <!-- Application Boot Sequence -->
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             window.app.init();
