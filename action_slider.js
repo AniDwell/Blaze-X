@@ -1,10 +1,9 @@
-// action_slider.js - Netflix-style Action Anime Slider with Instant Save & Transitions
+// action_slider.js - Larger Action Anime Slider with Permanent UI & Transitions
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
 
-// --- GLOBAL PAGE TRANSITION EFFECT ---
-// Removes the loader if the user navigates back to this page
+// --- GLOBAL PAGE TRANSITION EFFECT (Used by all sliders) ---
 window.addEventListener('pageshow', (event) => {
     if (event.persisted) {
         const overlay = document.getElementById('page-transition-overlay');
@@ -13,26 +12,18 @@ window.addEventListener('pageshow', (event) => {
 });
 
 window.app.sliderNavigate = (id, title, image, type, sub, dub) => {
-    // 1. Inject Styles for the Loading Bar if they don't exist
     if (!document.getElementById('slider-transition-styles')) {
         const style = document.createElement('style');
         style.id = 'slider-transition-styles';
         style.innerHTML = `
-            @keyframes loadingSlide {
-                0% { transform: translateX(-100%); }
-                100% { transform: translateX(200%); }
-            }
+            @keyframes loadingSlide { 0% { transform: translateX(-100%); } 100% { transform: translateX(200%); } }
         `;
         document.head.appendChild(style);
     }
 
-    // 2. Create and Append the Dulling Overlay & Orange Bar
     const overlayHtml = `
         <div id="page-transition-overlay" class="fixed inset-0 z-[9999] flex flex-col transition-opacity duration-300 opacity-0">
-            <!-- Dulling Backdrop -->
             <div class="absolute inset-0 bg-black/80 backdrop-blur-sm"></div>
-            
-            <!-- Slim Orange Progress Bar at Top -->
             <div class="w-full h-1 bg-black/50 relative overflow-hidden z-10">
                 <div class="w-1/2 h-full bg-[#F47521] rounded-r-full shadow-[0_0_10px_#F47521] animate-[loadingSlide_1s_infinite_ease-in-out]"></div>
             </div>
@@ -40,16 +31,13 @@ window.app.sliderNavigate = (id, title, image, type, sub, dub) => {
     `;
     document.body.insertAdjacentHTML('beforeend', overlayHtml);
     
-    // Trigger the fade-in effect smoothly
     const overlayEl = document.getElementById('page-transition-overlay');
     requestAnimationFrame(() => {
         overlayEl.classList.remove('opacity-0');
         overlayEl.classList.add('opacity-100');
     });
 
-    // 3. Wait slightly for animation, then Navigate
     setTimeout(() => {
-        // Reuse search.js saveAndGo history function if it's loaded, else direct redirect like carousel
         if (typeof window.saveAndGo === 'function') {
             window.saveAndGo(id, title, image, type, sub, dub);
         } else {
@@ -60,10 +48,8 @@ window.app.sliderNavigate = (id, title, image, type, sub, dub) => {
 
 // --- INSTANT SAVE / LIBRARY SYNC LOGIC ---
 window.app.toggleSliderLibrary = async (event, btn, id, title, img) => {
-    event.stopPropagation(); // Prevent the click from triggering navigation
-    
+    event.stopPropagation(); 
     try {
-        // Ensure Firebase is initialized
         const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
         const { doc, setDoc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         
@@ -80,59 +66,47 @@ window.app.toggleSliderLibrary = async (event, btn, id, title, img) => {
         const isAdded = btn.dataset.added === "true";
         const libDocRef = doc(db, "users", auth.currentUser.uid, "library", docIdStr);
 
-        // SVGs for both states
-        const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
-        const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
+        const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
+        const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
 
         if (isAdded) {
-            // Optimistic UI Remove
             btn.dataset.added = "false";
             btn.innerHTML = unsavedSvg;
-            btn.classList.replace('bg-black/80', 'bg-black/50');
-            
-            // Sync with Carousel global state if it exists
+            btn.classList.replace('bg-black/90', 'bg-black/70');
             if (window.app.state.carouselLibrarySet) window.app.state.carouselLibrarySet.delete(docIdStr);
-
             await deleteDoc(libDocRef);
             if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
         } else {
-            // Optimistic UI Add
             btn.dataset.added = "true";
             btn.innerHTML = savedSvg;
-            btn.classList.replace('bg-black/50', 'bg-black/80');
-
-            // Sync with Carousel global state
+            btn.classList.replace('bg-black/70', 'bg-black/90');
             if (window.app.state.carouselLibrarySet) window.app.state.carouselLibrarySet.add(docIdStr);
-
             await setDoc(libDocRef, { id: docIdStr, title, img, timestamp: Date.now() });
             if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
         }
     } catch (error) { 
-        console.error("Firebase update failed in slider:", error); 
         if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to sync with cloud.", "error");
     }
 };
-
 
 // --- SLIDER RENDERING ---
 window.app.components.actionSlider = async () => {
     const container = document.getElementById('action-slider-container');
     if (!container) return;
 
-    // 1. SHOW LOADING SKELETON IMMEDIATELY
+    // 1. SHOW LOADING SKELETON (Larger Dimension: w-[150px] md:w-[210px])
     container.innerHTML = `
         <div class="px-4 md:px-8 py-4">
             <h2 class="text-xl md:text-2xl font-black text-white mb-4 border-l-4 border-[#F47521] pl-3 uppercase tracking-wider">Top Action Anime</h2>
-            <div class="flex gap-3 md:gap-4 overflow-hidden">
-                ${[1, 2, 3, 4, 5, 6].map(() => `
-                    <div class="min-w-[130px] md:min-w-[180px] h-[195px] md:h-[270px] bg-white/5 animate-pulse rounded-lg border border-white/5"></div>
+            <div class="flex gap-3 md:gap-5 overflow-hidden">
+                ${[1, 2, 3, 4, 5].map(() => `
+                    <div class="min-w-[150px] md:min-w-[210px] aspect-[2/3] bg-white/5 animate-pulse rounded-lg border border-white/5"></div>
                 `).join('')}
             </div>
         </div>
     `;
 
     try {
-        // 2. FETCH TOP ACTION ANIME FROM ANILIST
         const aniQuery = `
             query { 
                 Page(page: 1, perPage: 15) { 
@@ -144,14 +118,12 @@ window.app.components.actionSlider = async () => {
             }
         `;
         const aniRes = await fetch('https://graphql.anilist.co', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query: aniQuery })
         });
         const aniData = await aniRes.json();
         const actionAnimeList = aniData?.data?.Page?.media || [];
 
-        // 3. CROSS-REFERENCE WITH YOUR CUSTOM API
         const baseUrl = 'https://anikoto-api-xi.vercel.app';
         
         const crossReferenced = await Promise.all(actionAnimeList.map(async (ani) => {
@@ -159,18 +131,13 @@ window.app.components.actionSlider = async () => {
             try {
                 const searchRes = await fetch(`${baseUrl}/api/search?keyword=${encodeURIComponent(title)}`);
                 const searchJson = await searchRes.json();
-                
                 const results = searchJson.data || searchJson.results || [];
-                
                 if (results.length > 0) {
                     const match = results[0]; 
                     return {
-                        id: match.id,
-                        title: title, 
+                        id: match.id, title: title, 
                         image: ani.coverImage.extraLarge || match.image || match.poster, 
-                        type: match.type || 'TV',
-                        sub: match.tvInfo?.sub || match.sub || '?',
-                        dub: match.tvInfo?.dub || match.dub || 0
+                        type: match.type || 'TV', sub: match.tvInfo?.sub || match.sub || '?', dub: match.tvInfo?.dub || match.dub || 0
                     };
                 }
             } catch(e) {}
@@ -178,54 +145,52 @@ window.app.components.actionSlider = async () => {
         }));
 
         const finalSliderItems = crossReferenced.filter(item => item !== null);
+        if (finalSliderItems.length === 0) { container.innerHTML = ''; return; }
 
-        if (finalSliderItems.length === 0) {
-            container.innerHTML = ''; 
-            return;
-        }
-
-        // 4. RENDER THE NETFLIX-STYLE UI
         let cardsHtml = finalSliderItems.map(anime => {
             const safeTitle = anime.title.replace(/'/g, "\\'");
             const docIdStr = String(anime.id);
-            
-            // Check memory state globally maintained by Carousel/Search
             const isAdded = window.app.state.carouselLibrarySet && window.app.state.carouselLibrarySet.has(docIdStr);
             
-            const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
-            const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
+            const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
+            const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
 
             return `
-            <div class="snap-start shrink-0 w-[130px] md:w-[180px] relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-10"
+            <div class="snap-start shrink-0 w-[150px] md:w-[210px] relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-10"
                  onclick="window.app.sliderNavigate('${anime.id}', '${safeTitle}', '${anime.image}', '${anime.type}', '${anime.sub}', '${anime.dub}')">
                 
-                <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden shadow-lg border border-white/5 group-hover:border-[#F47521]/70 transition-colors">
+                <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden shadow-lg border border-white/10 group-hover:border-[#F47521]/70 transition-colors">
                     <img src="${anime.image}" loading="lazy" class="w-full h-full object-cover">
                     
-                    <!-- Permanent Save Button SVG -->
+                    <!-- Permanent Dark Gradient -->
+                    <div class="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent pointer-events-none"></div>
+
+                    <!-- Permanent Save Button -->
                     <button onclick="window.app.toggleSliderLibrary(event, this, '${anime.id}', '${safeTitle}', '${anime.image}')" 
                             data-added="${isAdded}"
-                            class="absolute top-2 right-2 z-30 p-1.5 rounded ${isAdded ? 'bg-black/80' : 'bg-black/50'} backdrop-blur-md border border-white/10 shadow-lg hover:bg-black/90 hover:scale-110 transition-all flex items-center justify-center">
+                            class="absolute top-2 right-2 z-30 p-2 rounded ${isAdded ? 'bg-black/90' : 'bg-black/70'} backdrop-blur-md border border-white/10 shadow-lg hover:bg-black transition-all flex items-center justify-center">
                         ${isAdded ? savedSvg : unsavedSvg}
                     </button>
                     
-                    <!-- Hover Overlay (Play Button & Dark Gradient) -->
-                    <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-2 md:p-3">
-                        <button onclick="event.stopPropagation(); window.app.sliderNavigate('${anime.id}', '${safeTitle}', '${anime.image}', '${anime.type}', '${anime.sub}', '${anime.dub}')" 
-                                class="bg-[#F47521] text-white w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(244,117,33,0.5)] hover:scale-110 transition-transform mb-1">
-                            <i class="fas fa-play text-xs md:text-sm pl-0.5"></i>
-                        </button>
+                    <!-- Permanent Play Button (Bottom Right) -->
+                    <div class="absolute inset-0 flex flex-col justify-end p-2 md:p-3 z-20 pointer-events-none">
+                        <div class="flex items-center justify-end w-full pointer-events-auto">
+                            <button onclick="event.stopPropagation(); window.app.sliderNavigate('${anime.id}', '${safeTitle}', '${anime.image}', '${anime.type}', '${anime.sub}', '${anime.dub}')" 
+                                    class="bg-white text-black w-9 h-9 md:w-11 md:h-11 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(255,255,255,0.4)] hover:scale-110 transition-transform">
+                                <i class="fas fa-play text-xs md:text-sm pl-0.5"></i>
+                            </button>
+                        </div>
                     </div>
                     
-                    <!-- Top Left Info Badges (Visible on Hover so they don't block the cover image normally) -->
-                    <div class="absolute top-0 left-0 p-2 flex flex-col gap-1 items-start opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
-                        <span class="bg-black/70 backdrop-blur-sm text-white text-[9px] md:text-[10px] px-1.5 py-0.5 rounded border border-white/10 font-bold uppercase shadow-md">${anime.type}</span>
-                        <span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[9px] px-1.5 py-0.5 rounded shadow-md font-bold">CC ${anime.sub}</span>
-                        ${anime.dub > 0 ? `<span class="bg-purple-600/90 backdrop-blur-sm text-white text-[9px] px-1.5 py-0.5 rounded shadow-md font-bold"><i class="fas fa-microphone text-[8px]"></i> ${anime.dub}</span>` : ''}
+                    <!-- Permanent Top Left Info Badges -->
+                    <div class="absolute top-0 left-0 p-2 flex flex-col gap-1.5 items-start z-10 pointer-events-none">
+                        <span class="bg-black/80 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded border border-white/10 font-bold uppercase shadow-md">${anime.type}</span>
+                        <span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-md font-bold">CC ${anime.sub}</span>
+                        ${anime.dub > 0 ? `<span class="bg-purple-600/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-md font-bold"><i class="fas fa-microphone text-[10px]"></i> ${anime.dub}</span>` : ''}
                     </div>
                 </div>
                 
-                <h3 class="mt-2 text-xs md:text-sm text-gray-200 font-bold truncate group-hover:text-white transition-colors drop-shadow-md">${anime.title}</h3>
+                <h3 class="mt-2 text-sm md:text-base text-gray-200 font-bold truncate group-hover:text-[#F47521] transition-colors drop-shadow-md">${anime.title}</h3>
             </div>
             `;
         }).join('');
@@ -233,63 +198,35 @@ window.app.components.actionSlider = async () => {
         container.innerHTML = `
             <div class="px-4 md:px-8 py-6 relative">
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-xl md:text-2xl font-black text-white border-l-4 border-[#F47521] pl-3 uppercase tracking-wider drop-shadow-md">
-                        Action Anime
-                    </h2>
+                    <h2 class="text-xl md:text-2xl font-black text-white border-l-4 border-[#F47521] pl-3 uppercase tracking-wider drop-shadow-md">Action Anime</h2>
                 </div>
-                
-                <!-- Slider Container -->
                 <div class="relative group/slider">
-                    <!-- Left scroll button (Desktop Only) -->
-                    <button id="slide-left-btn" class="hidden md:flex absolute -left-5 top-[40%] -translate-y-1/2 z-20 w-10 h-10 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0">
-                        <i class="fas fa-chevron-left"></i>
+                    <button id="slide-left-btn" class="hidden md:flex absolute -left-5 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0">
+                        <i class="fas fa-chevron-left text-lg"></i>
                     </button>
-                    
-                    <!-- Scrollable Track -->
-                    <div id="action-slider-track" class="flex gap-3 md:gap-4 overflow-x-auto snap-x snap-mandatory hide-scrollbar pb-4 pt-2 -mx-4 px-4 md:mx-0 md:px-0">
+                    <div id="action-slider-track" class="flex gap-3 md:gap-5 overflow-x-auto snap-x snap-mandatory hide-scrollbar pb-4 pt-2 -mx-4 px-4 md:mx-0 md:px-0">
                         ${cardsHtml}
                     </div>
-                    
-                    <!-- Right scroll button (Desktop Only) -->
-                    <button id="slide-right-btn" class="hidden md:flex absolute -right-5 top-[40%] -translate-y-1/2 z-20 w-10 h-10 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0">
-                        <i class="fas fa-chevron-right"></i>
+                    <button id="slide-right-btn" class="hidden md:flex absolute -right-5 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0">
+                        <i class="fas fa-chevron-right text-lg"></i>
                     </button>
                 </div>
             </div>
         `;
 
-        // 5. ATTACH SCROLL LOGIC FOR BUTTONS
         const track = document.getElementById('action-slider-track');
         const leftBtn = document.getElementById('slide-left-btn');
         const rightBtn = document.getElementById('slide-right-btn');
         
         if (track && leftBtn && rightBtn) {
-            const scrollAmount = window.innerWidth > 768 ? 600 : 300;
-            
-            leftBtn.addEventListener('click', () => {
-                track.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
-            });
-            
-            rightBtn.addEventListener('click', () => {
-                track.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-            });
-            
+            const scrollAmount = window.innerWidth > 768 ? 650 : 320;
+            leftBtn.addEventListener('click', () => { track.scrollBy({ left: -scrollAmount, behavior: 'smooth' }); });
+            rightBtn.addEventListener('click', () => { track.scrollBy({ left: scrollAmount, behavior: 'smooth' }); });
             track.addEventListener('scroll', () => {
                 leftBtn.disabled = track.scrollLeft <= 0;
                 rightBtn.disabled = Math.ceil(track.scrollLeft) >= (track.scrollWidth - track.clientWidth - 10);
             });
             leftBtn.disabled = true; 
         }
-
-    } catch (error) {
-        console.error("Action Slider Render Error:", error);
-        container.innerHTML = ''; 
-    }
+    } catch (error) { container.innerHTML = ''; }
 };
-
-// Initialize the component when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-    if (window.app.components.actionSlider) {
-        window.app.components.actionSlider();
-    }
-});
