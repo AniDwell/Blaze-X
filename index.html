@@ -80,43 +80,29 @@
                 <!-- 1. Hero Carousel -->
                 <div id="carousel-container"></div>
                 
-                <!-- 2. Continue Watching / History -->
+                <!-- 2. Continue Watching (History) -->
                 <div id="history-container"></div>
                 
-                <!-- 3. Top 10 of the Year Slider -->
-                <div id="top10-slider-container"></div> 
-                
-                <!-- 4. Upcoming Releases Slider -->
-                <div id="upcoming-slider-container"></div>
-                
-                <!-- 5. Newest Releases (Recent) -->
+                <!-- 3. Newest Releases (Recent) -->
                 <div id="recent-container"></div>
                 
-                <!-- 6. Top Rated Anime -->
-                <div id="top-rated-slider-container"></div>
-
-                <!-- 7. Action Anime Slider -->
+                <!-- 4. Top 10 of the Year Slider -->
+                <div id="top10-slider-container"></div> 
+                
+                <!-- 5. Upcoming Releases Slider -->
+                <div id="upcoming-slider-container"></div>
+                
+                <!-- 6. Action Anime Slider -->
                 <div id="action-slider-container"></div>
                 
-                <!-- 8. Must Watch Anime -->
+                <!-- 7. Others (Top Rated, Must Watch, Popular, etc.) -->
+                <div id="top-rated-slider-container"></div>
                 <div id="must-watch-slider-container"></div>
-
-                <!-- 9. All Time Popular -->
                 <div id="popular-container"></div>
-
-                <!-- 10. Upcoming Episodes -->
                 <div id="newep-container"></div>
-
-                <!-- 11. Movies -->
                 <div id="movies-container"></div>
-                
-                <!-- 12. Series -->
                 <div id="series-container"></div>
-
-                <!-- 13. Genre Based -->
                 <div id="genrebased-container"></div>
-                
-                <!-- Miscellaneous / Extras -->
                 <div id="pill-slider-container" class="pl-4 mt-2"></div>
             </div>
 
@@ -188,18 +174,18 @@
                 // --- Core UI Components ---
                 if(window.app.components.header) window.app.components.header();
                 if(window.app.components.bottomnav) window.app.components.bottomnav();
-                if(window.app.components.carousel) window.app.components.carousel();
                 
-                // --- Featured Sliders (Active Scripts) ---
+                // --- Ordered Sliders ---
+                if(window.app.components.carousel) window.app.components.carousel();
+                if(window.app.components.continueWatching) window.app.components.continueWatching();
+                if(window.app.components.recentSlider) window.app.components.recentSlider(); 
                 if(window.app.components.topTenSlider) window.app.components.topTenSlider(); 
                 if(window.app.components.upcomingSlider) window.app.components.upcomingSlider(); 
                 if(window.app.components.actionSlider) window.app.components.actionSlider(); 
                 
                 // --- Future Placeholder Initializers ---
-                // As you create the JS files for these, they will automatically render in the containers above.
                 if(window.app.components.topRatedSlider) window.app.components.topRatedSlider();
                 if(window.app.components.mustWatchSlider) window.app.components.mustWatchSlider();
-                // (Note: your old scripts for recent/popular/movies/series/newep will inject into their respective containers)
             }
         };
     </script>
@@ -208,8 +194,10 @@
     <script type="module" src="header.js"></script>
     <script src="auth.js"></script>
     
-    <!-- Hero & Custom Sliders -->
+    <!-- Hero & Custom Sliders (In Order of Appearance) -->
     <script src="carousel.js"></script>
+    <script src="continue_watching.js"></script>
+    <script src="recent_slider.js"></script> 
     <script src="top10_slider.js"></script> 
     <script src="upcoming_slider.js"></script>
     <script src="action_slider.js"></script> 
