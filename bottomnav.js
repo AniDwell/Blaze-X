@@ -5,7 +5,7 @@ window.app.components = window.app.components || {};
 
 window.app.components.bottomnav = () => {
     // Targeting 'bottomnav-mount' exactly as it is written in your HTML
-    const container = document.getElementById('bottomnav-mount');
+    const container = document.getElementById('bottomnav-container');
     if (!container) return;
 
     // Inject CSS for Mobile Safe Areas and Padding if not present
