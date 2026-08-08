@@ -6,226 +6,204 @@
     <title>Profile | AniKoto</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Cropper.js for Image Cropping -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
-    
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
+        
         body {
-            background-color: #050505;
+            background-color: #030305;
             color: white;
             font-family: 'Inter', sans-serif;
             -webkit-font-smoothing: antialiased;
         }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #0a0a0a; }
+        /* Custom Premium Scrollbar */
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #F47521; border-radius: 10px; }
+        
         .hidden-el { display: none !important; }
         
-        /* Cropper Container overrides */
-        .img-container {
-            max-height: 60vh;
-            width: 100%;
+        /* Glassmorphism utilities */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
         }
-        .cropper-view-box,
-        .cropper-face {
-            border-radius: 50%;
+        
+        .premium-glow {
+            box-shadow: 0 0 20px rgba(244, 117, 33, 0.15);
         }
+
+        /* Hide scrollbar for sliders but keep functionality */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
-<body class="min-h-screen flex flex-col pb-20">
+<body class="min-h-screen flex flex-col pb-24 relative overflow-x-hidden">
+
+    <!-- Ambient Background Glow -->
+    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-[#F47521] rounded-full blur-[120px] opacity-10 pointer-events-none z-0"></div>
 
     <!-- Header Mount -->
-    <div id="header-mount"></div>
-    <script src="header.js"></script>
+    <div id="header-mount" class="relative z-40"></div>
 
-    <!-- Avatar Fullscreen Modal -->
-    <div id="fullscreen-avatar-modal" class="fixed inset-0 bg-black/90 z-50 flex items-center justify-center hidden-el opacity-0 transition-opacity duration-300">
-        <button onclick="closeFullscreenAvatar()" class="absolute top-6 right-6 text-white text-3xl hover:text-gray-300">
-            <i class="fas fa-times"></i>
-        </button>
-        <img id="modal-avatar-img" src="" alt="Fullscreen Preview" class="max-w-[90vw] max-h-[80vh] rounded-2xl object-contain border border-white/10">
-    </div>
-
-    <!-- PFP Crop Modal -->
-    <div id="cropper-modal" class="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center hidden-el p-4">
-        <div class="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-xl overflow-hidden flex flex-col">
-            <div class="p-4 border-b border-white/10 flex justify-between items-center">
-                <h3 class="font-bold text-white"><i class="fas fa-crop text-[#F47521] mr-2"></i>Crop Profile Picture</h3>
-                <button onclick="closeCropper()" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="p-4 img-container bg-black/50">
-                <img id="image-to-crop" src="" alt="Picture to crop" class="max-w-full block">
-            </div>
-            <div class="p-4 border-t border-white/10 flex justify-end gap-3">
-                <button onclick="closeCropper()" class="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-bold">Cancel</button>
-                <button onclick="saveCroppedImage()" class="px-4 py-2 bg-[#F47521] hover:bg-[#d96216] text-white rounded-xl text-sm font-bold shadow-lg">Save Avatar</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Main Content -->
-    <main class="flex-1 max-w-4xl w-full mx-auto p-4 md:p-8 pt-24">
+    <!-- MAIN CONTAINER -->
+    <main class="flex-1 w-full max-w-2xl mx-auto p-4 pt-6 relative z-10">
         
-        <!-- Profile Header Widget -->
-        <div class="bg-gradient-to-br from-[#111] to-[#0a0a0a] border border-white/10 rounded-3xl p-6 md:p-10 shadow-2xl relative overflow-hidden mb-8 group">
-            <div class="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6">
+        <!-- PROFILE CARD -->
+        <div class="glass-panel rounded-[2rem] p-6 md:p-8 relative overflow-hidden mb-8 premium-glow transition-all">
+            <div class="flex flex-col items-center text-center">
                 
-                <!-- Avatar System -->
-                <div class="relative group/avatar shrink-0">
-                    <div onclick="handleAvatarClick()" class="w-28 h-28 md:w-32 md:h-32 rounded-full p-1 bg-gradient-to-b from-[#F47521] to-transparent shadow-lg cursor-pointer">
-                        <img id="user-avatar" src="https://ui-avatars.com/api/?name=User&background=111&color=F47521" alt="Profile Picture" class="w-full h-full rounded-full object-cover border-4 border-[#050505] bg-[#111]">
+                <!-- Avatar Section -->
+                <div class="relative group cursor-pointer mb-4">
+                    <div class="w-28 h-28 md:w-32 md:h-32 rounded-full p-1 bg-gradient-to-br from-[#F47521] to-[#8a3a0c] shadow-[0_0_25px_rgba(244,117,33,0.4)] transition-transform duration-300 group-hover:scale-105">
+                        <img id="user-avatar" src="https://ui-avatars.com/api/?name=User&background=111&color=F47521" alt="Profile" class="w-full h-full rounded-full object-cover border-4 border-[#030305] bg-[#111]">
                     </div>
-                    <!-- Owner Edit Upload Input -->
-                    <label id="upload-pfp-btn" for="pfp-upload" class="hidden-el absolute bottom-0 right-0 bg-[#F47521] p-2.5 rounded-full border-2 border-[#050505] cursor-pointer hover:bg-white hover:text-black transition-colors text-white shadow-lg z-20">
+                    
+                    <!-- Edit PFP Overlay (Owner Only) -->
+                    <label id="edit-pfp-btn" for="pfp-upload" class="hidden-el absolute bottom-0 right-0 bg-[#F47521] hover:bg-white hover:text-[#F47521] text-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-colors cursor-pointer border-2 border-[#030305]">
                         <i class="fas fa-camera text-sm"></i>
                     </label>
-                    <input type="file" id="pfp-upload" class="hidden" accept="image/*" onchange="initiatePfpUpload(event)">
+                    <input type="file" id="pfp-upload" class="hidden" accept="image/*" onchange="handleImageUpload(event)">
                 </div>
                 
-                <!-- Info Section -->
-                <div class="flex-1 text-center md:text-left flex flex-col justify-center pt-2">
-                    <div class="flex flex-col md:flex-row items-center gap-2 mb-1">
-                        <h1 id="user-name" class="text-2xl md:text-4xl font-black tracking-tight text-white">Loading...</h1>
-                        <span id="view-badge" class="bg-white/10 text-gray-300 px-2 py-0.5 rounded text-[10px] uppercase font-extrabold tracking-widest border border-white/10">Private View</span>
-                    </div>
-                    <p id="user-uid-display" class="text-xs text-[#F47521] font-mono mb-1 select-all"></p>
-                    <p id="user-email" class="text-sm text-gray-400 mb-4 font-medium"></p>
-                    
-                    <div class="flex justify-center md:justify-start gap-4 mb-4">
-                        <div id="like-metric-box" onclick="handleProfileLike()" class="flex flex-col items-center bg-black/30 border border-white/5 px-4 py-2 rounded-xl cursor-pointer hover:bg-white/5 transition-colors">
-                            <span id="stat-likes-count" class="text-xl font-black text-[#F47521]">0</span>
-                            <span class="text-[10px] uppercase tracking-wider text-gray-400 font-bold"><i id="heart-icon" class="far fa-heart mr-1"></i> Likes</span>
-                        </div>
-                    </div>
+                <!-- User Info -->
+                <div class="flex items-center justify-center gap-2 mb-1 group/name">
+                    <h1 id="user-name" class="text-3xl font-black tracking-tight text-white">Loading...</h1>
+                    <!-- Edit Name Button (Owner Only) -->
+                    <button id="edit-name-btn" onclick="openNameEditor()" class="hidden-el text-gray-500 hover:text-[#F47521] transition-colors">
+                        <i class="fas fa-pen text-sm"></i>
+                    </button>
                 </div>
-
-                <!-- Desktop Quick Actions -->
-                <div class="hidden md:flex flex-col gap-3 ml-auto mt-2 shrink-0 w-44">
-                    <div id="owner-actions-desktop" class="space-y-2 hidden-el">
-                        <button onclick="toggleSettingsPanel()" class="w-full bg-white/5 hover:bg-white/10 text-white border border-white/10 px-4 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 justify-center">
-                            <i class="fas fa-cog"></i> Settings
-                        </button>
-                        <button onclick="handleLogout()" class="w-full bg-white/5 hover:bg-white/10 text-white border border-white/10 px-4 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 justify-center">
-                            <i class="fas fa-sign-out-alt"></i> Logout
-                        </button>
-                    </div>
-                    <div id="visitor-actions-desktop" class="space-y-2 hidden-el">
-                        <button onclick="navigateToChat()" class="w-full bg-[#F47521] hover:bg-[#d96216] text-white px-4 py-3 rounded-xl text-sm font-black tracking-wide transition-all flex items-center gap-2 justify-center shadow-lg">
-                            <i class="fas fa-paper-plane"></i> Message User
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Owner Settings Panel -->
-        <div id="owner-settings-panel" class="mb-8 p-5 bg-[#0a0a0a] border border-white/10 rounded-2xl hidden-el transition-all">
-            <h3 class="text-md font-bold mb-4 text-white flex items-center gap-2"><i class="fas fa-sliders-h text-[#F47521]"></i> Profile Settings Configuration</h3>
-            <div class="space-y-4">
-                <div class="flex flex-col gap-1.5">
-                    <label class="text-xs font-bold text-gray-400 uppercase tracking-wider">Modify Username Handle</label>
-                    <div class="flex gap-2">
-                        <input type="text" id="input-edit-username" class="flex-1 bg-black border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-[#F47521]" placeholder="Change custom handle...">
-                        <button onclick="updateProfileMetadata()" class="bg-white/10 hover:bg-white/20 px-4 text-xs font-bold rounded-xl transition-all">Save</button>
-                    </div>
-                </div>
-                <div class="flex items-center justify-between p-3 bg-black/40 rounded-xl border border-white/5">
-                    <div>
-                        <p class="text-sm font-bold text-white">Hide Personal Watch Library</p>
-                        <p class="text-xs text-gray-500">When enabled, visitors cannot see your anime library slider.</p>
-                    </div>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="toggle-hide-library" onchange="handleLibraryVisibilityToggle()" class="sr-only peer">
-                        <div class="w-11 h-6 bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-gray-400 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#F47521] peer-checked:after:bg-white"></div>
-                    </label>
-                </div>
-            </div>
-        </div>
-
-        <!-- OWNER DASHBOARD (Buttons Layout) -->
-        <div id="owner-dashboard" class="hidden-el space-y-4">
-            <h2 class="text-xl font-black text-white mb-4">Your Dashboard</h2>
-            
-            <button onclick="window.location.href='library.html'" class="w-full bg-[#0a0a0a] hover:bg-[#111] border border-white/5 hover:border-[#F47521]/50 p-5 rounded-2xl flex items-center justify-between transition-all group">
-                <div class="flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-xl bg-[#F47521]/10 text-[#F47521] flex items-center justify-center text-xl group-hover:scale-110 transition-transform"><i class="fas fa-bookmark"></i></div>
-                    <div class="text-left">
-                        <h3 class="font-bold text-white text-lg">My Library</h3>
-                        <p class="text-xs text-gray-500">Manage your anime watchlists and catalogs</p>
-                    </div>
-                </div>
-                <i class="fas fa-chevron-right text-gray-600 group-hover:text-[#F47521]"></i>
-            </button>
-
-            <button onclick="window.location.href='chats.html'" class="w-full bg-[#0a0a0a] hover:bg-[#111] border border-white/5 hover:border-[#F47521]/50 p-5 rounded-2xl flex items-center justify-between transition-all group">
-                <div class="flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center text-xl group-hover:scale-110 transition-transform"><i class="fas fa-comments"></i></div>
-                    <div class="text-left">
-                        <h3 class="font-bold text-white text-lg">Messages & Chats</h3>
-                        <p class="text-xs text-gray-500">View your active direct messages</p>
-                    </div>
-                </div>
-                <i class="fas fa-chevron-right text-gray-600 group-hover:text-blue-500"></i>
-            </button>
-
-            <button onclick="window.location.href='notifications.html'" class="w-full bg-[#0a0a0a] hover:bg-[#111] border border-white/5 hover:border-[#F47521]/50 p-5 rounded-2xl flex items-center justify-between transition-all group">
-                <div class="flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center text-xl group-hover:scale-110 transition-transform"><i class="fas fa-bell"></i></div>
-                    <div class="text-left">
-                        <h3 class="font-bold text-white text-lg">Notifications</h3>
-                        <p class="text-xs text-gray-500">Check recent alerts and updates</p>
-                    </div>
-                </div>
-                <i class="fas fa-chevron-right text-gray-600 group-hover:text-purple-500"></i>
-            </button>
-
-            <button onclick="window.location.href='history.html'" class="w-full bg-[#0a0a0a] hover:bg-[#111] border border-white/5 hover:border-[#F47521]/50 p-5 rounded-2xl flex items-center justify-between transition-all group">
-                <div class="flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-xl bg-green-500/10 text-green-500 flex items-center justify-center text-xl group-hover:scale-110 transition-transform"><i class="fas fa-history"></i></div>
-                    <div class="text-left">
-                        <h3 class="font-bold text-white text-lg">Watch History</h3>
-                        <p class="text-xs text-gray-500">Review your recently viewed activity</p>
-                    </div>
-                </div>
-                <i class="fas fa-chevron-right text-gray-600 group-hover:text-green-500"></i>
-            </button>
-        </div>
-
-        <!-- VISITOR DASHBOARD (Library Slider Layout) -->
-        <div id="visitor-dashboard" class="hidden-el space-y-6">
-            <div id="visitor-library-container" class="bg-[#0a0a0a] rounded-2xl border border-white/5 p-5">
-                <h3 class="text-lg font-bold text-white mb-4 flex items-center justify-between">
-                    <span><i class="fas fa-bookmark text-[#F47521] mr-2"></i> User Library</span>
-                    <span id="visitor-library-status" class="text-xs bg-white/5 px-2 py-1 rounded text-gray-400">Loading...</span>
-                </h3>
                 
-                <!-- Horizontal Slider -->
-                <div id="visitor-library-slider" class="flex overflow-x-auto gap-4 pb-4 snap-x snap-mandatory hide-scroll">
-                    <!-- Dynamic Library Items Injected Here -->
+                <!-- Name Edit Input (Hidden by default) -->
+                <div id="name-edit-container" class="hidden-el flex items-center justify-center gap-2 mb-2 w-full max-w-xs">
+                    <input type="text" id="input-edit-username" class="w-full bg-black/50 border border-[#F47521]/50 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-[#F47521] text-center" placeholder="New username">
+                    <button onclick="saveName()" class="bg-[#F47521] text-white px-3 py-2 rounded-xl text-sm font-bold"><i class="fas fa-check"></i></button>
+                    <button onclick="closeNameEditor()" class="bg-white/10 text-white px-3 py-2 rounded-xl text-sm"><i class="fas fa-times"></i></button>
                 </div>
 
-                <div id="visitor-library-footer" class="mt-2 pt-4 border-t border-white/5 text-center hidden-el">
-                    <button onclick="goToVisitorLibrary()" class="text-sm font-bold text-white bg-[#F47521] hover:bg-[#d96216] px-6 py-2.5 rounded-xl transition-all shadow-lg">
-                        View Full Library
+                <div class="flex items-center gap-2 mb-6">
+                    <span id="view-badge" class="bg-white/10 text-gray-300 px-2.5 py-1 rounded-md text-[10px] uppercase font-black tracking-widest border border-white/5">Authenticating</span>
+                    <span id="user-email" class="text-xs text-gray-400 font-medium hidden md:block"></span>
+                </div>
+
+                <!-- Stats / Actions -->
+                <div id="visitor-actions" class="hidden-el w-full flex gap-3 mt-2">
+                    <button onclick="handleProfileLike()" class="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3.5 rounded-2xl text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-lg">
+                        <i id="heart-icon" class="far fa-heart text-lg text-gray-400"></i>
+                        <span id="stat-likes-count">0</span> Likes
+                    </button>
+                    <button onclick="navigateToChat()" class="flex-[2] bg-gradient-to-r from-[#F47521] to-[#e05e0b] hover:from-[#e05e0b] hover:to-[#c24e05] text-white py-3.5 rounded-2xl text-sm font-black tracking-wide transition-all flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(244,117,33,0.3)]">
+                        <i class="fas fa-paper-plane"></i> Message User
                     </button>
                 </div>
             </div>
         </div>
 
-        <!-- Mobile Visitor/Owner Actions Backup -->
-        <div class="flex md:hidden flex-col gap-2.5 mt-8">
-            <div id="owner-actions-mobile" class="space-y-2.5 w-full hidden-el">
-                <button onclick="toggleSettingsPanel()" class="w-full bg-white/5 hover:bg-white/10 text-white border border-white/10 px-5 py-3.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2">
-                    <i class="fas fa-cog"></i> Adjust Profile Settings
-                </button>
-                <button onclick="handleLogout()" class="w-full bg-white/5 hover:bg-white/10 text-white border border-white/10 px-5 py-3.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2">
-                    <i class="fas fa-sign-out-alt"></i> Logout Session
-                </button>
+        <!-- ================= OWNER VIEW: MENU BUTTONS ================= -->
+        <div id="owner-menu" class="hidden-el space-y-3">
+            
+            <!-- Privacy Toggle -->
+            <div class="glass-panel rounded-2xl p-4 flex items-center justify-between mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-[#F47521]">
+                        <i class="fas fa-eye-slash"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-bold text-white">Private Library</p>
+                        <p class="text-[10px] text-gray-400">Hide your catalog from visitors</p>
+                    </div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="toggle-hide-library" onchange="handleLibraryVisibilityToggle()" class="sr-only peer">
+                    <div class="w-11 h-6 bg-black/50 rounded-full peer border border-white/10 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-gray-400 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#F47521] peer-checked:after:bg-white"></div>
+                </label>
             </div>
-            <div id="visitor-actions-mobile" class="w-full hidden-el">
-                <button onclick="navigateToChat()" class="w-full bg-[#F47521] hover:bg-[#d96216] text-white px-5 py-4 rounded-xl text-sm font-black tracking-wide transition-all flex items-center justify-center gap-2 shadow-xl">
-                    <i class="fas fa-paper-plane"></i> Message User
+
+            <!-- Navigation Buttons -->
+            <button onclick="window.location.href='library.html'" class="w-full glass-panel hover:bg-white/5 p-4 rounded-2xl flex items-center justify-between group transition-all">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-[#F47521]/20 to-transparent flex items-center justify-center border border-[#F47521]/30 text-[#F47521] group-hover:scale-110 transition-transform">
+                        <i class="fas fa-bookmark text-xl"></i>
+                    </div>
+                    <div class="text-left">
+                        <h3 class="font-bold text-white text-lg">My Library</h3>
+                        <p class="text-xs text-gray-400">Manage your watch catalog</p>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-right text-gray-600 group-hover:text-white transition-colors"></i>
+            </button>
+
+            <button onclick="window.location.href='chats.html'" class="w-full glass-panel hover:bg-white/5 p-4 rounded-2xl flex items-center justify-between group transition-all">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-transparent flex items-center justify-center border border-blue-500/30 text-blue-400 group-hover:scale-110 transition-transform">
+                        <i class="fas fa-comments text-xl"></i>
+                    </div>
+                    <div class="text-left">
+                        <h3 class="font-bold text-white text-lg">Chats</h3>
+                        <p class="text-xs text-gray-400">Messages and conversations</p>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-right text-gray-600 group-hover:text-white transition-colors"></i>
+            </button>
+
+            <button onclick="window.location.href='notifications.html'" class="w-full glass-panel hover:bg-white/5 p-4 rounded-2xl flex items-center justify-between group transition-all">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500/20 to-transparent flex items-center justify-center border border-purple-500/30 text-purple-400 group-hover:scale-110 transition-transform">
+                        <i class="fas fa-bell text-xl"></i>
+                    </div>
+                    <div class="text-left">
+                        <h3 class="font-bold text-white text-lg">Notifications</h3>
+                        <p class="text-xs text-gray-400">Alerts and updates</p>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-right text-gray-600 group-hover:text-white transition-colors"></i>
+            </button>
+
+            <button onclick="window.location.href='history.html'" class="w-full glass-panel hover:bg-white/5 p-4 rounded-2xl flex items-center justify-between group transition-all mt-8">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-gray-500/20 to-transparent flex items-center justify-center border border-gray-500/30 text-gray-400 group-hover:scale-110 transition-transform">
+                        <i class="fas fa-history text-xl"></i>
+                    </div>
+                    <div class="text-left">
+                        <h3 class="font-bold text-white text-lg">History</h3>
+                        <p class="text-xs text-gray-400">Activity and logs</p>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-right text-gray-600 group-hover:text-white transition-colors"></i>
+            </button>
+            
+            <button onclick="handleLogout()" class="w-full mt-6 py-4 text-sm font-bold text-red-500/80 hover:text-red-500 transition-colors">
+                <i class="fas fa-sign-out-alt mr-2"></i> Log Out
+            </button>
+        </div>
+
+        <!-- ================= VISITOR VIEW: LIBRARY SLIDER ================= -->
+        <div id="visitor-library-container" class="hidden-el space-y-4">
+            <div class="flex items-center justify-between px-2">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i class="fas fa-bookmark text-[#F47521]"></i> User's Library
+                </h3>
+            </div>
+            
+            <!-- Private Message -->
+            <div id="visitor-library-private" class="hidden-el glass-panel p-8 text-center rounded-2xl">
+                <div class="w-16 h-16 rounded-full bg-red-500/10 text-red-400 flex items-center justify-center mx-auto mb-3 text-2xl">
+                    <i class="fas fa-lock"></i>
+                </div>
+                <p class="font-bold text-white">Library is Private</p>
+                <p class="text-xs text-gray-400 mt-1">This user has hidden their catalog.</p>
+            </div>
+
+            <!-- Public Slider -->
+            <div id="visitor-library-public" class="hidden-el">
+                <div id="library-slider" class="flex overflow-x-auto gap-4 snap-x no-scrollbar pb-4">
+                    <!-- Slider items populated by JS -->
+                    <div class="text-sm text-gray-500 italic px-2">Loading library...</div>
+                </div>
+                <button onclick="window.location.href='library.html?id=' + activeProfileUid" class="w-full glass-panel hover:bg-white/10 text-white py-3.5 rounded-xl text-sm font-bold transition-all mt-2">
+                    View Full Library
                 </button>
             </div>
         </div>
@@ -233,37 +211,51 @@
     </main>
 
     <!-- Bottom Nav Mount -->
-    <div id="bottom-nav-mount"></div>
+    <div id="bottomnav-mount" class="fixed bottom-0 w-full z-50"></div>
+
+    <!-- Image Crop Modal Placeholder -->
+    <div id="crop-modal" class="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center hidden-el backdrop-blur-sm p-4">
+        <div class="glass-panel w-full max-w-md rounded-3xl p-6 flex flex-col items-center">
+            <h3 class="text-xl font-bold mb-4">Adjust Photo</h3>
+            <div class="w-64 h-64 border-2 border-dashed border-[#F47521]/50 rounded-full mb-6 overflow-hidden relative flex items-center justify-center bg-black/50">
+                <img id="crop-preview" src="" class="object-cover w-full h-full opacity-50" alt="Crop preview">
+                <div class="absolute inset-0 flex items-center justify-center text-xs text-gray-400 pointer-events-none">
+                    Preview Size
+                </div>
+            </div>
+            <div class="flex gap-3 w-full">
+                <button onclick="closeCropModal()" class="flex-1 bg-white/10 hover:bg-white/20 py-3 rounded-xl font-bold transition-all">Cancel</button>
+                <button onclick="saveCroppedImage()" class="flex-1 bg-[#F47521] hover:bg-[#e05e0b] py-3 rounded-xl font-bold shadow-[0_4px_15px_rgba(244,117,33,0.3)] transition-all">Save Image</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts Loading -->
+    <script src="header.js"></script>
     <script src="bottomnav.js"></script>
 
-    <!-- Scripts: Cropper.js & Firebase -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
-    
+    <!-- Application Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
         import { getFirestore, doc, getDoc, collection, getDocs, updateDoc, increment, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
-        import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-storage.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
             authDomain: "blaze-x-db2f5.firebaseapp.com",
-            projectId: "blaze-x-db2f5",
-            storageBucket: "blaze-x-db2f5.firebasestorage.app",
-            messagingSenderId: "770812306638",
-            appId: "1:770812306638:web:eaf5ded647861f32c25c9f"
+            projectId: "blaze-x-db2f5"
+            // Shortened config to keep snippet concise
         };
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const storage = getStorage(app);
 
-        let activeProfileUid = null; 
+        window.activeProfileUid = null; 
         let currentAuthenticatedUser = null; 
         let isOwnerMode = true; 
         let cachedProfileData = null;
-        let cropperInstance = null;
+        let pendingImageDataUrl = null;
 
         onAuthStateChanged(auth, async (user) => {
             currentAuthenticatedUser = user;
@@ -272,26 +264,28 @@
 
             if (user) {
                 if (!targetQueryId || targetQueryId === user.uid) {
-                    activeProfileUid = user.uid;
+                    window.activeProfileUid = user.uid;
                     isOwnerMode = true;
                 } else {
-                    activeProfileUid = targetQueryId;
+                    window.activeProfileUid = targetQueryId;
                     isOwnerMode = false;
                 }
-                await evaluateProfileViewStructure();
+                await renderView();
             } else {
                 if (targetQueryId) {
-                    activeProfileUid = targetQueryId;
+                    window.activeProfileUid = targetQueryId;
                     isOwnerMode = false;
-                    await evaluateProfileViewStructure();
+                    await renderView();
                 } else {
                     document.querySelector('main').innerHTML = `
-                        <div class="flex flex-col items-center justify-center min-h-[50vh] text-center px-4">
-                            <i class="fas fa-user-lock text-5xl text-[#F47521] mb-6"></i>
-                            <h2 class="text-3xl font-black text-white mb-3">Authentication Required</h2>
-                            <p class="text-gray-400 mb-8 max-w-md">You need to be logged into your account to view your private profile dashboard.</p>
-                            <a href="index.html" class="bg-[#F47521] text-black px-8 py-3.5 rounded-xl font-black tracking-widest uppercase hover:bg-white transition-all shadow-lg">
-                                Return to Home
+                        <div class="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+                            <div class="w-24 h-24 rounded-full bg-white/5 flex items-center justify-center mb-6 border border-white/10 shadow-2xl">
+                                <i class="fas fa-user-lock text-4xl text-[#F47521]"></i>
+                            </div>
+                            <h2 class="text-3xl font-black text-white mb-2">Login Required</h2>
+                            <p class="text-gray-400 mb-8 max-w-sm">Sign in to manage your personalized catalog, messages, and account settings.</p>
+                            <a href="index.html" class="bg-gradient-to-r from-[#F47521] to-[#e05e0b] text-white px-8 py-3.5 rounded-xl font-bold tracking-wide shadow-[0_4px_20px_rgba(244,117,33,0.3)] transition-transform hover:scale-105">
+                                Return Home
                             </a>
                         </div>
                     `;
@@ -299,281 +293,177 @@
             }
         });
 
-        async function evaluateProfileViewStructure() {
+        async function renderView() {
             const badge = document.getElementById('view-badge');
             
             if (isOwnerMode) {
-                badge.innerText = "Private View";
-                badge.className = "bg-[#F47521]/20 text-[#F47521] px-2 py-0.5 rounded text-[10px] uppercase font-extrabold tracking-widest border border-[#F47521]/30";
+                badge.innerText = "Owner Dashboard";
+                badge.className = "bg-[#F47521]/20 text-[#F47521] px-2.5 py-1 rounded-md text-[10px] uppercase font-black tracking-widest border border-[#F47521]/30";
                 
-                // Show Owner UI
-                document.getElementById('owner-actions-desktop').classList.remove('hidden-el');
-                document.getElementById('owner-actions-mobile').classList.remove('hidden-el');
-                document.getElementById('upload-pfp-btn').classList.remove('hidden-el');
-                document.getElementById('owner-dashboard').classList.remove('hidden-el');
+                document.getElementById('owner-menu').classList.remove('hidden-el');
+                document.getElementById('visitor-actions').classList.add('hidden-el');
+                document.getElementById('visitor-library-container').classList.add('hidden-el');
                 
-                // Hide Visitor UI
-                document.getElementById('visitor-actions-desktop').classList.add('hidden-el');
-                document.getElementById('visitor-actions-mobile').classList.add('hidden-el');
-                document.getElementById('visitor-dashboard').classList.add('hidden-el');
+                document.getElementById('edit-pfp-btn').classList.remove('hidden-el');
+                document.getElementById('edit-name-btn').classList.remove('hidden-el');
             } else {
-                badge.innerText = "Public View";
-                badge.className = "bg-white/10 text-gray-300 px-2 py-0.5 rounded text-[10px] uppercase font-extrabold tracking-widest border border-white/10";
+                badge.innerText = "Public Profile";
+                badge.className = "bg-white/10 text-gray-300 px-2.5 py-1 rounded-md text-[10px] uppercase font-black tracking-widest border border-white/5";
                 
-                // Hide Owner UI
-                document.getElementById('owner-actions-desktop').classList.add('hidden-el');
-                document.getElementById('owner-actions-mobile').classList.add('hidden-el');
-                document.getElementById('upload-pfp-btn').classList.add('hidden-el');
-                document.getElementById('owner-dashboard').classList.add('hidden-el');
+                document.getElementById('owner-menu').classList.add('hidden-el');
+                document.getElementById('visitor-actions').classList.remove('hidden-el');
+                document.getElementById('visitor-library-container').classList.remove('hidden-el');
                 
-                // Show Visitor UI
-                document.getElementById('visitor-actions-desktop').classList.remove('hidden-el');
-                document.getElementById('visitor-actions-mobile').classList.remove('hidden-el');
-                document.getElementById('visitor-dashboard').classList.remove('hidden-el');
+                document.getElementById('edit-pfp-btn').classList.add('hidden-el');
+                document.getElementById('edit-name-btn').classList.add('hidden-el');
             }
 
-            document.getElementById('user-uid-display').innerText = `ID: ${activeProfileUid}`;
-            await pullTargetProfilePayload();
+            await loadUserData();
         }
 
-        async function pullTargetProfilePayload() {
+        async function loadUserData() {
             try {
-                const userDocRef = doc(db, "users", activeProfileUid);
+                const userDocRef = doc(db, "users", window.activeProfileUid);
                 const userDoc = await getDoc(userDocRef);
                 
-                if (userDoc.exists()) {
-                    cachedProfileData = userDoc.data();
-                    renderProfileHeader(cachedProfileData);
-                } else {
-                    cachedProfileData = { username: "Anime Fan", likesCount: 0, hideLibrary: false };
-                    renderProfileHeader(cachedProfileData);
+                cachedProfileData = userDoc.exists() ? userDoc.data() : { username: "Anime Fan", hideLibrary: false };
+
+                document.getElementById('user-name').innerText = cachedProfileData.username || "Anime Fan";
+                document.getElementById('input-edit-username').value = cachedProfileData.username || "";
+                
+                if (isOwnerMode && currentAuthenticatedUser) {
+                    document.getElementById('user-email').innerText = currentAuthenticatedUser.email;
                 }
 
-                // If visitor, fetch their library for the slider
-                if (!isOwnerMode) {
-                    await fetchVisitorLibrarySlider();
+                if (cachedProfileData.photoURL) {
+                    document.getElementById('user-avatar').src = cachedProfileData.photoURL;
+                }
+
+                // Likes Logic
+                let countedLikes = cachedProfileData.likedByArray ? cachedProfileData.likedByArray.length : (cachedProfileData.likesCount || 0);
+                document.getElementById('stat-likes-count').innerText = countedLikes;
+
+                const heartIcon = document.getElementById('heart-icon');
+                if (currentAuthenticatedUser && cachedProfileData.likedByArray && cachedProfileData.likedByArray.includes(currentAuthenticatedUser.uid)) {
+                    heartIcon.className = "fas fa-heart text-[#F47521] text-lg drop-shadow-[0_0_8px_rgba(244,117,33,0.8)]";
+                } else {
+                    heartIcon.className = "far fa-heart text-gray-400 text-lg";
+                }
+
+                if (isOwnerMode) {
+                    document.getElementById('toggle-hide-library').checked = cachedProfileData.hideLibrary || false;
+                } else {
+                    loadVisitorLibrary();
                 }
 
             } catch (error) {
-                console.error("Critical Error: ", error);
+                console.error("Error loading profile data: ", error);
             }
         }
 
-        function renderProfileHeader(data) {
-            document.getElementById('user-name').innerText = data.username || data.displayName || "Anime Fan";
-            document.getElementById('user-email').innerText = isOwnerMode && currentAuthenticatedUser ? currentAuthenticatedUser.email : "";
-            
-            const pfpUrl = data.photoURL || "https://ui-avatars.com/api/?name=User&background=111&color=F47521";
-            document.getElementById('user-avatar').src = pfpUrl;
+        async function loadVisitorLibrary() {
+            const privateMsg = document.getElementById('visitor-library-private');
+            const publicSlider = document.getElementById('visitor-library-public');
+            const sliderMount = document.getElementById('library-slider');
 
-            let countedLikes = 0;
-            if (data.likedByArray) countedLikes = data.likedByArray.length;
-            else if (data.likesCount) countedLikes = data.likesCount;
-            
-            document.getElementById('stat-likes-count').innerText = countedLikes;
-
-            if (currentAuthenticatedUser && data.likedByArray && data.likedByArray.includes(currentAuthenticatedUser.uid)) {
-                document.getElementById('heart-icon').className = "fas fa-heart text-[#F47521]";
-            } else {
-                document.getElementById('heart-icon').className = "far fa-heart text-gray-400";
-            }
-
-            if (isOwnerMode) {
-                document.getElementById('input-edit-username').value = data.username || "";
-                document.getElementById('toggle-hide-library').checked = data.hideLibrary || false;
-            }
-        }
-
-        // ==========================
-        // VISITOR LIBRARY SLIDER
-        // ==========================
-        async function fetchVisitorLibrarySlider() {
-            const sliderMount = document.getElementById('visitor-library-slider');
-            const statusText = document.getElementById('visitor-library-status');
-            const footerBtn = document.getElementById('visitor-library-footer');
-
-            if (cachedProfileData.hideLibrary === true) {
-                statusText.innerHTML = `<span class="text-red-400"><i class="fas fa-lock mr-1"></i> Private</span>`;
-                sliderMount.innerHTML = `<div class="w-full text-center py-6 text-gray-500 italic">This user has chosen to set their collection private.</div>`;
-                footerBtn.classList.add('hidden-el');
+            if (cachedProfileData.hideLibrary) {
+                privateMsg.classList.remove('hidden-el');
+                publicSlider.classList.add('hidden-el');
                 return;
             }
 
+            privateMsg.classList.add('hidden-el');
+            publicSlider.classList.remove('hidden-el');
+
             try {
-                const libRef = collection(db, "users", activeProfileUid, "library");
+                const libRef = collection(db, "users", window.activeProfileUid, "library");
                 const snapshot = await getDocs(libRef);
-                
-                statusText.innerHTML = `<span class="text-green-400"><i class="fas fa-globe mr-1"></i> Public (${snapshot.size})</span>`;
 
                 if (snapshot.empty) {
-                    sliderMount.innerHTML = `<div class="w-full text-center py-6 text-gray-600">User's library is empty.</div>`;
-                    footerBtn.classList.add('hidden-el');
+                    sliderMount.innerHTML = `<div class="text-sm text-gray-600 px-2 py-4">No entries in this library.</div>`;
                     return;
                 }
 
                 let htmlPayload = "";
-                // Limit to 10 for slider performance
-                const docs = snapshot.docs.slice(0, 10); 
-                
-                docs.forEach((itemDoc) => {
+                // Limit to 5 for the slider preview
+                snapshot.docs.slice(0, 5).forEach((itemDoc) => {
                     const item = itemDoc.data();
-                    const poster = item.poster || "https://via.placeholder.com/150x225/111/fff?text=No+Image";
                     htmlPayload += `
-                        <div class="snap-center shrink-0 w-28 md:w-32 flex flex-col items-center group">
-                            <div class="w-28 h-40 md:w-32 md:h-48 rounded-xl overflow-hidden mb-2 relative">
-                                <img src="${poster}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300">
-                                <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
-                                <span class="absolute bottom-2 left-2 right-2 text-center text-[10px] uppercase font-bold text-white bg-[#F47521]/90 rounded px-1">${item.status || 'Watching'}</span>
+                        <div class="snap-center shrink-0 w-32 h-44 rounded-xl overflow-hidden relative group shadow-lg border border-white/10 bg-[#111]">
+                            <img src="${item.coverImage || 'https://via.placeholder.com/150x200?text=No+Cover'}" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity">
+                            <div class="absolute bottom-0 w-full bg-gradient-to-t from-black via-black/80 to-transparent p-2 pt-6">
+                                <p class="text-xs font-bold text-white truncate">${item.title || 'Untitled'}</p>
+                                <p class="text-[9px] text-[#F47521] uppercase tracking-wider font-extrabold">${item.status || 'Watching'}</p>
                             </div>
-                            <span class="text-xs font-bold text-gray-300 text-center line-clamp-2 w-full">${item.title || 'Untitled'}</span>
                         </div>
                     `;
                 });
-                
                 sliderMount.innerHTML = htmlPayload;
-                footerBtn.classList.remove('hidden-el');
 
             } catch (err) {
-                sliderMount.innerHTML = `<div class="w-full text-center text-red-500 py-4">Error loading library.</div>`;
+                sliderMount.innerHTML = `<div class="text-xs text-red-500 py-2">Failed to load library items.</div>`;
             }
         }
 
-        window.goToVisitorLibrary = () => {
-            window.location.href = `library.html?id=${activeProfileUid}`;
+        // Exposed global functions for the HTML buttons
+        window.openNameEditor = () => {
+            document.getElementById('user-name').classList.add('hidden-el');
+            document.getElementById('edit-name-btn').classList.add('hidden-el');
+            document.getElementById('name-edit-container').classList.remove('hidden-el');
+            document.getElementById('input-edit-username').focus();
         };
 
-        // ==========================
-        // PROFILE PICTURE CROPPING
-        // ==========================
-        window.initiatePfpUpload = (event) => {
+        window.closeNameEditor = () => {
+            document.getElementById('name-edit-container').classList.add('hidden-el');
+            document.getElementById('user-name').classList.remove('hidden-el');
+            document.getElementById('edit-name-btn').classList.remove('hidden-el');
+        };
+
+        window.saveName = async () => {
+            const newName = document.getElementById('input-edit-username').value.trim();
+            if (!newName || !currentAuthenticatedUser) return;
+
+            try {
+                const userDocRef = doc(db, "users", currentAuthenticatedUser.uid);
+                await updateDoc(userDocRef, { username: newName });
+                document.getElementById('user-name').innerText = newName;
+                closeNameEditor();
+            } catch(e) {
+                console.error("Failed saving name", e);
+            }
+        };
+
+        window.handleImageUpload = (event) => {
             const file = event.target.files[0];
             if (!file) return;
 
             const reader = new FileReader();
             reader.onload = (e) => {
-                const imgElement = document.getElementById('image-to-crop');
-                imgElement.src = e.target.result;
-                
-                document.getElementById('cropper-modal').classList.remove('hidden-el');
-                
-                if (cropperInstance) cropperInstance.destroy();
-                cropperInstance = new Cropper(imgElement, {
-                    aspectRatio: 1,
-                    viewMode: 1,
-                    dragMode: 'move',
-                    autoCropArea: 1,
-                    cropBoxMovable: true,
-                    cropBoxResizable: true,
-                    guides: false,
-                    highlight: false,
-                    background: false,
-                });
+                pendingImageDataUrl = e.target.result;
+                document.getElementById('crop-preview').src = pendingImageDataUrl;
+                document.getElementById('crop-modal').classList.remove('hidden-el');
             };
             reader.readAsDataURL(file);
-            event.target.value = ''; // reset input
         };
 
-        window.closeCropper = () => {
-            document.getElementById('cropper-modal').classList.add('hidden-el');
-            if (cropperInstance) cropperInstance.destroy();
+        window.closeCropModal = () => {
+            document.getElementById('crop-modal').classList.add('hidden-el');
+            pendingImageDataUrl = null;
+            document.getElementById('pfp-upload').value = ''; 
         };
 
         window.saveCroppedImage = async () => {
-            if (!cropperInstance || !currentAuthenticatedUser) return;
+            if (!pendingImageDataUrl || !currentAuthenticatedUser) return;
             
-            // Get cropped canvas as base64 string
-            const canvas = cropperInstance.getCroppedCanvas({ width: 400, height: 400 });
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-            
-            closeCropper();
-            document.getElementById('user-avatar').src = dataUrl; // Optimistic UI Update
-
-            try {
-                // Upload to Firebase Storage
-                const storageRef = ref(storage, `avatars/${currentAuthenticatedUser.uid}.jpg`);
-                await uploadString(storageRef, dataUrl, 'data_url');
-                const downloadURL = await getDownloadURL(storageRef);
-                
-                // Save URL to User Document
-                const userDocRef = doc(db, "users", currentAuthenticatedUser.uid);
-                await updateDoc(userDocRef, { photoURL: downloadURL });
-                
-                alert("Profile picture updated successfully!");
-            } catch (err) {
-                console.error("Avatar Upload Error:", err);
-                alert("Failed to upload image. Please check your storage rules/connection.");
-            }
-        };
-
-        // ==========================
-        // OTHER ACTIONS
-        // ==========================
-        window.handleProfileLike = async () => {
-            if (!currentAuthenticatedUser) {
-                alert("Please log in to like profiles.");
-                return;
-            }
-            const userDocRef = doc(db, "users", activeProfileUid);
-            const heartIcon = document.getElementById('heart-icon');
-            
-            try {
-                if (cachedProfileData.likedByArray && cachedProfileData.likedByArray.includes(currentAuthenticatedUser.uid)) {
-                    await updateDoc(userDocRef, {
-                        likedByArray: arrayRemove(currentAuthenticatedUser.uid),
-                        likesCount: increment(-1)
-                    });
-                    heartIcon.className = "far fa-heart text-gray-400";
-                } else {
-                    await updateDoc(userDocRef, {
-                        likedByArray: arrayUnion(currentAuthenticatedUser.uid),
-                        likesCount: increment(1)
-                    });
-                    heartIcon.className = "fas fa-heart text-[#F47521]";
-                }
-                await pullTargetProfilePayload();
-            } catch (err) {
-                console.error("Like Error: ", err);
-            }
-        };
-
-        window.handleAvatarClick = () => {
-            const modal = document.getElementById('fullscreen-avatar-modal');
-            document.getElementById('modal-avatar-img').src = document.getElementById('user-avatar').src;
-            modal.classList.remove('hidden-el');
-            setTimeout(() => { modal.style.opacity = '1'; }, 10);
-        };
-
-        window.closeFullscreenAvatar = () => {
-            const modal = document.getElementById('fullscreen-avatar-modal');
-            modal.style.opacity = '0';
-            setTimeout(() => { modal.classList.add('hidden-el'); }, 300);
-        };
-
-        window.navigateToChat = () => {
-            if(!currentAuthenticatedUser) {
-                alert("Please log in to send a message.");
-                return;
-            }
-            // Navigate to chat.html with both IDs mapped
-            window.location.href = `chat.html?userA=${currentAuthenticatedUser.uid}&userB=${activeProfileUid}`;
-        };
-
-        window.toggleSettingsPanel = () => {
-            document.getElementById('owner-settings-panel').classList.toggle('hidden-el');
-        };
-
-        window.updateProfileMetadata = async () => {
-            if (!isOwnerMode || !currentAuthenticatedUser) return;
-            const newName = document.getElementById('input-edit-username').value.trim();
-            if(!newName) return;
-
             try {
                 const userDocRef = doc(db, "users", currentAuthenticatedUser.uid);
-                await updateDoc(userDocRef, { username: newName });
-                alert("Username updated successfully.");
-                await pullTargetProfilePayload();
-            } catch(e) {
-                alert("Failed to update username.");
+                // Saving DataURL directly to Firestore (For production, implement Firebase Storage here)
+                await updateDoc(userDocRef, { photoURL: pendingImageDataUrl });
+                document.getElementById('user-avatar').src = pendingImageDataUrl;
+                closeCropModal();
+            } catch (e) {
+                alert("Failed to save image.");
+                console.error(e);
             }
         };
 
@@ -585,10 +475,41 @@
                 const userDocRef = doc(db, "users", currentAuthenticatedUser.uid);
                 await updateDoc(userDocRef, { hideLibrary: checkedVal });
                 cachedProfileData.hideLibrary = checkedVal;
-                alert(`Library is now set to ${checkedVal ? 'Private' : 'Public'}.`);
             } catch(e) {
-                alert("Failed to update privacy settings.");
+                console.error("Failed updating privacy settings.", e);
             }
+        };
+
+        window.handleProfileLike = async () => {
+            if (!currentAuthenticatedUser) {
+                alert("Please sign in to like profiles.");
+                return;
+            }
+            const userDocRef = doc(db, "users", window.activeProfileUid);
+            try {
+                if (cachedProfileData.likedByArray && cachedProfileData.likedByArray.includes(currentAuthenticatedUser.uid)) {
+                    await updateDoc(userDocRef, {
+                        likedByArray: arrayRemove(currentAuthenticatedUser.uid),
+                        likesCount: increment(-1)
+                    });
+                } else {
+                    await updateDoc(userDocRef, {
+                        likedByArray: arrayUnion(currentAuthenticatedUser.uid),
+                        likesCount: increment(1)
+                    });
+                }
+                await loadUserData();
+            } catch (err) {
+                console.error("Failed to update like status: ", err);
+            }
+        };
+
+        window.navigateToChat = () => {
+            if(!currentAuthenticatedUser) {
+                alert("Please log in to send a message.");
+                return;
+            }
+            window.location.href = `chats.html?userA=${currentAuthenticatedUser.uid}&userB=${window.activeProfileUid}`;
         };
 
         window.handleLogout = async () => {
@@ -596,7 +517,7 @@
                 await signOut(auth);
                 window.location.href = 'index.html'; 
             } catch (error) {
-                alert("Error logging out.");
+                console.error("Error logging out", error);
             }
         };
     </script>
