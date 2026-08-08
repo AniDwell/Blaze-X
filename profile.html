@@ -7,7 +7,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Cropper.js for actual image cropping -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
 
@@ -47,7 +46,7 @@
 
     <div id="header-mount" class="relative z-40"></div>
 
-    <main class="flex-1 w-full max-w-2xl mx-auto p-4 pt-6 relative z-10">
+    <main class="flex-1 w-full max-w-3xl mx-auto p-4 pt-6 relative z-10">
         
         <!-- PROFILE CARD -->
         <div id="profile-card" class="rounded-[2rem] p-6 md:p-8 relative overflow-hidden mb-4 transition-all border border-white/10 bg-[#0a0a0c] bg-cover bg-center">
@@ -107,6 +106,7 @@
             </div>
         </div>
 
+        <!-- STATS BLOCK -->
         <div class="flex gap-3 mb-8 relative z-10">
             <div class="flex-1 glass-panel p-4 rounded-2xl flex flex-col items-center justify-center">
                 <h3 id="stat-bottom-likes" class="text-xl md:text-2xl font-black text-[#F47521]">0</h3>
@@ -118,6 +118,7 @@
             </div>
         </div>
 
+        <!-- ================= OWNER MENU ================= -->
         <div id="owner-menu" class="hidden-el space-y-3">
             <div class="mb-6 space-y-2">
                 <div class="glass-panel rounded-2xl p-4 flex items-center justify-between">
@@ -206,13 +207,8 @@
             </button>
         </div>
 
-        <!-- ================= VISITOR VIEW: RICH LIBRARY SLIDER ================= -->
+        <!-- ================= VISITOR VIEW: LIBRARY ================= -->
         <div id="visitor-library-container" class="hidden-el space-y-4">
-            <div class="flex items-center justify-between px-2">
-                <h3 class="text-lg font-black text-white flex items-center gap-2">
-                    <i class="fas fa-bookmark text-[#F47521]"></i> User's Library
-                </h3>
-            </div>
             
             <div id="visitor-library-private" class="hidden-el glass-panel p-8 text-center rounded-2xl">
                 <div class="w-14 h-14 rounded-full bg-red-500/10 text-red-400 flex items-center justify-center mx-auto mb-3 text-xl">
@@ -223,27 +219,62 @@
             </div>
 
             <div id="visitor-library-public" class="hidden-el">
-                <div id="library-slider" class="flex overflow-x-auto gap-4 snap-x no-scrollbar pb-4 pt-1">
-                    <div class="text-sm text-gray-500 italic px-2">Loading library posters...</div>
+                
+                <!-- THE SLIDER VIEW (Initial) -->
+                <div id="library-slider-view">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl md:text-2xl font-black text-white border-l-4 border-[#F47521] pl-3 uppercase tracking-wider drop-shadow-md">
+                            Recent Activity
+                        </h2>
+                    </div>
+                    
+                    <div class="relative group/slider">
+                        <button id="slide-left-btn" class="hidden md:flex absolute -left-5 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0">
+                            <i class="fas fa-chevron-left text-lg"></i>
+                        </button>
+                        
+                        <!-- Track matches Action Slider spec exactly -->
+                        <div id="library-slider-track" class="flex gap-4 md:gap-5 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-4 pt-2 -mx-4 px-4 md:mx-0 md:px-0">
+                            <div class="text-sm text-gray-500 italic">Loading library...</div>
+                        </div>
+                        
+                        <button id="slide-right-btn" class="hidden md:flex absolute -right-5 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl disabled:opacity-0">
+                            <i class="fas fa-chevron-right text-lg"></i>
+                        </button>
+                    </div>
+
+                    <button id="view-full-library-btn" onclick="showFullGridLibrary()" class="w-full glass-panel hover:bg-white/10 text-white py-3.5 rounded-xl text-sm font-bold transition-all mt-4 border border-[#F47521]/30 text-[#F47521]">
+                        View Full Library Grid <i class="fas fa-th-large ml-1"></i>
+                    </button>
                 </div>
-                <!-- Dynamic load more button instead of redirect -->
-                <button id="view-more-library-btn" onclick="expandLibrary()" class="hidden-el w-full glass-panel hover:bg-white/10 text-white py-3 rounded-xl text-sm font-bold transition-all mt-2">
-                    Load More Titles <i class="fas fa-chevron-down ml-1"></i>
-                </button>
+
+                <!-- THE GRID VIEW (Hidden Initially) -->
+                <div id="library-grid-view" class="hidden-el">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-xl font-black text-white border-l-4 border-[#F47521] pl-3 uppercase tracking-wider">
+                            Full Library
+                        </h2>
+                        <button onclick="showSliderLibrary()" class="text-xs text-gray-400 hover:text-white transition-colors bg-white/5 px-3 py-1.5 rounded-lg border border-white/10">
+                            <i class="fas fa-arrow-left mr-1"></i> Back to Slider
+                        </button>
+                    </div>
+                    
+                    <div id="library-grid-mount" class="space-y-8 pb-4">
+                        <!-- Genre Categories injected here -->
+                    </div>
+                </div>
+
             </div>
         </div>
 
     </main>
 
-    <!-- FIXED BOTTOMNAV CONTAINER ID -->
     <div id="bottomnav-container" class="fixed bottom-0 w-full z-50"></div>
 
-    <!-- CROPPER MODAL -->
     <div id="crop-modal" class="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center hidden-el p-4">
         <div class="glass-panel w-full max-w-lg rounded-2xl p-6 flex flex-col items-center">
             <h3 class="text-lg font-bold mb-4">Adjust Avatar</h3>
-            <!-- Wrapper needed for CropperJS -->
-            <div class="w-full h-64 bg-black/50 overflow-hidden relative mb-6">
+            <div class="w-full h-64 bg-black/50 overflow-hidden relative mb-6 rounded-lg">
                 <img id="crop-preview" src="" class="max-w-full block">
             </div>
             <div class="flex gap-3 w-full">
@@ -253,7 +284,6 @@
         </div>
     </div>
 
-    <!-- AniList Background Search Modal -->
     <div id="bg-search-modal" class="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center hidden-el p-4 backdrop-blur-sm">
         <div class="glass-panel w-full max-w-lg rounded-2xl p-5 flex flex-col max-h-[80vh]">
             <div class="flex justify-between items-center mb-4">
@@ -295,21 +325,27 @@
         let isOwnerMode = true; 
         let cachedProfileData = null;
         
-        // PFP Cropper globals
         let cropperInstance = null;
+        let pendingImageDataUrl = null;
         
         // Library Globals
         let fullLibraryItems = [];
-        let currentlyDisplayedLibrary = 0;
+        let enrichedLibraryItems = []; // Holds items augmented with AniList data
 
-        // Ensure global app state exists
         window.app = window.app || {};
         window.app.state = window.app.state || {};
         window.app.state.carouselLibrarySet = new Set();
         window.app.db = db;
 
-        // GLOBAL SLIDER NAVIGATION EFFECT
+        // --- GLOBAL SLIDER NAVIGATION EFFECT ---
         window.app.sliderNavigate = (id, title, image, type, sub, dub) => {
+            if (!document.getElementById('slider-transition-styles')) {
+                const style = document.createElement('style');
+                style.id = 'slider-transition-styles';
+                style.innerHTML = `@keyframes loadingSlide { 0% { transform: translateX(-100%); } 100% { transform: translateX(200%); } }`;
+                document.head.appendChild(style);
+            }
+
             const overlayHtml = `
                 <div id="page-transition-overlay" class="fixed inset-0 z-[9999] flex flex-col transition-opacity duration-300 opacity-0">
                     <div class="absolute inset-0 bg-black/80 backdrop-blur-sm"></div>
@@ -326,12 +362,10 @@
                 overlayEl.classList.add('opacity-100');
             });
 
-            setTimeout(() => {
-                window.location.href = `/info.html?id=${id}`;
-            }, 300);
+            setTimeout(() => { window.location.href = `/info.html?id=${id}`; }, 300);
         };
 
-        // GLOBAL TOGGLE LIBRARY FUNC (For Slider Cards)
+        // --- GLOBAL TOGGLE LIBRARY FUNC ---
         window.app.toggleSliderLibrary = async (event, btn, id, title, img) => {
             event.stopPropagation(); 
             if (!currentAuthenticatedUser) {
@@ -360,15 +394,13 @@
                     window.app.state.carouselLibrarySet.add(docIdStr);
                     await setDoc(libDocRef, { id: docIdStr, title, img, timestamp: Date.now() });
                 }
-            } catch (error) { 
-                console.error("Library sync failed", error);
-            }
+            } catch (error) { console.error("Library sync failed", error); }
         };
 
+        // --- AUTH & INIT ---
         onAuthStateChanged(auth, async (user) => {
             currentAuthenticatedUser = user;
             
-            // Populate current user's library set so Save buttons show correct state
             if (user) {
                 const myLibRef = collection(db, "users", user.uid, "library");
                 const myLibSnap = await getDocs(myLibRef);
@@ -387,18 +419,12 @@
             }
 
             if (user) {
-                if (targetQueryId) {
-                    window.activeProfileUid = targetQueryId;
-                    isOwnerMode = false;
-                } else {
-                    window.activeProfileUid = user.uid;
-                    isOwnerMode = true;
-                }
+                if (targetQueryId) { window.activeProfileUid = targetQueryId; isOwnerMode = false; } 
+                else { window.activeProfileUid = user.uid; isOwnerMode = true; }
                 await renderView();
             } else {
                 if (targetQueryId) {
-                    window.activeProfileUid = targetQueryId;
-                    isOwnerMode = false;
+                    window.activeProfileUid = targetQueryId; isOwnerMode = false;
                     await renderView();
                 } else {
                     document.querySelector('main').innerHTML = `
@@ -446,27 +472,6 @@
             await fetchLibraryCountAndData();
         }
 
-        async function fetchLibraryCountAndData() {
-            try {
-                const libRef = collection(db, "users", window.activeProfileUid, "library");
-                const libSnapshot = await getDocs(libRef);
-                
-                if (!isOwnerMode && cachedProfileData && cachedProfileData.hideLibrary) {
-                    document.getElementById('stat-library-count').innerText = "Locked";
-                } else {
-                    document.getElementById('stat-library-count').innerText = libSnapshot.size || 0;
-                }
-
-                if (!isOwnerMode) {
-                    await setupVisitorLibrary(libSnapshot);
-                }
-
-            } catch (err) {
-                console.error("Failed to load library size", err);
-                document.getElementById('stat-library-count').innerText = "Error";
-            }
-        }
-
         async function loadUserData() {
             try {
                 const userDocRef = doc(db, "users", window.activeProfileUid);
@@ -480,13 +485,8 @@
                 document.getElementById('input-edit-username').value = cachedProfileData.username || "";
                 document.getElementById('input-edit-bio').value = cachedProfileData.bio || "";
 
-                if (cachedProfileData.photoURL) {
-                    document.getElementById('user-avatar').src = cachedProfileData.photoURL;
-                }
-                
-                if (cachedProfileData.bgImage) {
-                    document.getElementById('profile-card').style.backgroundImage = `url('${cachedProfileData.bgImage}')`;
-                }
+                if (cachedProfileData.photoURL) document.getElementById('user-avatar').src = cachedProfileData.photoURL;
+                if (cachedProfileData.bgImage) document.getElementById('profile-card').style.backgroundImage = `url('${cachedProfileData.bgImage}')`;
 
                 let countedLikes = cachedProfileData.likedByArray ? cachedProfileData.likedByArray.length : (cachedProfileData.likesCount || 0);
                 document.getElementById('stat-bottom-likes').innerText = countedLikes;
@@ -502,13 +502,25 @@
                     document.getElementById('toggle-hide-library').checked = cachedProfileData.hideLibrary || false;
                     document.getElementById('toggle-incognito').checked = cachedProfileData.incognitoMode || false;
                 }
-
-            } catch (error) {
-                console.error("Error loading profile data: ", error);
-            }
+            } catch (error) { console.error(error); }
         }
 
-        // --- RICH VISITOR LIBRARY WITH ANILIST & LOAD MORE ---
+        async function fetchLibraryCountAndData() {
+            try {
+                const libRef = collection(db, "users", window.activeProfileUid, "library");
+                const libSnapshot = await getDocs(libRef);
+                
+                if (!isOwnerMode && cachedProfileData && cachedProfileData.hideLibrary) {
+                    document.getElementById('stat-library-count').innerText = "Locked";
+                } else {
+                    document.getElementById('stat-library-count').innerText = libSnapshot.size || 0;
+                }
+
+                if (!isOwnerMode) await setupVisitorLibrary(libSnapshot);
+            } catch (err) { document.getElementById('stat-library-count').innerText = "Error"; }
+        }
+
+        // --- RICH VISITOR LIBRARY (Slider & Grid Generation) ---
         async function setupVisitorLibrary(snapshot) {
             const privateMsg = document.getElementById('visitor-library-private');
             const publicSlider = document.getElementById('visitor-library-public');
@@ -525,20 +537,21 @@
             fullLibraryItems = snapshot.docs.map(doc => doc.data());
             
             if (fullLibraryItems.length === 0) {
-                document.getElementById('library-slider').innerHTML = `<div class="text-sm text-gray-600 px-2 py-4">No entries yet.</div>`;
+                document.getElementById('library-slider-track').innerHTML = `<div class="text-sm text-gray-600 px-2 py-4">No entries yet.</div>`;
+                document.getElementById('view-full-library-btn').classList.add('hidden-el');
                 return;
             }
 
-            // Load initial 15
-            currentlyDisplayedLibrary = 0; 
-            await renderLibraryBatch(0, 15);
+            // Fetch AniList Data for top 15 recent items for the slider
+            const recentBatch = fullLibraryItems.slice(0, 15);
+            enrichedLibraryItems = await enrichBatchWithAniList(recentBatch);
+            
+            renderSliderCards(enrichedLibraryItems);
         }
 
-        async function renderLibraryBatch(start, end) {
-            const batch = fullLibraryItems.slice(start, end);
-            if(batch.length === 0) return;
+        async function enrichBatchWithAniList(batch) {
+            if(batch.length === 0) return [];
             
-            // 1. Fetch high quality posters & genres from AniList in a single query
             const graphqlQuery = `
                 query {
                     ${batch.map((item, index) => {
@@ -557,85 +570,137 @@
                 });
                 const json = await res.json();
                 anilistData = json.data || {};
-            } catch(e) { console.error("Anilist batch fetch failed"); }
+            } catch(e) {}
 
-            // 2. Render the rich cards
-            let htmlPayload = "";
-            batch.forEach((item, i) => {
-                const safeTitle = (item.title || 'Untitled').replace(/'/g, "\\'");
+            return batch.map((item, i) => {
                 const aniMatch = anilistData[`anime${i}`];
-                
-                const poster = aniMatch?.coverImage?.extraLarge || item.coverImage || 'https://via.placeholder.com/150x225?text=No+Cover';
-                const genre = aniMatch?.genres?.[0] || 'Anime';
-                const type = item.type || 'TV';
-                const sub = item.sub || '?';
-                const dub = item.dub || 0;
-                
-                const docIdStr = String(item.id);
-                const isAdded = window.app.state.carouselLibrarySet.has(docIdStr);
+                return {
+                    ...item,
+                    poster: aniMatch?.coverImage?.extraLarge || item.coverImage || item.image || 'https://via.placeholder.com/150x225?text=No+Cover',
+                    genre: aniMatch?.genres?.[0] || 'Uncategorized',
+                    type: item.type || 'TV',
+                    sub: item.sub || item.tvInfo?.sub || '?',
+                    dub: item.dub || item.tvInfo?.dub || 0
+                };
+            });
+        }
 
-                const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
-                const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
+        function createRichCardHtml(item) {
+            const safeTitle = (item.title || 'Untitled').replace(/'/g, "\\'");
+            const docIdStr = String(item.id);
+            const isAdded = window.app.state.carouselLibrarySet.has(docIdStr);
 
-                htmlPayload += `
-                <div class="snap-start shrink-0 w-[140px] md:w-[190px] relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-10"
-                     onclick="window.app.sliderNavigate('${item.id}', '${safeTitle}', '${poster}', '${type}', '${sub}', '${dub}')">
+            const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
+            const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
+
+            return `
+            <div class="snap-start shrink-0 w-[140px] md:w-[190px] relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-10"
+                 onclick="window.app.sliderNavigate('${item.id}', '${safeTitle}', '${item.poster}', '${item.type}', '${item.sub}', '${item.dub}')">
+                
+                <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden shadow-lg border border-white/10 group-hover:border-[#F47521]/70 transition-colors bg-[#111]">
+                    <img src="${item.poster}" loading="lazy" class="w-full h-full object-cover">
                     
-                    <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden shadow-lg border border-white/10 group-hover:border-[#F47521]/70 transition-colors bg-[#111]">
-                        <img src="${poster}" loading="lazy" class="w-full h-full object-cover">
-                        
-                        <button onclick="window.app.toggleSliderLibrary(event, this, '${item.id}', '${safeTitle}', '${poster}')" 
-                                data-added="${isAdded}"
-                                class="absolute top-2 right-2 z-30 p-2 rounded bg-black/70 backdrop-blur-md border border-white/10 shadow-lg hover:bg-black transition-all flex items-center justify-center">
-                            ${isAdded ? savedSvg : unsavedSvg}
-                        </button>
-                        
-                        <div class="absolute top-0 left-0 p-2 flex flex-col gap-1.5 items-start z-10 pointer-events-none">
-                            <span class="bg-black/80 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded border border-white/10 font-bold uppercase shadow-md">${genre}</span>
-                            <div class="flex gap-1">
-                                <span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-1.5 py-0.5 rounded shadow-md font-bold">CC ${sub}</span>
-                                ${dub > 0 ? `<span class="bg-purple-600/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-1.5 py-0.5 rounded shadow-md font-bold"><i class="fas fa-microphone text-[9px]"></i> ${dub}</span>` : ''}
-                            </div>
+                    <button onclick="window.app.toggleSliderLibrary(event, this, '${item.id}', '${safeTitle}', '${item.poster}')" 
+                            data-added="${isAdded}"
+                            class="absolute top-2 right-2 z-30 p-2 rounded bg-black/70 backdrop-blur-md border border-white/10 shadow-lg hover:bg-black transition-all flex items-center justify-center">
+                        ${isAdded ? savedSvg : unsavedSvg}
+                    </button>
+                    
+                    <div class="absolute top-0 left-0 p-2 flex flex-col gap-1.5 items-start z-10 pointer-events-none">
+                        <span class="bg-black/80 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded border border-white/10 font-bold uppercase shadow-md">${item.genre}</span>
+                        <div class="flex gap-1">
+                            <span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-1.5 py-0.5 rounded shadow-md font-bold">CC ${item.sub}</span>
+                            ${item.dub > 0 ? `<span class="bg-purple-600/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-1.5 py-0.5 rounded shadow-md font-bold"><i class="fas fa-microphone text-[9px]"></i> ${item.dub}</span>` : ''}
                         </div>
                     </div>
-                    
-                    <h3 class="mt-2 text-sm md:text-base text-gray-100 font-bold truncate group-hover:text-white transition-colors drop-shadow-md">${item.title}</h3>
                 </div>
-                `;
-            });
+                
+                <h3 class="mt-2 text-sm md:text-base text-gray-100 font-bold truncate group-hover:text-white transition-colors drop-shadow-md">${item.title}</h3>
+            </div>
+            `;
+        }
+
+        function renderSliderCards(items) {
+            const track = document.getElementById('library-slider-track');
+            track.innerHTML = items.map(createRichCardHtml).join('');
             
-            const sliderMount = document.getElementById('library-slider');
-            if (start === 0) {
-                sliderMount.innerHTML = htmlPayload;
-            } else {
-                sliderMount.insertAdjacentHTML('beforeend', htmlPayload);
-            }
+            // Slider Scrolling Logic
+            const leftBtn = document.getElementById('slide-left-btn');
+            const rightBtn = document.getElementById('slide-right-btn');
             
-            currentlyDisplayedLibrary = end;
-            
-            // Toggle "Load More" button visibility
-            const btn = document.getElementById('view-more-library-btn');
-            if (currentlyDisplayedLibrary >= fullLibraryItems.length) {
-                btn.classList.add('hidden-el');
-            } else {
-                btn.classList.remove('hidden-el');
+            if (leftBtn && rightBtn) {
+                const scrollAmount = window.innerWidth > 768 ? 600 : 300;
+                
+                // Remove old listeners to prevent duplication if re-rendered
+                const newLeft = leftBtn.cloneNode(true);
+                const newRight = rightBtn.cloneNode(true);
+                leftBtn.parentNode.replaceChild(newLeft, leftBtn);
+                rightBtn.parentNode.replaceChild(newRight, rightBtn);
+
+                newLeft.addEventListener('click', () => { track.scrollBy({ left: -scrollAmount, behavior: 'smooth' }); });
+                newRight.addEventListener('click', () => { track.scrollBy({ left: scrollAmount, behavior: 'smooth' }); });
+                
+                track.addEventListener('scroll', () => {
+                    newLeft.disabled = track.scrollLeft <= 0;
+                    newRight.disabled = Math.ceil(track.scrollLeft) >= (track.scrollWidth - track.clientWidth - 10);
+                });
+                newLeft.disabled = true; 
             }
         }
 
-        // Global expand function called by HTML button
-        window.expandLibrary = async () => {
-            const btn = document.getElementById('view-more-library-btn');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
-            btn.disabled = true;
+        // --- GRID VIEW LOGIC ---
+        window.showFullGridLibrary = async () => {
+            document.getElementById('library-slider-view').classList.add('hidden-el');
+            document.getElementById('library-grid-view').classList.remove('hidden-el');
             
-            await renderLibraryBatch(currentlyDisplayedLibrary, currentlyDisplayedLibrary + 15);
-            
-            btn.innerHTML = originalText;
-            btn.disabled = false;
+            const gridMount = document.getElementById('library-grid-mount');
+            gridMount.innerHTML = `<div class="text-center text-gray-500 py-10"><i class="fas fa-spinner fa-spin text-2xl text-[#F47521] mb-2"></i><br>Organizing Full Library...</div>`;
+
+            // If we haven't fetched AniList data for the rest of the library, do it now
+            if (fullLibraryItems.length > enrichedLibraryItems.length) {
+                const remaining = fullLibraryItems.slice(enrichedLibraryItems.length);
+                const enrichedRemaining = await enrichBatchWithAniList(remaining);
+                enrichedLibraryItems = [...enrichedLibraryItems, ...enrichedRemaining];
+            }
+
+            // Group by Genre
+            const grouped = {};
+            enrichedLibraryItems.forEach(item => {
+                const g = item.genre || 'Other';
+                if(!grouped[g]) grouped[g] = [];
+                grouped[g].push(item);
+            });
+
+            let gridHtml = '';
+            for (const [genre, items] of Object.entries(grouped)) {
+                gridHtml += `
+                    <div>
+                        <h3 class="text-lg font-bold text-white mb-3 text-gray-300 border-b border-white/10 pb-1">${genre} <span class="text-xs text-gray-500 ml-2">(${items.length})</span></h3>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            ${items.map(item => `
+                                <div class="w-full relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03]"
+                                     onclick="window.app.sliderNavigate('${item.id}', '${(item.title||'').replace(/'/g, "\\'")}', '${item.poster}', '${item.type}', '${item.sub}', '${item.dub}')">
+                                    <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden border border-white/10 bg-[#111]">
+                                        <img src="${item.poster}" loading="lazy" class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity">
+                                        <div class="absolute bottom-0 w-full bg-gradient-to-t from-black via-black/80 to-transparent p-2 pt-8">
+                                            <p class="text-[11px] font-bold text-white line-clamp-2 leading-tight">${item.title}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            gridMount.innerHTML = gridHtml;
         };
 
-        // --- Profile Name & Bio Editor ---
+        window.showSliderLibrary = () => {
+            document.getElementById('library-grid-view').classList.add('hidden-el');
+            document.getElementById('library-slider-view').classList.remove('hidden-el');
+        };
+
+        // --- EDITOR & CROPPER ---
         window.openProfileEditor = () => {
             document.getElementById('profile-display-block').classList.add('hidden-el');
             document.getElementById('profile-edit-block').classList.remove('hidden-el');
@@ -660,12 +725,10 @@
                 
                 document.getElementById('user-name').innerText = newName;
                 document.getElementById('user-bio').innerText = newBio || "No bio set.";
-                
                 closeProfileEditor();
             } catch(e) { console.error("Failed saving profile", e); }
         };
 
-        // --- CROPPER.JS IMAGE UPLOAD (ImgBB) ---
         window.handleImageUpload = (event) => {
             const file = event.target.files[0];
             if (!file) return;
@@ -676,11 +739,10 @@
                 previewImg.src = e.target.result;
                 document.getElementById('crop-modal').classList.remove('hidden-el');
                 
-                // Initialize Cropper JS
                 if(cropperInstance) cropperInstance.destroy();
                 cropperInstance = new Cropper(previewImg, {
-                    aspectRatio: 1, // Enforce Square
-                    viewMode: 1,    // Restrict crop box to not exceed canvas
+                    aspectRatio: 1,
+                    viewMode: 1,
                     background: false
                 });
             };
@@ -689,8 +751,7 @@
 
         window.closeCropModal = () => {
             document.getElementById('crop-modal').classList.add('hidden-el');
-            if(cropperInstance) cropperInstance.destroy();
-            cropperInstance = null;
+            if(cropperInstance) { cropperInstance.destroy(); cropperInstance = null; }
             document.getElementById('pfp-upload').value = ''; 
             const btn = document.getElementById('save-pfp-btn');
             btn.innerHTML = 'Save';
@@ -705,14 +766,12 @@
             btn.disabled = true;
 
             try {
-                // Get cropped image data
                 const canvas = cropperInstance.getCroppedCanvas({ width: 400, height: 400 });
                 const base64Data = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
                 
                 const formData = new FormData();
                 formData.append('image', base64Data);
 
-                // Upload to ImgBB
                 const imgbbResponse = await fetch('https://api.imgbb.com/1/upload?key=4a683051e76ed12880a42aefa6ed427b', {
                     method: 'POST',
                     body: formData
@@ -722,8 +781,6 @@
                 
                 if (imgbbData.success) {
                     const hostedUrl = imgbbData.data.url;
-
-                    // Save ImgBB URL to Firestore
                     const userDocRef = doc(db, "users", currentAuthenticatedUser.uid);
                     await updateDoc(userDocRef, { photoURL: hostedUrl });
                     
@@ -814,10 +871,7 @@
                 const userDocRef = doc(db, "users", currentAuthenticatedUser.uid);
                 await updateDoc(userDocRef, { hideLibrary: checkedVal });
                 cachedProfileData.hideLibrary = checkedVal;
-                
-                if (checkedVal && !isOwnerMode) {
-                    document.getElementById('stat-library-count').innerText = "Locked";
-                }
+                if (checkedVal && !isOwnerMode) document.getElementById('stat-library-count').innerText = "Locked";
             } catch(e) {}
         };
 
@@ -831,10 +885,7 @@
         };
 
         window.handleProfileLike = async () => {
-            if (!currentAuthenticatedUser) {
-                alert("Please sign in to like profiles.");
-                return;
-            }
+            if (!currentAuthenticatedUser) { alert("Please sign in to like profiles."); return; }
             const userDocRef = doc(db, "users", window.activeProfileUid);
             try {
                 let currentLikes = parseInt(document.getElementById('stat-bottom-likes').innerText) || 0;
@@ -861,18 +912,12 @@
         };
 
         window.navigateToChat = () => {
-            if(!currentAuthenticatedUser) {
-                alert("Please log in to send a message.");
-                return;
-            }
+            if(!currentAuthenticatedUser) { alert("Please log in to send a message."); return; }
             window.location.href = `/chats.html?userA=${currentAuthenticatedUser.uid}&userB=${window.activeProfileUid}`;
         };
 
         window.handleLogout = async () => {
-            try {
-                await signOut(auth);
-                window.location.href = '/index.html'; 
-            } catch (error) {}
+            try { await signOut(auth); window.location.href = '/index.html'; } catch (error) {}
         };
     </script>
 </body>
