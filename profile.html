@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Profile | AniKoto</title>
+    <title>Profile | BlazeX</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -15,34 +15,26 @@
             font-family: 'Inter', sans-serif;
             -webkit-font-smoothing: antialiased;
         }
-        /* Custom Premium Scrollbar */
+        
         ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #F47521; border-radius: 10px; }
         
         .hidden-el { display: none !important; }
         
-        /* Glassmorphism utilities */
+        /* Clean Glassmorphism without glows */
         .glass-panel {
             background: rgba(255, 255, 255, 0.03);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        
-        .premium-glow {
-            box-shadow: 0 0 20px rgba(244, 117, 33, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.08);
         }
 
-        /* Hide scrollbar for sliders but keep functionality */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col pb-24 relative overflow-x-hidden">
-
-    <!-- Ambient Background Glow -->
-    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-[#F47521] rounded-full blur-[120px] opacity-10 pointer-events-none z-0"></div>
 
     <!-- Header Mount -->
     <div id="header-mount" class="relative z-40"></div>
@@ -51,53 +43,70 @@
     <main class="flex-1 w-full max-w-2xl mx-auto p-4 pt-6 relative z-10">
         
         <!-- PROFILE CARD -->
-        <div class="glass-panel rounded-[2rem] p-6 md:p-8 relative overflow-hidden mb-8 premium-glow transition-all">
-            <div class="flex flex-col items-center text-center">
+        <div id="profile-card" class="rounded-[2rem] p-6 md:p-8 relative overflow-hidden mb-8 transition-all border border-white/10 bg-[#0a0a0c] bg-cover bg-center">
+            
+            <!-- Dark Overlay for Text Readability -->
+            <div class="absolute inset-0 bg-black/70 backdrop-blur-[2px] z-0"></div>
+
+            <!-- BG Edit Button (Owner Only) -->
+            <button id="edit-bg-btn" onclick="openBgSearchModal()" class="hidden-el absolute top-4 right-4 z-20 w-8 h-8 bg-black/50 hover:bg-[#F47521] border border-white/20 rounded-full flex items-center justify-center text-white transition-colors cursor-pointer">
+                <i class="fas fa-image text-xs"></i>
+            </button>
+
+            <div class="relative z-10 flex flex-row items-center gap-5 md:gap-8">
                 
-                <!-- Avatar Section -->
-                <div class="relative group cursor-pointer mb-4">
-                    <div class="w-28 h-28 md:w-32 md:h-32 rounded-full p-1 bg-gradient-to-br from-[#F47521] to-[#8a3a0c] shadow-[0_0_25px_rgba(244,117,33,0.4)] transition-transform duration-300 group-hover:scale-105">
+                <!-- Avatar (Left) -->
+                <div class="relative group cursor-pointer shrink-0">
+                    <div class="w-24 h-24 md:w-28 md:h-28 rounded-full p-1 bg-gradient-to-br from-[#F47521] to-[#8a3a0c] transition-transform duration-300 group-hover:scale-105">
                         <img id="user-avatar" src="https://ui-avatars.com/api/?name=User&background=111&color=F47521" alt="Profile" class="w-full h-full rounded-full object-cover border-4 border-[#030305] bg-[#111]">
                     </div>
                     
-                    <!-- Edit PFP Overlay (Owner Only) -->
-                    <label id="edit-pfp-btn" for="pfp-upload" class="hidden-el absolute bottom-0 right-0 bg-[#F47521] hover:bg-white hover:text-[#F47521] text-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-colors cursor-pointer border-2 border-[#030305]">
-                        <i class="fas fa-camera text-sm"></i>
+                    <label id="edit-pfp-btn" for="pfp-upload" class="hidden-el absolute bottom-0 right-0 bg-[#F47521] hover:bg-white hover:text-[#F47521] text-white w-9 h-9 rounded-full flex items-center justify-center transition-colors cursor-pointer border-2 border-[#030305]">
+                        <i class="fas fa-camera text-xs"></i>
                     </label>
                     <input type="file" id="pfp-upload" class="hidden" accept="image/*" onchange="handleImageUpload(event)">
                 </div>
                 
-                <!-- User Info -->
-                <div class="flex items-center justify-center gap-2 mb-1 group/name">
-                    <h1 id="user-name" class="text-3xl font-black tracking-tight text-white">Loading...</h1>
-                    <!-- Edit Name Button (Owner Only) -->
-                    <button id="edit-name-btn" onclick="openNameEditor()" class="hidden-el text-gray-500 hover:text-[#F47521] transition-colors">
-                        <i class="fas fa-pen text-sm"></i>
-                    </button>
-                </div>
-                
-                <!-- Name Edit Input (Hidden by default) -->
-                <div id="name-edit-container" class="hidden-el flex items-center justify-center gap-2 mb-2 w-full max-w-xs">
-                    <input type="text" id="input-edit-username" class="w-full bg-black/50 border border-[#F47521]/50 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-[#F47521] text-center" placeholder="New username">
-                    <button onclick="saveName()" class="bg-[#F47521] text-white px-3 py-2 rounded-xl text-sm font-bold"><i class="fas fa-check"></i></button>
-                    <button onclick="closeNameEditor()" class="bg-white/10 text-white px-3 py-2 rounded-xl text-sm"><i class="fas fa-times"></i></button>
-                </div>
+                <!-- User Details (Right) -->
+                <div class="flex flex-col flex-1 text-left justify-center">
+                    
+                    <!-- Display Mode -->
+                    <div id="profile-display-block">
+                        <div class="flex items-center gap-3">
+                            <h1 id="user-name" class="text-2xl md:text-3xl font-black tracking-tight text-white line-clamp-1">Loading...</h1>
+                            <button id="edit-profile-btn" onclick="openProfileEditor()" class="hidden-el text-gray-400 hover:text-[#F47521] transition-colors">
+                                <i class="fas fa-pen text-sm"></i>
+                            </button>
+                        </div>
+                        <p id="user-bio" class="text-sm text-gray-300 mt-1 line-clamp-2 max-w-sm">No bio set.</p>
+                        
+                        <div class="flex items-center gap-2 mt-3">
+                            <span id="view-badge" class="bg-white/10 text-gray-300 px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-widest border border-white/5">Authenticating</span>
+                        </div>
+                    </div>
 
-                <div class="flex items-center gap-2 mb-6">
-                    <span id="view-badge" class="bg-white/10 text-gray-300 px-2.5 py-1 rounded-md text-[10px] uppercase font-black tracking-widest border border-white/5">Authenticating</span>
-                    <span id="user-email" class="text-xs text-gray-400 font-medium hidden md:block"></span>
-                </div>
+                    <!-- Edit Mode (Hidden by default) -->
+                    <div id="profile-edit-block" class="hidden-el flex-col gap-2 w-full max-w-sm">
+                        <input type="text" id="input-edit-username" class="w-full bg-black/60 border border-white/20 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[#F47521]" placeholder="Username">
+                        <textarea id="input-edit-bio" rows="2" class="w-full bg-black/60 border border-white/20 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[#F47521] resize-none" placeholder="Write a short bio..."></textarea>
+                        <div class="flex gap-2">
+                            <button onclick="saveProfileDetails()" class="bg-[#F47521] text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-colors hover:bg-[#d96216]">Save</button>
+                            <button onclick="closeProfileEditor()" class="bg-white/10 text-white px-4 py-1.5 rounded-lg text-xs hover:bg-white/20">Cancel</button>
+                        </div>
+                    </div>
 
-                <!-- Stats / Actions -->
-                <div id="visitor-actions" class="hidden-el w-full flex gap-3 mt-2">
-                    <button onclick="handleProfileLike()" class="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3.5 rounded-2xl text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-lg">
-                        <i id="heart-icon" class="far fa-heart text-lg text-gray-400"></i>
-                        <span id="stat-likes-count">0</span> Likes
-                    </button>
-                    <button onclick="navigateToChat()" class="flex-[2] bg-gradient-to-r from-[#F47521] to-[#e05e0b] hover:from-[#e05e0b] hover:to-[#c24e05] text-white py-3.5 rounded-2xl text-sm font-black tracking-wide transition-all flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(244,117,33,0.3)]">
-                        <i class="fas fa-paper-plane"></i> Message User
-                    </button>
                 </div>
+            </div>
+
+            <!-- Stats / Visitor Actions -->
+            <div id="visitor-actions" class="hidden-el w-full flex gap-3 mt-6 relative z-10">
+                <button onclick="handleProfileLike()" class="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2">
+                    <i id="heart-icon" class="far fa-heart text-gray-400"></i>
+                    <span id="stat-likes-count">0</span> Likes
+                </button>
+                <button onclick="navigateToChat()" class="flex-[2] bg-[#F47521] hover:bg-[#d96216] text-white py-3 rounded-xl text-sm font-black tracking-wide transition-all flex items-center justify-center gap-2">
+                    <i class="fas fa-paper-plane"></i> Message User
+                </button>
             </div>
         </div>
 
@@ -105,9 +114,9 @@
         <div id="owner-menu" class="hidden-el space-y-3">
             
             <!-- Privacy Toggle -->
-            <div class="glass-panel rounded-2xl p-4 flex items-center justify-between mb-6">
+            <div class="glass-panel rounded-2xl p-4 flex items-center justify-between mb-2">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-[#F47521]">
+                    <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-[#F47521]">
                         <i class="fas fa-eye-slash"></i>
                     </div>
                     <div>
@@ -124,12 +133,11 @@
             <!-- Navigation Buttons -->
             <button onclick="window.location.href='library.html'" class="w-full glass-panel hover:bg-white/5 p-4 rounded-2xl flex items-center justify-between group transition-all">
                 <div class="flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-[#F47521]/20 to-transparent flex items-center justify-center border border-[#F47521]/30 text-[#F47521] group-hover:scale-110 transition-transform">
+                    <div class="w-12 h-12 rounded-xl bg-[#F47521]/10 flex items-center justify-center text-[#F47521] group-hover:scale-105 transition-transform">
                         <i class="fas fa-bookmark text-xl"></i>
                     </div>
                     <div class="text-left">
-                        <h3 class="font-bold text-white text-lg">My Library</h3>
-                        <p class="text-xs text-gray-400">Manage your watch catalog</p>
+                        <h3 class="font-bold text-white text-md">My Library</h3>
                     </div>
                 </div>
                 <i class="fas fa-chevron-right text-gray-600 group-hover:text-white transition-colors"></i>
@@ -137,12 +145,11 @@
 
             <button onclick="window.location.href='chats.html'" class="w-full glass-panel hover:bg-white/5 p-4 rounded-2xl flex items-center justify-between group transition-all">
                 <div class="flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-transparent flex items-center justify-center border border-blue-500/30 text-blue-400 group-hover:scale-110 transition-transform">
+                    <div class="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-105 transition-transform">
                         <i class="fas fa-comments text-xl"></i>
                     </div>
                     <div class="text-left">
-                        <h3 class="font-bold text-white text-lg">Chats</h3>
-                        <p class="text-xs text-gray-400">Messages and conversations</p>
+                        <h3 class="font-bold text-white text-md">Chats</h3>
                     </div>
                 </div>
                 <i class="fas fa-chevron-right text-gray-600 group-hover:text-white transition-colors"></i>
@@ -150,29 +157,44 @@
 
             <button onclick="window.location.href='notifications.html'" class="w-full glass-panel hover:bg-white/5 p-4 rounded-2xl flex items-center justify-between group transition-all">
                 <div class="flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500/20 to-transparent flex items-center justify-center border border-purple-500/30 text-purple-400 group-hover:scale-110 transition-transform">
+                    <div class="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 group-hover:scale-105 transition-transform">
                         <i class="fas fa-bell text-xl"></i>
                     </div>
                     <div class="text-left">
-                        <h3 class="font-bold text-white text-lg">Notifications</h3>
-                        <p class="text-xs text-gray-400">Alerts and updates</p>
+                        <h3 class="font-bold text-white text-md">Notifications</h3>
                     </div>
                 </div>
                 <i class="fas fa-chevron-right text-gray-600 group-hover:text-white transition-colors"></i>
             </button>
 
-            <button onclick="window.location.href='history.html'" class="w-full glass-panel hover:bg-white/5 p-4 rounded-2xl flex items-center justify-between group transition-all mt-8">
+            <button onclick="window.location.href='history.html'" class="w-full glass-panel hover:bg-white/5 p-4 rounded-2xl flex items-center justify-between group transition-all mt-4">
                 <div class="flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-gray-500/20 to-transparent flex items-center justify-center border border-gray-500/30 text-gray-400 group-hover:scale-110 transition-transform">
+                    <div class="w-12 h-12 rounded-xl bg-gray-500/10 flex items-center justify-center text-gray-400 group-hover:scale-105 transition-transform">
                         <i class="fas fa-history text-xl"></i>
                     </div>
                     <div class="text-left">
-                        <h3 class="font-bold text-white text-lg">History</h3>
-                        <p class="text-xs text-gray-400">Activity and logs</p>
+                        <h3 class="font-bold text-white text-md">History</h3>
                     </div>
                 </div>
                 <i class="fas fa-chevron-right text-gray-600 group-hover:text-white transition-colors"></i>
             </button>
+
+            <!-- Incognito Toggle (Added below history) -->
+            <div class="glass-panel rounded-2xl p-4 flex items-center justify-between mt-2">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-gray-400">
+                        <i class="fas fa-user-secret"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-bold text-white">Incognito Mode</p>
+                        <p class="text-[10px] text-gray-400">Pause logging to history</p>
+                    </div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="toggle-incognito" onchange="handleIncognitoToggle()" class="sr-only peer">
+                    <div class="w-11 h-6 bg-black/50 rounded-full peer border border-white/10 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-gray-400 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-500 peer-checked:after:bg-white"></div>
+                </label>
+            </div>
             
             <button onclick="handleLogout()" class="w-full mt-6 py-4 text-sm font-bold text-red-500/80 hover:text-red-500 transition-colors">
                 <i class="fas fa-sign-out-alt mr-2"></i> Log Out
@@ -182,27 +204,23 @@
         <!-- ================= VISITOR VIEW: LIBRARY SLIDER ================= -->
         <div id="visitor-library-container" class="hidden-el space-y-4">
             <div class="flex items-center justify-between px-2">
-                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                <h3 class="text-md font-bold text-white flex items-center gap-2">
                     <i class="fas fa-bookmark text-[#F47521]"></i> User's Library
                 </h3>
             </div>
             
-            <!-- Private Message -->
             <div id="visitor-library-private" class="hidden-el glass-panel p-8 text-center rounded-2xl">
-                <div class="w-16 h-16 rounded-full bg-red-500/10 text-red-400 flex items-center justify-center mx-auto mb-3 text-2xl">
+                <div class="w-14 h-14 rounded-full bg-red-500/10 text-red-400 flex items-center justify-center mx-auto mb-3 text-xl">
                     <i class="fas fa-lock"></i>
                 </div>
                 <p class="font-bold text-white">Library is Private</p>
-                <p class="text-xs text-gray-400 mt-1">This user has hidden their catalog.</p>
             </div>
 
-            <!-- Public Slider -->
             <div id="visitor-library-public" class="hidden-el">
                 <div id="library-slider" class="flex overflow-x-auto gap-4 snap-x no-scrollbar pb-4">
-                    <!-- Slider items populated by JS -->
                     <div class="text-sm text-gray-500 italic px-2">Loading library...</div>
                 </div>
-                <button onclick="window.location.href='library.html?id=' + activeProfileUid" class="w-full glass-panel hover:bg-white/10 text-white py-3.5 rounded-xl text-sm font-bold transition-all mt-2">
+                <button onclick="window.location.href='library.html?id=' + activeProfileUid" class="w-full glass-panel hover:bg-white/10 text-white py-3 rounded-xl text-sm font-bold transition-all mt-2">
                     View Full Library
                 </button>
             </div>
@@ -214,18 +232,35 @@
     <div id="bottomnav-mount" class="fixed bottom-0 w-full z-50"></div>
 
     <!-- Image Crop Modal Placeholder -->
-    <div id="crop-modal" class="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center hidden-el backdrop-blur-sm p-4">
-        <div class="glass-panel w-full max-w-md rounded-3xl p-6 flex flex-col items-center">
-            <h3 class="text-xl font-bold mb-4">Adjust Photo</h3>
-            <div class="w-64 h-64 border-2 border-dashed border-[#F47521]/50 rounded-full mb-6 overflow-hidden relative flex items-center justify-center bg-black/50">
-                <img id="crop-preview" src="" class="object-cover w-full h-full opacity-50" alt="Crop preview">
-                <div class="absolute inset-0 flex items-center justify-center text-xs text-gray-400 pointer-events-none">
-                    Preview Size
-                </div>
+    <div id="crop-modal" class="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center hidden-el p-4">
+        <div class="glass-panel w-full max-w-md rounded-2xl p-6 flex flex-col items-center">
+            <h3 class="text-lg font-bold mb-4">Adjust Avatar</h3>
+            <div class="w-48 h-48 border border-white/20 rounded-full mb-6 overflow-hidden relative flex items-center justify-center bg-black/50">
+                <img id="crop-preview" src="" class="object-cover w-full h-full opacity-50">
             </div>
             <div class="flex gap-3 w-full">
-                <button onclick="closeCropModal()" class="flex-1 bg-white/10 hover:bg-white/20 py-3 rounded-xl font-bold transition-all">Cancel</button>
-                <button onclick="saveCroppedImage()" class="flex-1 bg-[#F47521] hover:bg-[#e05e0b] py-3 rounded-xl font-bold shadow-[0_4px_15px_rgba(244,117,33,0.3)] transition-all">Save Image</button>
+                <button onclick="closeCropModal()" class="flex-1 bg-white/10 hover:bg-white/20 py-2.5 rounded-xl text-sm font-bold">Cancel</button>
+                <button onclick="saveCroppedImage()" class="flex-1 bg-[#F47521] hover:bg-[#e05e0b] py-2.5 rounded-xl text-sm font-bold">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AniList Background Search Modal -->
+    <div id="bg-search-modal" class="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center hidden-el p-4 backdrop-blur-sm">
+        <div class="glass-panel w-full max-w-lg rounded-2xl p-5 flex flex-col max-h-[80vh]">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold">Search Anime Background</h3>
+                <button onclick="closeBgSearchModal()" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
+            </div>
+            
+            <div class="flex gap-2 mb-4">
+                <input type="text" id="anilist-search-input" class="flex-1 bg-black/60 border border-white/20 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-[#F47521]" placeholder="Anime title (e.g., Naruto)">
+                <button onclick="searchAniList()" class="bg-[#F47521] text-white px-4 rounded-xl text-sm font-bold"><i class="fas fa-search"></i></button>
+            </div>
+
+            <div id="anilist-results" class="flex-1 overflow-y-auto space-y-3 no-scrollbar pr-1">
+                <!-- Results populated here -->
+                <p class="text-xs text-gray-500 text-center py-4">Powered by AniList</p>
             </div>
         </div>
     </div>
@@ -244,7 +279,6 @@
             apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
             authDomain: "blaze-x-db2f5.firebaseapp.com",
             projectId: "blaze-x-db2f5"
-            // Shortened config to keep snippet concise
         };
 
         const app = initializeApp(firebaseConfig);
@@ -279,14 +313,12 @@
                 } else {
                     document.querySelector('main').innerHTML = `
                         <div class="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
-                            <div class="w-24 h-24 rounded-full bg-white/5 flex items-center justify-center mb-6 border border-white/10 shadow-2xl">
-                                <i class="fas fa-user-lock text-4xl text-[#F47521]"></i>
+                            <div class="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-6 border border-white/10">
+                                <i class="fas fa-user-lock text-3xl text-[#F47521]"></i>
                             </div>
-                            <h2 class="text-3xl font-black text-white mb-2">Login Required</h2>
-                            <p class="text-gray-400 mb-8 max-w-sm">Sign in to manage your personalized catalog, messages, and account settings.</p>
-                            <a href="index.html" class="bg-gradient-to-r from-[#F47521] to-[#e05e0b] text-white px-8 py-3.5 rounded-xl font-bold tracking-wide shadow-[0_4px_20px_rgba(244,117,33,0.3)] transition-transform hover:scale-105">
-                                Return Home
-                            </a>
+                            <h2 class="text-2xl font-black text-white mb-2">Login Required</h2>
+                            <p class="text-gray-400 text-sm mb-6 max-w-sm">Sign in to manage your BlazeX profile.</p>
+                            <a href="index.html" class="bg-[#F47521] text-white px-6 py-2.5 rounded-xl font-bold">Return Home</a>
                         </div>
                     `;
                 }
@@ -298,24 +330,26 @@
             
             if (isOwnerMode) {
                 badge.innerText = "Owner Dashboard";
-                badge.className = "bg-[#F47521]/20 text-[#F47521] px-2.5 py-1 rounded-md text-[10px] uppercase font-black tracking-widest border border-[#F47521]/30";
+                badge.className = "bg-[#F47521]/20 text-[#F47521] px-2 py-0.5 rounded text-[10px] uppercase font-black border border-[#F47521]/30";
                 
                 document.getElementById('owner-menu').classList.remove('hidden-el');
                 document.getElementById('visitor-actions').classList.add('hidden-el');
                 document.getElementById('visitor-library-container').classList.add('hidden-el');
                 
                 document.getElementById('edit-pfp-btn').classList.remove('hidden-el');
-                document.getElementById('edit-name-btn').classList.remove('hidden-el');
+                document.getElementById('edit-profile-btn').classList.remove('hidden-el');
+                document.getElementById('edit-bg-btn').classList.remove('hidden-el');
             } else {
                 badge.innerText = "Public Profile";
-                badge.className = "bg-white/10 text-gray-300 px-2.5 py-1 rounded-md text-[10px] uppercase font-black tracking-widest border border-white/5";
+                badge.className = "bg-white/10 text-gray-300 px-2 py-0.5 rounded text-[10px] uppercase font-black border border-white/10";
                 
                 document.getElementById('owner-menu').classList.add('hidden-el');
                 document.getElementById('visitor-actions').classList.remove('hidden-el');
                 document.getElementById('visitor-library-container').classList.remove('hidden-el');
                 
                 document.getElementById('edit-pfp-btn').classList.add('hidden-el');
-                document.getElementById('edit-name-btn').classList.add('hidden-el');
+                document.getElementById('edit-profile-btn').classList.add('hidden-el');
+                document.getElementById('edit-bg-btn').classList.add('hidden-el');
             }
 
             await loadUserData();
@@ -329,29 +363,33 @@
                 cachedProfileData = userDoc.exists() ? userDoc.data() : { username: "Anime Fan", hideLibrary: false };
 
                 document.getElementById('user-name').innerText = cachedProfileData.username || "Anime Fan";
-                document.getElementById('input-edit-username').value = cachedProfileData.username || "";
+                document.getElementById('user-bio').innerText = cachedProfileData.bio || "No bio set.";
                 
-                if (isOwnerMode && currentAuthenticatedUser) {
-                    document.getElementById('user-email').innerText = currentAuthenticatedUser.email;
-                }
+                document.getElementById('input-edit-username').value = cachedProfileData.username || "";
+                document.getElementById('input-edit-bio').value = cachedProfileData.bio || "";
 
                 if (cachedProfileData.photoURL) {
                     document.getElementById('user-avatar').src = cachedProfileData.photoURL;
                 }
+                
+                // Apply Profile Background if set
+                if (cachedProfileData.bgImage) {
+                    document.getElementById('profile-card').style.backgroundImage = `url('${cachedProfileData.bgImage}')`;
+                }
 
-                // Likes Logic
                 let countedLikes = cachedProfileData.likedByArray ? cachedProfileData.likedByArray.length : (cachedProfileData.likesCount || 0);
                 document.getElementById('stat-likes-count').innerText = countedLikes;
 
                 const heartIcon = document.getElementById('heart-icon');
                 if (currentAuthenticatedUser && cachedProfileData.likedByArray && cachedProfileData.likedByArray.includes(currentAuthenticatedUser.uid)) {
-                    heartIcon.className = "fas fa-heart text-[#F47521] text-lg drop-shadow-[0_0_8px_rgba(244,117,33,0.8)]";
+                    heartIcon.className = "fas fa-heart text-[#F47521]";
                 } else {
-                    heartIcon.className = "far fa-heart text-gray-400 text-lg";
+                    heartIcon.className = "far fa-heart text-gray-400";
                 }
 
                 if (isOwnerMode) {
                     document.getElementById('toggle-hide-library').checked = cachedProfileData.hideLibrary || false;
+                    document.getElementById('toggle-incognito').checked = cachedProfileData.incognitoMode || false;
                 } else {
                     loadVisitorLibrary();
                 }
@@ -380,59 +418,61 @@
                 const snapshot = await getDocs(libRef);
 
                 if (snapshot.empty) {
-                    sliderMount.innerHTML = `<div class="text-sm text-gray-600 px-2 py-4">No entries in this library.</div>`;
+                    sliderMount.innerHTML = `<div class="text-sm text-gray-600 px-2 py-4">No entries yet.</div>`;
                     return;
                 }
 
                 let htmlPayload = "";
-                // Limit to 5 for the slider preview
                 snapshot.docs.slice(0, 5).forEach((itemDoc) => {
                     const item = itemDoc.data();
                     htmlPayload += `
-                        <div class="snap-center shrink-0 w-32 h-44 rounded-xl overflow-hidden relative group shadow-lg border border-white/10 bg-[#111]">
-                            <img src="${item.coverImage || 'https://via.placeholder.com/150x200?text=No+Cover'}" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity">
+                        <div class="snap-center shrink-0 w-28 h-40 rounded-xl overflow-hidden relative group border border-white/10 bg-[#111]">
+                            <img src="${item.coverImage || 'https://via.placeholder.com/150x200?text=No+Cover'}" class="w-full h-full object-cover opacity-80">
                             <div class="absolute bottom-0 w-full bg-gradient-to-t from-black via-black/80 to-transparent p-2 pt-6">
-                                <p class="text-xs font-bold text-white truncate">${item.title || 'Untitled'}</p>
-                                <p class="text-[9px] text-[#F47521] uppercase tracking-wider font-extrabold">${item.status || 'Watching'}</p>
+                                <p class="text-[10px] font-bold text-white truncate">${item.title || 'Untitled'}</p>
                             </div>
                         </div>
                     `;
                 });
                 sliderMount.innerHTML = htmlPayload;
-
             } catch (err) {
-                sliderMount.innerHTML = `<div class="text-xs text-red-500 py-2">Failed to load library items.</div>`;
+                sliderMount.innerHTML = `<div class="text-xs text-red-500 py-2">Error loading.</div>`;
             }
         }
 
-        // Exposed global functions for the HTML buttons
-        window.openNameEditor = () => {
-            document.getElementById('user-name').classList.add('hidden-el');
-            document.getElementById('edit-name-btn').classList.add('hidden-el');
-            document.getElementById('name-edit-container').classList.remove('hidden-el');
+        // --- Profile Name & Bio Editor ---
+        window.openProfileEditor = () => {
+            document.getElementById('profile-display-block').classList.add('hidden-el');
+            document.getElementById('profile-edit-block').classList.remove('hidden-el');
+            document.getElementById('profile-edit-block').classList.add('flex');
             document.getElementById('input-edit-username').focus();
         };
 
-        window.closeNameEditor = () => {
-            document.getElementById('name-edit-container').classList.add('hidden-el');
-            document.getElementById('user-name').classList.remove('hidden-el');
-            document.getElementById('edit-name-btn').classList.remove('hidden-el');
+        window.closeProfileEditor = () => {
+            document.getElementById('profile-edit-block').classList.add('hidden-el');
+            document.getElementById('profile-edit-block').classList.remove('flex');
+            document.getElementById('profile-display-block').classList.remove('hidden-el');
         };
 
-        window.saveName = async () => {
+        window.saveProfileDetails = async () => {
             const newName = document.getElementById('input-edit-username').value.trim();
+            const newBio = document.getElementById('input-edit-bio').value.trim();
             if (!newName || !currentAuthenticatedUser) return;
 
             try {
                 const userDocRef = doc(db, "users", currentAuthenticatedUser.uid);
-                await updateDoc(userDocRef, { username: newName });
+                await updateDoc(userDocRef, { username: newName, bio: newBio });
+                
                 document.getElementById('user-name').innerText = newName;
-                closeNameEditor();
+                document.getElementById('user-bio').innerText = newBio || "No bio set.";
+                
+                closeProfileEditor();
             } catch(e) {
-                console.error("Failed saving name", e);
+                console.error("Failed saving profile", e);
             }
         };
 
+        // --- Profile Picture (Avatar) ---
         window.handleImageUpload = (event) => {
             const file = event.target.files[0];
             if (!file) return;
@@ -454,29 +494,115 @@
 
         window.saveCroppedImage = async () => {
             if (!pendingImageDataUrl || !currentAuthenticatedUser) return;
-            
             try {
                 const userDocRef = doc(db, "users", currentAuthenticatedUser.uid);
-                // Saving DataURL directly to Firestore (For production, implement Firebase Storage here)
                 await updateDoc(userDocRef, { photoURL: pendingImageDataUrl });
                 document.getElementById('user-avatar').src = pendingImageDataUrl;
                 closeCropModal();
             } catch (e) {
-                alert("Failed to save image.");
+                console.error("Failed to save image.", e);
+            }
+        };
+
+        // --- AniList Background Integration ---
+        window.openBgSearchModal = () => {
+            document.getElementById('bg-search-modal').classList.remove('hidden-el');
+            document.getElementById('anilist-search-input').focus();
+        };
+
+        window.closeBgSearchModal = () => {
+            document.getElementById('bg-search-modal').classList.add('hidden-el');
+        };
+
+        window.searchAniList = async () => {
+            const query = document.getElementById('anilist-search-input').value.trim();
+            if(!query) return;
+
+            const resultsDiv = document.getElementById('anilist-results');
+            resultsDiv.innerHTML = `<p class="text-sm text-center text-gray-400 py-4">Searching...</p>`;
+
+            const graphqlQuery = `
+            query ($search: String) {
+                Page(page: 1, perPage: 10) {
+                    media(search: $search, type: ANIME, sort: POPULARITY_DESC) {
+                        id
+                        title { romaji english }
+                        bannerImage
+                        coverImage { extraLarge }
+                    }
+                }
+            }`;
+
+            try {
+                const response = await fetch('https://graphql.anilist.co', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({ query: graphqlQuery, variables: { search: query } })
+                });
+
+                const data = await response.json();
+                const animes = data.data.Page.media;
+                
+                if (animes.length === 0) {
+                    resultsDiv.innerHTML = `<p class="text-sm text-center text-gray-400 py-4">No anime found.</p>`;
+                    return;
+                }
+
+                let html = '';
+                animes.forEach(anime => {
+                    const title = anime.title.english || anime.title.romaji;
+                    // Prefer bannerImage, fallback to coverImage
+                    const bgUrl = anime.bannerImage || anime.coverImage.extraLarge;
+                    
+                    html += `
+                        <div class="glass-panel p-2 rounded-xl flex items-center gap-3 cursor-pointer hover:bg-white/10 transition-colors" onclick="setProfileBackground('${bgUrl}')">
+                            <img src="${anime.coverImage.extraLarge}" class="w-12 h-16 object-cover rounded-lg">
+                            <div class="flex-1">
+                                <p class="text-sm font-bold text-white line-clamp-1">${title}</p>
+                                ${!anime.bannerImage ? '<p class="text-[10px] text-gray-400">No official banner, using cover</p>' : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+                resultsDiv.innerHTML = html;
+
+            } catch(e) {
+                resultsDiv.innerHTML = `<p class="text-sm text-center text-red-500 py-4">Error fetching AniList.</p>`;
+            }
+        };
+
+        window.setProfileBackground = async (imageUrl) => {
+            if(!imageUrl || !currentAuthenticatedUser) return;
+            try {
+                const userDocRef = doc(db, "users", currentAuthenticatedUser.uid);
+                await updateDoc(userDocRef, { bgImage: imageUrl });
+                document.getElementById('profile-card').style.backgroundImage = `url('${imageUrl}')`;
+                closeBgSearchModal();
+            } catch(e) {
+                console.error("Failed setting background.", e);
+            }
+        };
+
+        // --- Toggles & Actions ---
+        window.handleLibraryVisibilityToggle = async () => {
+            if (!isOwnerMode || !currentAuthenticatedUser) return;
+            const checkedVal = document.getElementById('toggle-hide-library').checked;
+            try {
+                const userDocRef = doc(db, "users", currentAuthenticatedUser.uid);
+                await updateDoc(userDocRef, { hideLibrary: checkedVal });
+            } catch(e) {
                 console.error(e);
             }
         };
 
-        window.handleLibraryVisibilityToggle = async () => {
+        window.handleIncognitoToggle = async () => {
             if (!isOwnerMode || !currentAuthenticatedUser) return;
-            const checkedVal = document.getElementById('toggle-hide-library').checked;
-
+            const checkedVal = document.getElementById('toggle-incognito').checked;
             try {
                 const userDocRef = doc(db, "users", currentAuthenticatedUser.uid);
-                await updateDoc(userDocRef, { hideLibrary: checkedVal });
-                cachedProfileData.hideLibrary = checkedVal;
+                await updateDoc(userDocRef, { incognitoMode: checkedVal });
             } catch(e) {
-                console.error("Failed updating privacy settings.", e);
+                console.error(e);
             }
         };
 
@@ -500,7 +626,7 @@
                 }
                 await loadUserData();
             } catch (err) {
-                console.error("Failed to update like status: ", err);
+                console.error(err);
             }
         };
 
@@ -517,7 +643,7 @@
                 await signOut(auth);
                 window.location.href = 'index.html'; 
             } catch (error) {
-                console.error("Error logging out", error);
+                console.error(error);
             }
         };
     </script>
