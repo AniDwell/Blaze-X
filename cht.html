@@ -2,31 +2,30 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat | AniKoto</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chat | BlazeX</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
-            --chat-theme: #F47521; /* Default Theme Color */
+            --chat-theme: #F47521;
         }
         
         body {
-            background-color: #050505;
+            background-color: #030305;
             color: white;
-            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            overflow: hidden; /* Prevent body scroll */
+            font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+            overflow: hidden; 
+            touch-action: pan-y; /* Prevent browser swipe navigation */
         }
 
         .theme-bg { background-color: var(--chat-theme) !important; }
         .theme-text { color: var(--chat-theme) !important; }
         .theme-border { border-color: var(--chat-theme) !important; }
-        .theme-ring { --tw-ring-color: var(--chat-theme) !important; }
 
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* Custom Emoji-only message styles */
         .msg-emoji-only {
             background: transparent !important;
             border: none !important;
@@ -36,10 +35,11 @@
             line-height: 1.1 !important;
         }
 
-        /* Typing Indicator Animation */
-        .typing-dot {
-            animation: typing 1.4s infinite ease-in-out both;
-        }
+        /* Swipe Animation */
+        .msg-container { transition: transform 0.2s ease-out; }
+        .swiping-left { transform: translateX(-40px); }
+
+        .typing-dot { animation: typing 1.4s infinite ease-in-out both; }
         .typing-dot:nth-child(1) { animation-delay: -0.32s; }
         .typing-dot:nth-child(2) { animation-delay: -0.16s; }
         @keyframes typing {
@@ -47,9 +47,11 @@
             40% { transform: scale(1); opacity: 1; }
         }
 
-        /* Message Hover Actions */
         .msg-container:hover .msg-actions { opacity: 1; visibility: visible; }
         .msg-actions { opacity: 0; visibility: hidden; transition: all 0.2s; }
+        
+        /* Canvas Editor */
+        #img-canvas { touch-action: none; cursor: crosshair; }
     </style>
 </head>
 <body class="flex flex-col h-[100dvh]">
@@ -59,20 +61,14 @@
             <button onclick="window.history.back()" class="text-gray-400 hover:text-white transition-colors p-2 -ml-2">
                 <i class="fas fa-chevron-left"></i>
             </button>
-            <div class="relative cursor-pointer">
-                <img src="https://via.placeholder.com/150/111/fff?text=PFP" alt="Profile" class="w-10 h-10 rounded-full object-cover border border-white/10 shadow-sm">
+            <div class="relative cursor-pointer" onclick="window.location.href='/profile.html?id=' + targetUserId">
+                <img id="chat-header-pfp" src="https://ui-avatars.com/api/?name=User&background=111&color=F47521" alt="Profile" class="w-10 h-10 rounded-full object-cover border border-white/10 shadow-sm">
                 <div class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-[#0a0a0a] rounded-full"></div>
             </div>
             <div class="flex flex-col">
-                <h2 class="text-white font-bold text-sm leading-tight tracking-wide">Alex Mercer</h2>
+                <h2 id="chat-header-name" class="text-white font-bold text-sm leading-tight tracking-wide">Loading...</h2>
                 <div id="status-indicator" class="text-[10px] text-gray-400 font-medium tracking-wide">
-                    <span id="last-seen-text">Last seen today at 10:42 PM</span>
-                    <div id="typing-anim" class="hidden items-center gap-0.5 text-[#F47521] theme-text font-black">
-                        <i>typing</i>
-                        <div class="w-1 h-1 rounded-full theme-bg typing-dot ml-0.5"></div>
-                        <div class="w-1 h-1 rounded-full theme-bg typing-dot"></div>
-                        <div class="w-1 h-1 rounded-full theme-bg typing-dot"></div>
-                    </div>
+                    <span id="last-seen-text">Online</span>
                 </div>
             </div>
         </div>
@@ -90,14 +86,13 @@
     </header>
 
     <main id="chat-box" class="flex-1 overflow-y-auto hide-scrollbar p-4 flex flex-col gap-4 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-fixed relative">
-        <div class="absolute inset-0 bg-[#050505]/95 z-0 pointer-events-none"></div>
-        
+        <div class="absolute inset-0 bg-[#030305]/95 z-0 pointer-events-none"></div>
         <div id="messages-container" class="relative z-10 flex flex-col gap-3 pb-2 flex-1 justify-end"></div>
     </main>
 
     <div id="reply-preview" class="hidden px-4 py-2 bg-[#0a0a0a] border-t border-white/5 shrink-0 flex items-center justify-between relative z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.2)]">
         <div class="flex-1 min-w-0 border-l-2 theme-border pl-3">
-            <p class="text-[10px] theme-text font-black uppercase tracking-widest mb-0.5">Replying to <span id="reply-name"></span></p>
+            <p class="text-[10px] theme-text font-black uppercase tracking-widest mb-0.5">Replying</p>
             <p id="reply-text" class="text-xs text-gray-300 truncate"></p>
         </div>
         <button onclick="cancelReplyEdit()" class="text-gray-500 hover:text-white p-2 transition-colors ml-2 shrink-0">
@@ -106,424 +101,629 @@
     </div>
 
     <footer class="bg-[#0a0a0a] border-t border-white/5 px-3 py-3 shrink-0 relative z-40 flex items-end gap-2 pb-5 md:pb-3">
-        <div class="flex-1 bg-[#111] border border-white/10 rounded-2xl flex items-end px-3 py-1.5 focus-within:border-[#F47521] focus-within:theme-border transition-colors shadow-inner">
+        <div class="flex-1 bg-[#111] border border-white/10 rounded-2xl flex items-end px-3 py-1.5 focus-within:border-[#F47521] focus-within:theme-border transition-colors shadow-inner relative">
             <button class="text-gray-500 hover:theme-text transition-colors p-2 shrink-0 h-10 flex items-center justify-center">
                 <i class="fas fa-smile text-lg"></i>
             </button>
+            
             <textarea id="msg-input" rows="1" placeholder="Type a message..." class="w-full bg-transparent text-sm text-white placeholder-gray-500 resize-none outline-none max-h-32 px-2 py-2.5 hide-scrollbar"></textarea>
-            <button class="text-gray-500 hover:text-white transition-colors p-2 shrink-0 h-10 flex items-center justify-center">
+            
+            <label for="img-upload-input" class="text-gray-500 hover:text-white transition-colors p-2 shrink-0 h-10 flex items-center justify-center cursor-pointer">
                 <i class="fas fa-paperclip text-lg"></i>
-            </button>
+            </label>
+            <input type="file" id="img-upload-input" class="hidden" accept="image/*" onchange="openImageEditor(event)">
         </div>
         <button onclick="sendMessage()" class="w-12 h-12 rounded-full theme-bg text-black flex items-center justify-center shrink-0 hover:scale-105 transition-transform shadow-[0_4px_15px_rgba(244,117,33,0.3)] theme-shadow" id="send-btn">
             <i class="fas fa-paper-plane text-lg ml-[-2px]"></i>
         </button>
     </footer>
 
-    <div id="theme-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] hidden items-center justify-center p-4 transition-opacity opacity-0">
-        <div class="bg-[#111] border border-white/10 rounded-2xl w-full max-w-sm p-6 shadow-2xl transform scale-95 transition-transform" id="theme-modal-content">
-            <div class="flex items-center justify-between mb-5">
-                <h3 class="text-white font-black text-lg tracking-wide"><i class="fas fa-palette mr-2 text-gray-400"></i> Customize Theme</h3>
-                <button onclick="closeThemeModal()" class="text-gray-500 hover:text-white"><i class="fas fa-times text-lg"></i></button>
-            </div>
-            <div class="grid grid-cols-5 gap-4" id="theme-colors-container">
-                </div>
-        </div>
-    </div>
-
+    <!-- Dropdown Template -->
     <div id="msg-dropdown-template" class="absolute hidden bg-[#111] border border-white/10 rounded-xl shadow-2xl z-50 flex-col overflow-hidden w-32 origin-bottom-right md:origin-top-left">
         <button onclick="actionReply()" class="w-full text-left px-4 py-2.5 text-[11px] font-bold text-gray-300 hover:bg-white/5 hover:text-white transition-colors border-b border-white/5"><i class="fas fa-reply mr-2 w-3"></i> Reply</button>
+        <button onclick="actionForward()" class="w-full text-left px-4 py-2.5 text-[11px] font-bold text-gray-300 hover:bg-white/5 hover:text-white transition-colors border-b border-white/5"><i class="fas fa-share mr-2 w-3"></i> Forward</button>
         <button onclick="actionEdit()" id="btn-action-edit" class="w-full text-left px-4 py-2.5 text-[11px] font-bold text-gray-300 hover:bg-white/5 hover:text-white transition-colors border-b border-white/5"><i class="fas fa-pen mr-2 w-3"></i> Edit</button>
         <button onclick="actionUnsend()" id="btn-action-unsend" class="w-full text-left px-4 py-2.5 text-[11px] font-bold text-yellow-500 hover:bg-yellow-500/10 transition-colors border-b border-white/5"><i class="fas fa-undo mr-2 w-3"></i> Unsend</button>
         <button onclick="actionDelete()" class="w-full text-left px-4 py-2.5 text-[11px] font-bold text-red-500 hover:bg-red-500/10 transition-colors"><i class="fas fa-trash-alt mr-2 w-3"></i> Delete</button>
     </div>
 
-<script>
-    // --- STATE ---
-    let currentUser = 'me';
-    let chatBlocked = false;
-    let replyingToId = null;
-    let editingId = null;
-    let targetMsgId = null; // For dropdown context
+    <!-- Theme Modal -->
+    <div id="theme-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] hidden items-center justify-center p-4 transition-opacity opacity-0">
+        <div class="bg-[#111] border border-white/10 rounded-2xl w-full max-w-sm p-6 shadow-2xl transform scale-95 transition-transform" id="theme-modal-content">
+            <div class="flex items-center justify-between mb-5">
+                <h3 class="text-white font-black text-lg tracking-wide"><i class="fas fa-palette mr-2 text-gray-400"></i> Theme</h3>
+                <button onclick="closeThemeModal()" class="text-gray-500 hover:text-white"><i class="fas fa-times text-lg"></i></button>
+            </div>
+            <div class="grid grid-cols-5 gap-4" id="theme-colors-container"></div>
+        </div>
+    </div>
 
-    const THEMES = [
-        { name: 'Orange', hex: '#F47521', shadow: 'rgba(244,117,33,0.3)' },
-        { name: 'Blue', hex: '#3b82f6', shadow: 'rgba(59,130,246,0.3)' },
-        { name: 'Red', hex: '#ef4444', shadow: 'rgba(239,68,68,0.3)' },
-        { name: 'Green', hex: '#22c55e', shadow: 'rgba(34,197,94,0.3)' },
-        { name: 'Purple', hex: '#a855f7', shadow: 'rgba(168,85,247,0.3)' },
-        { name: 'Pink', hex: '#ec4899', shadow: 'rgba(236,72,153,0.3)' },
-        { name: 'Yellow', hex: '#eab308', shadow: 'rgba(234,179,8,0.3)' },
-        { name: 'Teal', hex: '#14b8a6', shadow: 'rgba(20,184,166,0.3)' },
-        { name: 'Indigo', hex: '#6366f1', shadow: 'rgba(99,102,241,0.3)' },
-        { name: 'Rose', hex: '#f43f5e', shadow: 'rgba(244,63,94,0.3)' }
-    ];
-
-    let messages = [
-        { id: '1', text: 'Hey! Did you check out the new episode?', time: '10:30 AM', sender: 'other', isEdited: false, replyTo: null },
-        { id: '2', text: 'Yeah, the animation was insane! 🔥', time: '10:32 AM', sender: 'me', isEdited: false, replyTo: '1' },
-        { id: '3', text: '⭐⭐⭐', time: '10:35 AM', sender: 'other', isEdited: false, replyTo: null }
-    ];
-
-    // --- UTILS ---
-    const generateId = () => Math.random().toString(36).substr(2, 9);
-    const getTime = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
-    // Checks if string contains ONLY 1 to 4 emojis (ignores spaces)
-    const isEmojiOnly = (str) => {
-        const noSpaces = str.replace(/\s/g, '');
-        if (!noSpaces || noSpaces.length === 0) return false;
-        // Strip out emojis
-        const stripped = noSpaces.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}\uFE0F\u200D]/gu, '');
-        // If there's any text left, it's not purely emojis
-        if (stripped.length > 0) return false;
-        // Count emojis roughly
-        const emojiCount = [...new Intl.Segmenter().segment(noSpaces)].length;
-        return emojiCount > 0 && emojiCount <= 4;
-    };
-
-    // --- CORE LOGIC ---
-    const init = () => {
-        setupTextareaAutoResize();
-        renderThemeSwatches();
-        renderMessages();
-        setupClickOutside();
-        simulateTyping();
-    };
-
-    const renderMessages = () => {
-        const container = document.getElementById('messages-container');
-        container.innerHTML = '';
+    <!-- Image Editor Modal -->
+    <div id="image-editor-modal" class="fixed inset-0 bg-black/95 z-[100] hidden flex-col">
+        <div class="flex items-center justify-between p-4 bg-gradient-to-b from-black/80 to-transparent absolute w-full z-10">
+            <button onclick="closeImageEditor()" class="text-white bg-black/50 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md"><i class="fas fa-times"></i></button>
+            <div class="flex items-center gap-2">
+                <input type="color" id="draw-color" value="#F47521" class="w-8 h-8 rounded cursor-pointer border-none p-0 bg-transparent">
+                <button onclick="addTextToCanvas()" class="text-white bg-black/50 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md"><i class="fas fa-font"></i></button>
+                <button onclick="clearCanvas()" class="text-white bg-black/50 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md"><i class="fas fa-eraser"></i></button>
+            </div>
+        </div>
         
-        messages.forEach(msg => {
-            const isMe = msg.sender === 'me';
-            const isEmoji = isEmojiOnly(msg.text);
+        <div class="flex-1 flex items-center justify-center overflow-hidden relative" id="canvas-container">
+            <canvas id="img-canvas" class="max-w-full max-h-full object-contain"></canvas>
+        </div>
+
+        <div class="p-4 bg-[#0a0a0a] border-t border-white/10 flex items-center gap-3">
+            <input type="text" id="img-caption-input" placeholder="Add a caption..." class="flex-1 bg-[#111] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#F47521] transition-colors">
+            <button id="send-img-btn" onclick="sendEditedImage()" class="w-12 h-12 rounded-full theme-bg text-black font-black flex items-center justify-center hover:scale-105 shadow-[0_4px_15px_rgba(244,117,33,0.3)]">
+                <i class="fas fa-paper-plane ml-[-2px]"></i>
+            </button>
+        </div>
+    </div>
+
+    <script src="/share.js"></script>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot, query, orderBy, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
+            authDomain: "blaze-x-db2f5.firebaseapp.com",
+            projectId: "blaze-x-db2f5"
+        };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // --- GLOBAL STATE ---
+        window.activeUserUid = null;
+        window.targetUserId = null;
+        window.chatRoomId = null;
+        
+        let chatBlocked = false;
+        let replyingToId = null;
+        let editingId = null;
+        let targetMsgId = null;
+        let messages = [];
+
+        // Swipe State
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let swipeMsgId = null;
+
+        // Canvas State
+        let canvas, ctx;
+        let isDrawing = false;
+        let originalImage = null;
+
+        const THEMES = [
+            { name: 'Orange', hex: '#F47521', shadow: 'rgba(244,117,33,0.3)' },
+            { name: 'Blue', hex: '#3b82f6', shadow: 'rgba(59,130,246,0.3)' },
+            { name: 'Red', hex: '#ef4444', shadow: 'rgba(239,68,68,0.3)' },
+            { name: 'Green', hex: '#22c55e', shadow: 'rgba(34,197,94,0.3)' },
+            { name: 'Purple', hex: '#a855f7', shadow: 'rgba(168,85,247,0.3)' }
+        ];
+
+        // --- INITIALIZATION ---
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) { window.location.href = '/index.html'; return; }
+            window.activeUserUid = user.uid;
             
-            // Reply UI Logic
-            let replyHtml = '';
-            if (msg.replyTo) {
-                const parentMsg = messages.find(m => m.id === msg.replyTo);
-                if (parentMsg) {
-                    const parentName = parentMsg.sender === 'me' ? 'You' : 'Alex Mercer';
-                    replyHtml = `
-                        <div class="text-[10px] bg-black/20 rounded pl-2 pr-4 py-1 mb-1 border-l-2 ${isMe ? 'border-white/50 text-white/80' : 'theme-border theme-text'} max-w-xs truncate cursor-pointer hover:opacity-80" onclick="highlightMsg('${parentMsg.id}')">
-                            <span class="font-black">${parentName}</span><br>
-                            <span class="opacity-70">${parentMsg.text}</span>
-                        </div>
-                    `;
+            const urlParams = new URLSearchParams(window.location.search);
+            const userA = urlParams.get('userA');
+            const userB = urlParams.get('userB');
+            
+            if (!userA || !userB) { alert("Invalid Chat URL"); return; }
+            
+            window.targetUserId = (user.uid === userA) ? userB : userA;
+            window.chatRoomId = [userA, userB].sort().join('_');
+
+            initUI();
+            await loadTargetProfile();
+            listenToMessages();
+        });
+
+        async function loadTargetProfile() {
+            try {
+                const docRef = doc(db, "users", window.targetUserId);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    document.getElementById('chat-header-name').innerText = data.username || "User";
+                    if (data.photoURL) document.getElementById('chat-header-pfp').src = data.photoURL;
                 }
-            }
+            } catch (e) { console.error("Error loading profile"); }
+        }
 
-            // Bubble Styling
-            let bubbleClass = isMe 
-                ? `theme-bg text-black rounded-tl-2xl rounded-tr-2xl rounded-bl-2xl rounded-br-sm` 
-                : `bg-[#1a1a1a] border border-white/5 text-gray-100 rounded-tl-2xl rounded-tr-2xl rounded-br-2xl rounded-bl-sm`;
-            
-            let extraClasses = '';
-            if (isEmoji) {
-                bubbleClass = `msg-emoji-only ${isMe ? 'text-right' : 'text-left'}`;
-            } else {
-                extraClasses = 'px-4 py-2.5 shadow-md';
-            }
-
-            // Edited Indicator
-            const editedHtml = msg.isEdited ? `<span class="text-[8px] opacity-60 ml-1 italic">(edited)</span>` : '';
-
-            // Layout
-            const wrapperClass = isMe ? 'self-end flex-row-reverse' : 'self-start flex-row';
-            const timePosClass = isMe ? 'mr-1' : 'ml-1';
-            
-            const msgHtml = `
-                <div class="msg-container flex gap-2 w-full max-w-[85%] relative ${wrapperClass}" id="msg-el-${msg.id}">
-                    <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-full">
-                        <div class="${bubbleClass} ${extraClasses} relative group break-words min-w-[50px] transition-all">
-                            ${!isEmoji ? replyHtml : ''}
-                            <span class="text-sm leading-relaxed">${msg.text}</span>
-                        </div>
-                        <div class="flex items-center gap-1 mt-1 text-[9px] text-gray-500 font-medium ${timePosClass}">
-                            <span>${msg.time}</span>
-                            ${editedHtml}
-                            ${isMe ? '<i class="fas fa-check-double text-[8px] theme-text ml-0.5"></i>' : ''}
-                        </div>
-                    </div>
-
-                    <div class="msg-actions flex items-center shrink-0 self-center ${isMe ? 'mr-2' : 'ml-2'}">
-                        <button onclick="openMessageDropdown(event, '${msg.id}')" class="w-7 h-7 rounded-full bg-[#111] border border-white/10 text-gray-400 hover:text-white hover:theme-border transition-all flex items-center justify-center shadow-sm">
-                            <i class="fas fa-ellipsis-h text-[10px]"></i>
-                        </button>
-                    </div>
-                </div>
-            `;
-            container.insertAdjacentHTML('beforeend', msgHtml);
-        });
-
-        scrollToBottom();
-    };
-
-    const sendMessage = () => {
-        if (chatBlocked) { alert("You have blocked this user."); return; }
-        
-        const input = document.getElementById('msg-input');
-        const text = input.value.trim();
-        if (!text) return;
-
-        if (editingId) {
-            const msgObj = messages.find(m => m.id === editingId);
-            if (msgObj) {
-                msgObj.text = text;
-                msgObj.isEdited = true;
-            }
-            cancelReplyEdit();
-        } else {
-            messages.push({
-                id: generateId(),
-                text: text,
-                time: getTime(),
-                sender: 'me',
-                isEdited: false,
-                replyTo: replyingToId
+        function listenToMessages() {
+            const q = query(collection(db, "chats", window.chatRoomId, "messages"), orderBy("timestamp", "asc"));
+            onSnapshot(q, (snapshot) => {
+                messages = [];
+                snapshot.forEach(doc => {
+                    messages.push({ id: doc.id, ...doc.data() });
+                });
+                renderMessages();
             });
-            cancelReplyEdit();
         }
 
-        input.value = '';
-        input.style.height = 'auto'; // Reset height
-        renderMessages();
-    };
-
-    // --- ACTIONS LOGIC ---
-    const openMessageDropdown = (e, id) => {
-        e.stopPropagation();
-        targetMsgId = id;
-        const msg = messages.find(m => m.id === id);
-        if(!msg) return;
-
-        const dropdown = document.getElementById('msg-dropdown-template');
-        const isMe = msg.sender === 'me';
-        
-        document.getElementById('btn-action-edit').style.display = isMe ? 'block' : 'none';
-        document.getElementById('btn-action-unsend').style.display = isMe ? 'block' : 'none';
-
-        // Position dropdown
-        dropdown.classList.remove('hidden');
-        dropdown.classList.add('flex');
-        
-        const rect = e.currentTarget.getBoundingClientRect();
-        
-        // Ensure it doesn't go off screen
-        let top = rect.bottom + window.scrollY;
-        let left = rect.left + window.scrollX;
-
-        if (isMe) {
-            left = left - dropdown.offsetWidth + 20;
-        }
-
-        if (top + dropdown.offsetHeight > window.innerHeight) {
-            top = rect.top + window.scrollY - dropdown.offsetHeight;
-        }
-
-        dropdown.style.top = `${top}px`;
-        dropdown.style.left = `${left}px`;
-    };
-
-    const closeDropdowns = () => {
-        document.getElementById('header-menu').classList.add('hidden');
-        document.getElementById('msg-dropdown-template').classList.add('hidden');
-    };
-
-    const actionReply = () => {
-        const msg = messages.find(m => m.id === targetMsgId);
-        if(!msg) return;
-        replyingToId = msg.id;
-        editingId = null;
-
-        document.getElementById('reply-preview').classList.remove('hidden');
-        document.getElementById('reply-name').innerText = msg.sender === 'me' ? 'Yourself' : 'Alex Mercer';
-        document.getElementById('reply-text').innerText = msg.text;
-        
-        document.getElementById('msg-input').focus();
-        closeDropdowns();
-    };
-
-    const actionEdit = () => {
-        const msg = messages.find(m => m.id === targetMsgId);
-        if(!msg || msg.sender !== 'me') return;
-        
-        editingId = msg.id;
-        replyingToId = null;
-
-        document.getElementById('reply-preview').classList.remove('hidden');
-        document.getElementById('reply-name').innerText = 'Message (Editing)';
-        document.getElementById('reply-text').innerText = msg.text;
-
-        const input = document.getElementById('msg-input');
-        input.value = msg.text;
-        input.focus();
-        closeDropdowns();
-    };
-
-    const actionUnsend = () => {
-        messages = messages.filter(m => m.id !== targetMsgId);
-        if (replyingToId === targetMsgId || editingId === targetMsgId) cancelReplyEdit();
-        renderMessages();
-        closeDropdowns();
-    };
-
-    const actionDelete = () => {
-        // In reality, delete only hides it for 'me', unsend removes it entirely.
-        // For UI purposes, both just remove it from the array here.
-        actionUnsend(); 
-    };
-
-    const cancelReplyEdit = () => {
-        replyingToId = null;
-        editingId = null;
-        document.getElementById('reply-preview').classList.add('hidden');
-        if(!editingId) document.getElementById('msg-input').value = '';
-    };
-
-    const clearChat = () => {
-        if(confirm("Delete all messages?")) {
-            messages = [];
-            renderMessages();
-        }
-        closeDropdowns();
-    };
-
-    const toggleBlock = () => {
-        chatBlocked = !chatBlocked;
-        const input = document.getElementById('msg-input');
-        const btn = document.getElementById('block-btn');
-        if (chatBlocked) {
-            input.disabled = true;
-            input.placeholder = "You have blocked this user.";
-            btn.innerHTML = `<i class="fas fa-unlock w-4 text-center"></i> Unblock User`;
-            btn.classList.replace('text-red-500', 'text-gray-300');
-        } else {
-            input.disabled = false;
-            input.placeholder = "Type a message...";
-            btn.innerHTML = `<i class="fas fa-ban w-4 text-center"></i> Block User`;
-            btn.classList.replace('text-gray-300', 'text-red-500');
-        }
-        closeDropdowns();
-    };
-
-    // --- THEME ENGINE ---
-    const applyTheme = (hex, shadow) => {
-        document.documentElement.style.setProperty('--chat-theme', hex);
-        const sendBtn = document.getElementById('send-btn');
-        sendBtn.style.boxShadow = `0 4px 15px ${shadow}`;
-        closeThemeModal();
-    };
-
-    const renderThemeSwatches = () => {
-        const container = document.getElementById('theme-colors-container');
-        container.innerHTML = THEMES.map(t => `
-            <button onclick="applyTheme('${t.hex}', '${t.shadow}')" class="w-12 h-12 rounded-full shadow-md hover:scale-110 hover:shadow-lg transition-transform border-2 border-[#111] hover:border-white" style="background-color: ${t.hex};" title="${t.name}"></button>
-        `).join('');
-    };
-
-    const openThemeModal = () => {
-        closeDropdowns();
-        const modal = document.getElementById('theme-modal');
-        const content = document.getElementById('theme-modal-content');
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-        setTimeout(() => {
-            modal.classList.remove('opacity-0');
-            content.classList.remove('scale-95');
-        }, 10);
-    };
-
-    const closeThemeModal = () => {
-        const modal = document.getElementById('theme-modal');
-        const content = document.getElementById('theme-modal-content');
-        modal.classList.add('opacity-0');
-        content.classList.add('scale-95');
-        setTimeout(() => {
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
-        }, 300);
-    };
-
-    // --- UI HELPERS ---
-    const scrollToBottom = () => {
-        const box = document.getElementById('chat-box');
-        box.scrollTop = box.scrollHeight;
-    };
-
-    const highlightMsg = (id) => {
-        const el = document.getElementById(`msg-el-${id}`);
-        if(el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            el.querySelector('.msg-container > div > div').classList.add('opacity-50');
-            setTimeout(() => {
-                el.querySelector('.msg-container > div > div').classList.remove('opacity-50');
-            }, 1000);
-        }
-    };
-
-    const toggleMenu = (id) => {
-        const menu = document.getElementById(id);
-        if (menu.classList.contains('hidden')) {
-            closeDropdowns();
-            menu.classList.remove('hidden');
-            menu.classList.add('flex');
-        } else {
-            menu.classList.add('hidden');
-        }
-    };
-
-    const setupClickOutside = () => {
-        document.addEventListener('click', (e) => {
-            const hMenu = document.getElementById('header-menu');
-            const mMenu = document.getElementById('msg-dropdown-template');
+        // --- CORE CHAT LOGIC ---
+        function renderMessages() {
+            const container = document.getElementById('messages-container');
+            container.innerHTML = '';
             
-            if (!e.target.closest('#header-menu') && !e.target.closest('header button i.fa-ellipsis-v')) {
-                hMenu.classList.add('hidden');
-            }
-            if (!e.target.closest('#msg-dropdown-template') && !e.target.closest('.msg-actions button')) {
-                mMenu.classList.add('hidden');
-            }
-        });
-    };
+            messages.forEach(msg => {
+                const isMe = msg.senderId === window.activeUserUid;
+                const isEmoji = isEmojiOnly(msg.text) && !msg.imageUrl;
+                
+                let replyHtml = '';
+                if (msg.replyTo) {
+                    const parentMsg = messages.find(m => m.id === msg.replyTo);
+                    if (parentMsg) {
+                        const parentName = parentMsg.senderId === window.activeUserUid ? 'You' : 'User';
+                        replyHtml = `
+                            <div class="text-[10px] bg-black/30 rounded pl-2 pr-4 py-1 mb-1.5 border-l-2 ${isMe ? 'border-white/50 text-white/80' : 'theme-border theme-text'} max-w-xs truncate cursor-pointer hover:opacity-80 transition-opacity" onclick="highlightMsg('${parentMsg.id}')">
+                                <span class="font-black">${parentName}</span><br>
+                                <span class="opacity-70">${parentMsg.text || 'Image'}</span>
+                            </div>
+                        `;
+                    }
+                }
 
-    const setupTextareaAutoResize = () => {
-        const tx = document.getElementById('msg-input');
-        tx.addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = (this.scrollHeight) + 'px';
-        });
-        tx.addEventListener('keypress', function(e) {
-            if(e.key === 'Enter' && !e.shiftKey) {
+                let bubbleClass = isMe 
+                    ? `theme-bg text-black rounded-tl-2xl rounded-tr-2xl rounded-bl-2xl rounded-br-sm` 
+                    : `bg-[#1a1a1a] border border-white/10 text-gray-100 rounded-tl-2xl rounded-tr-2xl rounded-br-2xl rounded-bl-sm`;
+                
+                let extraClasses = '';
+                if (isEmoji) bubbleClass = `msg-emoji-only ${isMe ? 'text-right' : 'text-left'}`;
+                else extraClasses = 'px-4 py-2.5 shadow-md';
+
+                let contentHtml = '';
+                if (msg.imageUrl) {
+                    contentHtml += `<img src="${msg.imageUrl}" class="w-full max-w-[200px] rounded-lg mb-2 object-cover border border-black/10 cursor-pointer hover:opacity-90" onclick="window.open('${msg.imageUrl}', '_blank')">`;
+                }
+                if (msg.text) {
+                    contentHtml += `<span class="text-sm leading-relaxed">${msg.text}</span>`;
+                }
+
+                const editedHtml = msg.isEdited ? `<span class="text-[8px] opacity-60 ml-1 italic">(edited)</span>` : '';
+                const wrapperClass = isMe ? 'self-end flex-row-reverse' : 'self-start flex-row';
+                
+                // Format Time
+                const timeString = msg.timestamp ? new Date(msg.timestamp.toMillis()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...';
+
+                const msgHtml = `
+                    <div class="msg-container flex gap-2 w-full max-w-[85%] relative ${wrapperClass}" id="msg-el-${msg.id}" data-id="${msg.id}">
+                        <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-full">
+                            <div class="${bubbleClass} ${extraClasses} relative group break-words min-w-[50px] transition-all">
+                                ${replyHtml}
+                                ${contentHtml}
+                            </div>
+                            <div class="flex items-center gap-1 mt-1 text-[9px] text-gray-500 font-medium ${isMe ? 'mr-1' : 'ml-1'}">
+                                <span>${timeString}</span>
+                                ${editedHtml}
+                                ${isMe ? '<i class="fas fa-check-double text-[8px] theme-text ml-0.5"></i>' : ''}
+                            </div>
+                        </div>
+
+                        <div class="msg-actions flex items-center shrink-0 self-center ${isMe ? 'mr-2' : 'ml-2'}">
+                            <button onclick="openMessageDropdown(event, '${msg.id}')" class="w-7 h-7 rounded-full bg-[#111] border border-white/10 text-gray-400 hover:text-white hover:theme-border transition-all flex items-center justify-center shadow-sm">
+                                <i class="fas fa-ellipsis-h text-[10px]"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', msgHtml);
+            });
+
+            scrollToBottom();
+            attachSwipeListeners();
+        }
+
+        window.sendMessage = async () => {
+            if (chatBlocked) { alert("Chat blocked."); return; }
+            const input = document.getElementById('msg-input');
+            const text = input.value.trim();
+            if (!text) return;
+
+            const msgRef = editingId 
+                ? doc(db, "chats", window.chatRoomId, "messages", editingId) 
+                : doc(collection(db, "chats", window.chatRoomId, "messages"));
+
+            const payload = editingId ? {
+                text: text,
+                isEdited: true
+            } : {
+                text: text,
+                senderId: window.activeUserUid,
+                timestamp: serverTimestamp(),
+                isEdited: false,
+                replyTo: replyingToId,
+                imageUrl: null
+            };
+
+            input.value = '';
+            input.style.height = 'auto';
+            cancelReplyEdit();
+
+            try {
+                if (editingId) await updateDoc(msgRef, payload);
+                else await setDoc(msgRef, payload);
+            } catch(e) { console.error("Send failed", e); }
+        };
+
+        // --- SWIPE TO REPLY ---
+        function attachSwipeListeners() {
+            const container = document.getElementById('chat-box');
+            
+            container.addEventListener('touchstart', (e) => {
+                const msgEl = e.target.closest('.msg-container');
+                if(msgEl) {
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                    swipeMsgId = msgEl.dataset.id;
+                }
+            }, {passive: true});
+
+            container.addEventListener('touchmove', (e) => {
+                if(!swipeMsgId) return;
+                const diffX = touchStartX - e.touches[0].clientX;
+                const diffY = Math.abs(touchStartY - e.touches[0].clientY);
+                
+                // Allow vertical scrolling to interrupt swipe
+                if (diffY > 20) { swipeMsgId = null; return; }
+                
+                const msgEl = document.getElementById(`msg-el-${swipeMsgId}`);
+                if (diffX > 0 && diffX < 60) {
+                    msgEl.style.transform = `translateX(-${diffX}px)`;
+                }
+            }, {passive: true});
+
+            container.addEventListener('touchend', (e) => {
+                if(!swipeMsgId) return;
+                const diffX = touchStartX - e.changedTouches[0].clientX;
+                const msgEl = document.getElementById(`msg-el-${swipeMsgId}`);
+                
+                msgEl.style.transform = ''; // reset
+                
+                if (diffX > 50) { // Trigger Reply on significant left swipe
+                    targetMsgId = swipeMsgId;
+                    actionReply();
+                }
+                swipeMsgId = null;
+            });
+        }
+
+        // --- IMAGE CANVAS EDITOR ---
+        window.openImageEditor = (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.getElementById('image-editor-modal').classList.remove('hidden');
+                document.getElementById('image-editor-modal').classList.add('flex');
+                
+                canvas = document.getElementById('img-canvas');
+                ctx = canvas.getContext('2d');
+                originalImage = new Image();
+                
+                originalImage.onload = () => {
+                    // Fit canvas to screen ratio
+                    const maxWidth = window.innerWidth;
+                    const maxHeight = window.innerHeight - 150;
+                    let width = originalImage.width;
+                    let height = originalImage.height;
+
+                    if (width > maxWidth || height > maxHeight) {
+                        const ratio = Math.min(maxWidth / width, maxHeight / height);
+                        width *= ratio;
+                        height *= ratio;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    ctx.drawImage(originalImage, 0, 0, width, height);
+                    setupCanvasDrawing();
+                };
+                originalImage.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        };
+
+        window.closeImageEditor = () => {
+            document.getElementById('image-editor-modal').classList.add('hidden');
+            document.getElementById('image-editor-modal').classList.remove('flex');
+            document.getElementById('img-upload-input').value = '';
+            document.getElementById('img-caption-input').value = '';
+        };
+
+        function setupCanvasDrawing() {
+            const getPos = (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                // Adjust for CSS scaling vs internal resolution
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                return {
+                    x: (clientX - rect.left) * scaleX,
+                    y: (clientY - rect.top) * scaleY
+                };
+            };
+
+            const startDraw = (e) => { 
+                e.preventDefault(); 
+                isDrawing = true; 
+                const pos = getPos(e);
+                ctx.beginPath(); 
+                ctx.moveTo(pos.x, pos.y); 
+            };
+            
+            const draw = (e) => { 
+                if(!isDrawing) return; 
                 e.preventDefault();
-                sendMessage();
-            }
-        });
-    };
+                const pos = getPos(e);
+                ctx.lineTo(pos.x, pos.y);
+                ctx.strokeStyle = document.getElementById('draw-color').value;
+                ctx.lineWidth = 4;
+                ctx.lineCap = 'round';
+                ctx.stroke();
+            };
+            
+            const stopDraw = () => { isDrawing = false; ctx.closePath(); };
 
-    // Simulate other user typing and stopping
-    const simulateTyping = () => {
-        const textEl = document.getElementById('last-seen-text');
-        const animEl = document.getElementById('typing-anim');
-        
-        setInterval(() => {
-            const isTyping = Math.random() > 0.7; // 30% chance to be typing
-            if (isTyping) {
-                textEl.classList.add('hidden');
-                animEl.classList.remove('hidden');
-                animEl.classList.add('flex');
+            canvas.onmousedown = startDraw;
+            canvas.onmousemove = draw;
+            canvas.onmouseup = stopDraw;
+            canvas.onmouseleave = stopDraw;
+
+            canvas.ontouchstart = startDraw;
+            canvas.ontouchmove = draw;
+            canvas.ontouchend = stopDraw;
+        }
+
+        window.addTextToCanvas = () => {
+            const text = prompt("Enter text to add to image:");
+            if(text) {
+                ctx.font = "bold 30px Arial";
+                ctx.fillStyle = document.getElementById('draw-color').value;
+                ctx.textAlign = "center";
+                // Add a slight black shadow for readability
+                ctx.shadowColor = "black";
+                ctx.shadowBlur = 4;
+                ctx.lineWidth = 1;
+                ctx.fillText(text, canvas.width/2, canvas.height/2);
+                ctx.shadowBlur = 0; // reset
+            }
+        };
+
+        window.clearCanvas = () => {
+            if (originalImage) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(originalImage, 0, 0, canvas.width, canvas.height);
+            }
+        };
+
+        window.sendEditedImage = async () => {
+            const btn = document.getElementById('send-img-btn');
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            btn.disabled = true;
+
+            try {
+                // ImgBB Upload
+                const base64Data = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+                const formData = new FormData();
+                formData.append('image', base64Data);
+
+                const res = await fetch('https://api.imgbb.com/1/upload?key=4a683051e76ed12880a42aefa6ed427b', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    const caption = document.getElementById('img-caption-input').value.trim();
+                    const msgRef = doc(collection(db, "chats", window.chatRoomId, "messages"));
+                    
+                    await setDoc(msgRef, {
+                        text: caption,
+                        imageUrl: data.data.url,
+                        senderId: window.activeUserUid,
+                        timestamp: serverTimestamp(),
+                        isEdited: false,
+                        replyTo: replyingToId
+                    });
+                    
+                    closeImageEditor();
+                    cancelReplyEdit();
+                } else { throw new Error("Upload Failed"); }
+            } catch (e) {
+                console.error(e);
+                alert("Failed to send image.");
+            }
+            
+            btn.innerHTML = '<i class="fas fa-paper-plane ml-[-2px]"></i>';
+            btn.disabled = false;
+        };
+
+        // --- ACTIONS ---
+        window.openMessageDropdown = (e, id) => {
+            e.stopPropagation();
+            targetMsgId = id;
+            const msg = messages.find(m => m.id === id);
+            if(!msg) return;
+
+            const dropdown = document.getElementById('msg-dropdown-template');
+            const isMe = msg.senderId === window.activeUserUid;
+            
+            document.getElementById('btn-action-edit').style.display = (isMe && !msg.imageUrl) ? 'block' : 'none';
+            document.getElementById('btn-action-unsend').style.display = isMe ? 'block' : 'none';
+
+            dropdown.classList.remove('hidden');
+            dropdown.classList.add('flex');
+            
+            const rect = e.currentTarget.getBoundingClientRect();
+            let top = rect.bottom + window.scrollY;
+            let left = rect.left + window.scrollX;
+
+            if (isMe) left = left - dropdown.offsetWidth + 20;
+            if (top + dropdown.offsetHeight > window.innerHeight) top = rect.top + window.scrollY - dropdown.offsetHeight;
+
+            dropdown.style.top = `${top}px`;
+            dropdown.style.left = `${left}px`;
+        };
+
+        window.closeDropdowns = () => {
+            document.getElementById('header-menu').classList.add('hidden');
+            document.getElementById('msg-dropdown-template').classList.add('hidden');
+        };
+
+        window.actionReply = () => {
+            const msg = messages.find(m => m.id === targetMsgId);
+            if(!msg) return;
+            replyingToId = msg.id;
+            editingId = null;
+
+            document.getElementById('reply-preview').classList.remove('hidden');
+            document.getElementById('reply-text').innerText = msg.text || 'Image';
+            
+            document.getElementById('msg-input').focus();
+            closeDropdowns();
+        };
+
+        window.actionForward = () => {
+            const msg = messages.find(m => m.id === targetMsgId);
+            if(msg && window.app && window.app.shareMessage) {
+                // Hook into your share.js implementation
+                window.app.shareMessage(msg); 
             } else {
-                textEl.classList.remove('hidden');
-                animEl.classList.add('hidden');
-                animEl.classList.remove('flex');
+                alert("Share script not fully initialized or message missing.");
             }
-        }, 5000);
-    };
+            closeDropdowns();
+        };
 
-    // Run Init
-    document.addEventListener('DOMContentLoaded', init);
+        window.actionEdit = () => {
+            const msg = messages.find(m => m.id === targetMsgId);
+            if(!msg || msg.senderId !== window.activeUserUid) return;
+            
+            editingId = msg.id;
+            replyingToId = null;
 
-</script>
+            document.getElementById('reply-preview').classList.remove('hidden');
+            document.getElementById('reply-text').innerText = "Editing: " + msg.text;
+
+            const input = document.getElementById('msg-input');
+            input.value = msg.text;
+            input.focus();
+            closeDropdowns();
+        };
+
+        window.actionUnsend = async () => {
+            try {
+                await deleteDoc(doc(db, "chats", window.chatRoomId, "messages", targetMsgId));
+                if (replyingToId === targetMsgId || editingId === targetMsgId) cancelReplyEdit();
+            } catch(e) {}
+            closeDropdowns();
+        };
+
+        window.actionDelete = window.actionUnsend; // Simplify for now
+
+        window.cancelReplyEdit = () => {
+            replyingToId = null;
+            editingId = null;
+            document.getElementById('reply-preview').classList.add('hidden');
+            if(!editingId) document.getElementById('msg-input').value = '';
+        };
+
+        // --- UTILS ---
+        const isEmojiOnly = (str) => {
+            if(!str) return false;
+            const noSpaces = str.replace(/\s/g, '');
+            if (!noSpaces || noSpaces.length === 0) return false;
+            const stripped = noSpaces.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}\uFE0F\u200D]/gu, '');
+            if (stripped.length > 0) return false;
+            const emojiCount = [...new Intl.Segmenter().segment(noSpaces)].length;
+            return emojiCount > 0 && emojiCount <= 4;
+        };
+
+        window.highlightMsg = (id) => {
+            const el = document.getElementById(`msg-el-${id}`);
+            if(el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.classList.add('opacity-50');
+                setTimeout(() => el.classList.remove('opacity-50'), 800);
+            }
+        };
+
+        window.scrollToBottom = () => {
+            const box = document.getElementById('chat-box');
+            box.scrollTop = box.scrollHeight;
+        };
+
+        // --- UI & THEMES ---
+        function initUI() {
+            renderThemeSwatches();
+            
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('#header-menu') && !e.target.closest('header button i.fa-ellipsis-v')) {
+                    document.getElementById('header-menu').classList.add('hidden');
+                }
+                if (!e.target.closest('#msg-dropdown-template') && !e.target.closest('.msg-actions button')) {
+                    document.getElementById('msg-dropdown-template').classList.add('hidden');
+                }
+            });
+
+            const tx = document.getElementById('msg-input');
+            tx.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight) + 'px';
+            });
+            tx.addEventListener('keypress', function(e) {
+                if(e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+        }
+
+        window.toggleMenu = (id) => {
+            const menu = document.getElementById(id);
+            if (menu.classList.contains('hidden')) {
+                closeDropdowns();
+                menu.classList.remove('hidden');
+                menu.classList.add('flex');
+            } else { menu.classList.add('hidden'); }
+        };
+
+        window.applyTheme = (hex, shadow) => {
+            document.documentElement.style.setProperty('--chat-theme', hex);
+            document.getElementById('send-btn').style.boxShadow = `0 4px 15px ${shadow}`;
+            closeThemeModal();
+        };
+
+        const renderThemeSwatches = () => {
+            const container = document.getElementById('theme-colors-container');
+            container.innerHTML = THEMES.map(t => `
+                <button onclick="applyTheme('${t.hex}', '${t.shadow}')" class="w-10 h-10 rounded-full shadow-md hover:scale-110 border-2 border-[#111] hover:border-white" style="background-color: ${t.hex};"></button>
+            `).join('');
+        };
+
+        window.openThemeModal = () => {
+            closeDropdowns();
+            const modal = document.getElementById('theme-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => modal.classList.remove('opacity-0'), 10);
+        };
+
+        window.closeThemeModal = () => {
+            const modal = document.getElementById('theme-modal');
+            modal.classList.add('opacity-0');
+            setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
+        };
+    </script>
 </body>
 </html>
