@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notifications</title>
+    
+    <!-- Tailwind CSS & FontAwesome -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body { background-color: #000; color: #fff; font-family: sans-serif; }
+        /* Hide scrollbar for category pills */
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-black text-white min-h-screen pb-24">
+
+    <!-- Header Container -->
+    <div id="header-container"></div>
+
+    <main class="container mx-auto px-4 pt-20 max-w-3xl relative">
+        <!-- Header & Clear All -->
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-2xl font-black tracking-wider uppercase drop-shadow-md">Notifications</h1>
+            <button onclick="window.app.clearAllNotifications()" class="text-xs font-bold text-red-500 hover:text-red-400 bg-red-500/10 px-3 py-1.5 rounded transition-colors uppercase tracking-wider">
+                <i class="fas fa-trash-alt mr-1"></i> Clear All
+            </button>
+        </div>
+
+        <!-- Category Pills -->
+        <div class="flex gap-3 overflow-x-auto pb-4 scrollbar-hide mb-2 border-b border-white/10" id="category-pills">
+            <button onclick="window.app.setFilter('all')" data-filter="all" class="category-pill whitespace-nowrap px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-[#F47521] text-white transition-all shadow-lg">Most Recent</button>
+            <button onclick="window.app.setFilter('like')" data-filter="like" class="category-pill whitespace-nowrap px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-white/10 text-gray-400 hover:bg-white/20 transition-all">Profile Likes</button>
+            <button onclick="window.app.setFilter('comment')" data-filter="comment" class="category-pill whitespace-nowrap px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-white/10 text-gray-400 hover:bg-white/20 transition-all">Comments</button>
+            <button onclick="window.app.setFilter('library')" data-filter="library" class="category-pill whitespace-nowrap px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-white/10 text-gray-400 hover:bg-white/20 transition-all">Library</button>
+        </div>
+
+        <!-- Notifications Feed -->
+        <div id="notifications-feed" class="flex flex-col gap-3 mt-4">
+            <!-- Loading State -->
+            <div class="flex justify-center items-center py-12">
+                <i class="fas fa-spinner fa-spin text-3xl text-[#F47521]"></i>
+            </div>
+        </div>
+    </main>
+
+    <!-- Bottom Nav Container -->
+    <div id="bottomnav-container"></div>
+
+    <!-- External Components -->
+    <script src="header.js"></script>
+    <script src="bottomnav.js"></script>
+
+    <!-- Firebase & Logic -->
+    <script type="module">
+        import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js';
+        import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js';
+        import { getFirestore, collection, onSnapshot, query, orderBy, deleteDoc, doc, writeBatch } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js';
+
+        window.app = window.app || {};
+        window.app.state = window.app.state || {};
+        window.app.state.allNotifications = [];
+        window.app.state.currentFilter = 'all';
+
+        // Firebase Config (Replace with your actual config if different)
+        const firebaseConfig = {
+            apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
+            authDomain: "blaze-x-db2f5.firebaseapp.com",
+            projectId: "blaze-x-db2f5",
+            storageBucket: "blaze-x-db2f5.firebasestorage.app",
+            messagingSenderId: "770812306638",
+            appId: "1:770812306638:web:eaf5ded647861f32c25c9f"
+        };
+
+        const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // --- RENDER NOTIFICATIONS ---
+        window.app.renderNotifications = () => {
+            const feed = document.getElementById('notifications-feed');
+            
+            // Filter Data
+            const filteredData = window.app.state.currentFilter === 'all' 
+                ? window.app.state.allNotifications 
+                : window.app.state.allNotifications.filter(n => n.type === window.app.state.currentFilter);
+
+            if (filteredData.length === 0) {
+                feed.innerHTML = `
+                    <div class="text-center py-16 text-gray-500 flex flex-col items-center">
+                        <i class="fas fa-bell-slash text-4xl mb-3 opacity-50"></i>
+                        <p class="text-sm font-medium tracking-widest uppercase">No notifications found</p>
+                    </div>`;
+                return;
+            }
+
+            let html = '';
+            filteredData.forEach(notif => {
+                // Ensure there's a fallback image
+                const imgUrl = notif.image || 'https://via.placeholder.com/150x225/111/fff?text=No+Image';
+                
+                // Determine icon based on type
+                let iconHtml = '';
+                if(notif.type === 'like') iconHtml = '<i class="fas fa-heart text-red-500 text-xs"></i>';
+                else if(notif.type === 'comment') iconHtml = '<i class="fas fa-comment text-blue-500 text-xs"></i>';
+                else if(notif.type === 'library') iconHtml = '<i class="fas fa-bookmark text-green-500 text-xs"></i>';
+
+                html += `
+                    <div class="group flex gap-4 p-3 bg-white/5 border border-white/10 hover:border-white/20 hover:bg-white/10 rounded-xl relative transition-all overflow-hidden items-center">
+                        <!-- Cover Image (Left) -->
+                        <div class="shrink-0 relative">
+                            <img src="${imgUrl}" alt="Cover" class="w-16 h-20 md:w-20 md:h-28 object-cover rounded shadow-lg">
+                        </div>
+                        
+                        <!-- Content (Right) -->
+                        <div class="flex-1 min-w-0 pr-8 py-1">
+                            <div class="flex items-center gap-2 mb-1">
+                                ${iconHtml}
+                                <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                                    ${notif.timestamp ? new Date(notif.timestamp).toLocaleDateString() : 'New'}
+                                </span>
+                            </div>
+                            <h3 class="text-white font-bold text-sm md:text-base leading-tight mb-1 truncate">${notif.title || 'Notification'}</h3>
+                            <p class="text-gray-400 text-xs md:text-sm line-clamp-2 leading-relaxed">${notif.message || ''}</p>
+                        </div>
+
+                        <!-- Delete Button -->
+                        <button onclick="window.app.deleteNotification('${notif.id}')" class="absolute top-1/2 -translate-y-1/2 right-4 text-gray-500 hover:text-red-500 w-8 h-8 rounded-full hover:bg-red-500/10 flex items-center justify-center transition-colors">
+                            <i class="fas fa-times text-lg"></i>
+                        </button>
+                    </div>
+                `;
+            });
+
+            feed.innerHTML = html;
+        };
+
+        // --- FILTER LOGIC ---
+        window.app.setFilter = (type) => {
+            window.app.state.currentFilter = type;
+            
+            // Update UI for pills
+            document.querySelectorAll('.category-pill').forEach(pill => {
+                if (pill.dataset.filter === type) {
+                    pill.className = "category-pill whitespace-nowrap px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-[#F47521] text-white transition-all shadow-lg";
+                } else {
+                    pill.className = "category-pill whitespace-nowrap px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-white/10 text-gray-400 hover:bg-white/20 transition-all";
+                }
+            });
+
+            window.app.renderNotifications();
+        };
+
+        // --- DELETE SINGLE NOTIFICATION ---
+        window.app.deleteNotification = async (docId) => {
+            const user = auth.currentUser;
+            if (!user) return;
+            try {
+                await deleteDoc(doc(db, "users", user.uid, "notifications", docId));
+                // Real-time listener will auto-update the UI
+            } catch (err) {
+                console.error("Error deleting notification:", err);
+                alert("Failed to delete notification.");
+            }
+        };
+
+        // --- DELETE ALL NOTIFICATIONS ---
+        window.app.clearAllNotifications = async () => {
+            const user = auth.currentUser;
+            if (!user) return;
+            if (!confirm("Are you sure you want to delete all notifications?")) return;
+
+            try {
+                // Determine which ones to delete (based on current filter, or actually ALL of them?)
+                // Standard UX: "Clear All" deletes all visible in the current list.
+                const toDelete = window.app.state.currentFilter === 'all' 
+                    ? window.app.state.allNotifications 
+                    : window.app.state.allNotifications.filter(n => n.type === window.app.state.currentFilter);
+
+                if (toDelete.length === 0) return;
+
+                const batch = writeBatch(db);
+                toDelete.forEach(notif => {
+                    const docRef = doc(db, "users", user.uid, "notifications", notif.id);
+                    batch.delete(docRef);
+                });
+
+                await batch.commit();
+            } catch (err) {
+                console.error("Error clearing notifications:", err);
+                alert("Failed to clear notifications.");
+            }
+        };
+
+        // --- INITIALIZE LISTENER ---
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                const notifRef = collection(db, "users", user.uid, "notifications");
+                // Fetch ordered by timestamp descending
+                const q = query(notifRef, orderBy("timestamp", "desc"));
+
+                onSnapshot(q, (snapshot) => {
+                    const data = [];
+                    snapshot.forEach((doc) => {
+                        data.push({ id: doc.id, ...doc.data() });
+                    });
+                    
+                    window.app.state.allNotifications = data;
+                    window.app.renderNotifications();
+                }, (error) => {
+                    console.error("Error fetching notifications:", error);
+                    document.getElementById('notifications-feed').innerHTML = `
+                        <div class="text-center py-12 text-red-500">
+                            Failed to load notifications.
+                        </div>`;
+                });
+            } else {
+                document.getElementById('notifications-feed').innerHTML = `
+                    <div class="text-center py-12 text-gray-500 uppercase tracking-widest text-sm">
+                        Please log in to view notifications.
+                    </div>`;
+            }
+        });
+    </script>
+</body>
+</html>
