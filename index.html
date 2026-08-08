@@ -247,12 +247,28 @@
         };
     </script>
 
+    <!-- Global Firebase & Notifications Script -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+        import { initializeGlobalNotifications } from "./popup.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
+            authDomain: "blaze-x-db2f5.firebaseapp.com",
+            projectId: "blaze-x-db2f5"
+        };
+        
+        const app = initializeApp(firebaseConfig);
+        initializeGlobalNotifications(app);
+    </script>
+
     <!-- App System Scripts -->
     <script type="module" src="header.js"></script>
     <script src="auth.js"></script>
     <script src="bottomnav.js"></script>
     
     <!-- All Custom Slider Scripts (Loaded safely at the bottom) -->
+    <script src="popup.js" type="module"></script>
     <script src="carousel.js"></script>
     <script src="continue_watching.js"></script>
     <script src="recent_slider.js"></script> 
