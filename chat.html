@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Chat | BlazeX</title>
+    <title>Chats | BlazeX</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
         :root {
             --chat-theme: #F47521;
@@ -15,16 +16,15 @@
             background-color: #030305;
             color: white;
             font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
-            overflow: hidden; 
-            touch-action: pan-y;
-            -webkit-touch-callout: none;
-            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
             user-select: none;
+            -webkit-user-select: none;
         }
 
-        input, textarea {
-            -webkit-user-select: auto;
+        input {
             user-select: auto;
+            -webkit-user-select: auto;
         }
 
         .theme-bg { background-color: var(--chat-theme) !important; }
@@ -33,121 +33,67 @@
 
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-        .msg-emoji-only {
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-            font-size: 3.5rem !important;
-            padding: 0 !important;
-            line-height: 1.1 !important;
-        }
-
-        .msg-container { will-change: transform; }
         
-        .typing-dot { animation: typing 1.4s infinite ease-in-out both; }
-        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
-        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
-        @keyframes typing {
-            0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
-            40% { transform: scale(1); opacity: 1; }
-        }
-
-        .msg-container:hover .msg-actions { opacity: 1; visibility: visible; }
-        .msg-actions { opacity: 0; visibility: hidden; transition: all 0.2s; }
-        
-        #img-canvas { touch-action: none; cursor: crosshair; }
-        
+        /* Modal Transitions */
         .modal-enter { transform: scale(0.95); opacity: 0; }
         .modal-enter-active { transform: scale(1); opacity: 1; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
     </style>
 </head>
-<body class="flex flex-col h-[100dvh]">
+<body class="flex flex-col min-h-screen pb-20 relative">
 
-    <!-- HEADER -->
-    <header class="flex items-center justify-between bg-[#0a0a0a] border-b border-white/5 px-4 py-3 shrink-0 relative z-40 shadow-md">
-        <div class="flex items-center gap-3">
-            <button onclick="window.history.back()" class="text-gray-400 hover:text-white transition-colors p-2 -ml-2">
-                <i class="fas fa-chevron-left"></i>
-            </button>
-            <div class="relative cursor-pointer" onclick="window.location.href='/profile.html?id=' + window.targetUserId">
-                <img id="chat-header-pfp" src="https://ui-avatars.com/api/?name=User&background=111&color=F47521" alt="Profile" class="w-10 h-10 rounded-full object-cover border border-white/10 shadow-sm">
-                <div class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-[#0a0a0a] rounded-full"></div>
+    <!-- Header Container -->
+    <div id="header-container" class="relative z-40 shadow-md"></div>
+
+    <main class="flex-1 w-full max-w-3xl mx-auto px-4 pt-20 flex flex-col gap-4 relative z-10">
+        
+        <!-- Top Bar: Search & Group Add -->
+        <div class="flex gap-3 items-center relative z-10 mt-2">
+            <div class="relative flex-1">
+                <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-500"></i>
+                <input type="text" id="search-input" placeholder="Search chats or global users..." 
+                    class="w-full bg-[#111] border border-white/10 rounded-full py-3 pl-11 pr-10 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[var(--chat-theme)] transition-colors shadow-inner">
+                <button id="clear-search" class="hidden absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
-            <div class="flex flex-col cursor-pointer" onclick="window.location.href='/profile.html?id=' + window.targetUserId">
-                <h2 id="chat-header-name" class="text-white font-bold text-sm leading-tight tracking-wide">Loading...</h2>
-                <div id="status-indicator" class="text-[10px] text-gray-400 font-medium tracking-wide">
-                    <span id="last-seen-text">Online</span>
-                </div>
+            <button onclick="window.app.openGroupModal()" class="shrink-0 w-12 h-12 theme-bg text-black rounded-full flex items-center justify-center shadow-[0_4px_15px_rgba(244,117,33,0.3)] hover:scale-105 transition-transform">
+                <i class="fas fa-plus text-lg"></i>
+            </button>
+        </div>
+
+        <!-- Category Pills -->
+        <div id="category-pills" class="flex gap-3 overflow-x-auto pb-2 hide-scrollbar border-b border-white/5">
+            <button onclick="window.app.setTab('chats')" data-tab="chats" class="tab-pill px-6 py-2 rounded-full text-xs font-bold uppercase tracking-wider theme-bg text-black transition-all shadow-md">Chats</button>
+            <button onclick="window.app.setTab('groups')" data-tab="groups" class="tab-pill px-6 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-[#111] text-gray-400 border border-white/10 hover:bg-white/5 transition-all">Groups</button>
+            <button onclick="window.app.setTab('requests')" data-tab="requests" class="tab-pill px-6 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-[#111] text-gray-400 border border-white/10 hover:bg-white/5 transition-all">Requests</button>
+        </div>
+
+        <!-- Standard Feed (Chats/Groups/Requests) -->
+        <div id="main-feed" class="flex flex-col gap-2 mt-2">
+            <!-- Loading State -->
+            <div class="flex justify-center items-center py-16">
+                <i class="fas fa-circle-notch fa-spin text-3xl theme-text"></i>
             </div>
         </div>
 
-        <div class="relative">
-            <button onclick="window.toggleMenu('header-menu')" class="text-gray-400 hover:text-white p-2 transition-colors">
-                <i class="fas fa-ellipsis-v text-lg"></i>
-            </button>
-            <div id="header-menu" class="absolute right-0 top-full mt-2 w-48 bg-[#111] border border-white/10 rounded-xl shadow-2xl z-50 hidden flex-col overflow-hidden">
-                <button onclick="window.openThemeModal()" class="flex items-center gap-3 px-4 py-3 text-xs font-bold text-gray-300 hover:bg-white/5 hover:text-white transition-colors text-left w-full border-b border-white/5"><i class="fas fa-palette text-[#F47521] theme-text w-4 text-center"></i> Edit Theme</button>
-                <button onclick="window.clearChat()" class="flex items-center gap-3 px-4 py-3 text-xs font-bold text-gray-300 hover:bg-white/5 hover:text-white transition-colors text-left w-full border-b border-white/5"><i class="fas fa-trash-alt text-gray-500 w-4 text-center"></i> Delete Chat</button>
-                <button onclick="window.toggleBlock()" id="block-btn" class="flex items-center gap-3 px-4 py-3 text-xs font-bold text-red-500 hover:bg-red-500/10 transition-colors text-left w-full"><i class="fas fa-ban w-4 text-center"></i> Block User</button>
+        <!-- Search Results Feed (Hidden by default) -->
+        <div id="search-feed" class="hidden flex-col gap-6 mt-2">
+            <!-- Global Users -->
+            <div>
+                <h3 class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 pl-2">Global Users</h3>
+                <div id="search-users-results" class="flex flex-col gap-2"></div>
             </div>
         </div>
-    </header>
-
-    <!-- CHAT FEED -->
-    <main id="chat-box" class="flex-1 overflow-y-auto hide-scrollbar p-4 flex flex-col gap-4 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-fixed relative">
-        <div class="absolute inset-0 bg-[#030305]/95 z-0 pointer-events-none"></div>
-        <!-- Padding top for better scrolling -->
-        <div class="pt-10 z-10"></div>
-        <div id="messages-container" class="relative z-10 flex flex-col gap-3 pb-2 flex-1 justify-end"></div>
     </main>
 
-    <!-- REPLY PREVIEW -->
-    <div id="reply-preview" class="hidden px-4 py-2 bg-[#0a0a0a] border-t border-white/5 shrink-0 flex items-center justify-between relative z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.2)]">
-        <div class="flex-1 min-w-0 border-l-2 theme-border pl-3">
-            <p class="text-[10px] theme-text font-black uppercase tracking-widest mb-0.5">Replying</p>
-            <p id="reply-text" class="text-xs text-gray-300 truncate"></p>
-        </div>
-        <button onclick="window.cancelReplyEdit()" class="text-gray-500 hover:text-white p-2 transition-colors ml-2 shrink-0">
-            <i class="fas fa-times"></i>
-        </button>
-    </div>
+    <!-- Bottom Nav Container -->
+    <div id="bottomnav-container" class="fixed bottom-0 w-full z-50"></div>
 
-    <!-- INPUT FOOTER -->
-    <footer class="bg-[#0a0a0a] border-t border-white/5 px-3 py-3 shrink-0 relative z-40 flex items-end gap-2 pb-5 md:pb-3">
-        <div class="flex-1 bg-[#111] border border-white/10 rounded-2xl flex items-end px-3 py-1.5 focus-within:border-[#F47521] focus-within:theme-border transition-colors shadow-inner relative">
-            
-            <textarea id="msg-input" rows="1" placeholder="Type a message..." class="w-full bg-transparent text-sm text-white placeholder-gray-500 resize-none outline-none max-h-32 px-2 py-2.5 hide-scrollbar"></textarea>
-            
-            <label for="img-upload-input" class="text-gray-500 hover:text-white transition-colors p-2 shrink-0 h-10 flex items-center justify-center cursor-pointer">
-                <i class="fas fa-paperclip text-lg"></i>
-            </label>
-            <input type="file" id="img-upload-input" class="hidden" accept="image/*" onchange="window.openImageEditor(event)">
-        </div>
-        <button onclick="window.sendMessage()" class="w-12 h-12 rounded-full theme-bg text-black flex items-center justify-center shrink-0 hover:scale-105 transition-transform shadow-[0_4px_15px_rgba(244,117,33,0.3)] theme-shadow" id="send-btn">
-            <i class="fas fa-paper-plane text-lg ml-[-2px]"></i>
-        </button>
-    </footer>
+    <!-- ========================================== -->
+    <!-- CUSTOM CSS MODALS                          -->
+    <!-- ========================================== -->
 
-    <!-- MESSAGE ACTION DROPDOWN -->
-    <div id="msg-dropdown-template" class="absolute hidden bg-[#111] border border-white/10 rounded-xl shadow-2xl z-50 flex-col overflow-hidden w-32 origin-bottom-right md:origin-top-left">
-        <button onclick="window.actionReply()" class="w-full text-left px-4 py-2.5 text-[11px] font-bold text-gray-300 hover:bg-white/5 hover:text-white transition-colors border-b border-white/5"><i class="fas fa-reply mr-2 w-3"></i> Reply</button>
-        <button onclick="window.actionForward()" class="w-full text-left px-4 py-2.5 text-[11px] font-bold text-gray-300 hover:bg-white/5 hover:text-white transition-colors border-b border-white/5"><i class="fas fa-share mr-2 w-3"></i> Forward</button>
-        <button onclick="window.actionEdit()" id="btn-action-edit" class="w-full text-left px-4 py-2.5 text-[11px] font-bold text-gray-300 hover:bg-white/5 hover:text-white transition-colors border-b border-white/5"><i class="fas fa-pen mr-2 w-3"></i> Edit</button>
-        <button onclick="window.actionUnsend()" id="btn-action-unsend" class="w-full text-left px-4 py-2.5 text-[11px] font-bold text-yellow-500 hover:bg-yellow-500/10 transition-colors border-b border-white/5"><i class="fas fa-undo mr-2 w-3"></i> Unsend</button>
-        <button onclick="window.actionDelete()" class="w-full text-left px-4 py-2.5 text-[11px] font-bold text-red-500 hover:bg-red-500/10 transition-colors"><i class="fas fa-trash-alt mr-2 w-3"></i> Delete</button>
-    </div>
-
-    <!-- REACTION POPUP -->
-    <div id="reaction-popup" class="fixed z-[150] hidden bg-[#222] border border-white/10 rounded-full px-4 py-3 shadow-2xl flex items-center gap-3 transition-transform transform scale-0 origin-bottom">
-        <button class="text-2xl hover:-translate-y-1 hover:scale-110 transition-transform" onclick="window.submitReaction('❤️')">❤️</button>
-        <button class="text-2xl hover:-translate-y-1 hover:scale-110 transition-transform" onclick="window.submitReaction('😂')">😂</button>
-        <button class="text-2xl hover:-translate-y-1 hover:scale-110 transition-transform" onclick="window.submitReaction('😮')">😮</button>
-        <button class="text-2xl hover:-translate-y-1 hover:scale-110 transition-transform" onclick="window.submitReaction('😢')">😢</button>
-        <button class="w-8 h-8 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-colors ml-1" onclick="window.openMoreReactions()"><i class="fas fa-plus text-xs"></i></button>
-    </div>
-
-    <!-- UNIFIED MODAL SYSTEM -->
+    <!-- Unified Modal System (Matches chat.html) -->
     <div id="system-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] hidden items-center justify-center p-4 transition-opacity opacity-0">
         <div class="bg-[#111] border border-white/10 rounded-2xl w-full max-w-sm p-6 shadow-2xl modal-enter" id="system-modal-content">
             <h3 id="system-modal-title" class="text-white font-bold text-lg mb-2">Notice</h3>
@@ -160,86 +106,64 @@
         </div>
     </div>
 
-    <!-- THEME MODAL -->
-    <div id="theme-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] hidden items-center justify-center p-4 transition-opacity opacity-0">
-        <div class="bg-[#111] border border-white/10 rounded-2xl w-full max-w-sm p-6 shadow-2xl transform scale-95 transition-transform" id="theme-modal-content">
-            <div class="flex items-center justify-between mb-5">
-                <h3 class="text-white font-black text-lg tracking-wide"><i class="fas fa-palette mr-2 text-gray-400"></i> Theme</h3>
-                <button onclick="window.closeThemeModal()" class="text-gray-500 hover:text-white"><i class="fas fa-times text-lg"></i></button>
+    <!-- Create Group Modal -->
+    <div id="group-modal" class="fixed inset-0 z-[150] hidden flex-col bg-black/95 backdrop-blur-md pt-20 px-4 pb-4">
+        <div class="max-w-md w-full mx-auto flex flex-col h-full relative">
+            <button onclick="window.app.closeGroupModal()" class="absolute -top-12 right-0 text-gray-400 hover:text-white text-2xl p-2">
+                <i class="fas fa-times"></i>
+            </button>
+            
+            <h2 class="text-2xl font-black uppercase tracking-wider mb-6 theme-text drop-shadow-md">Create Group</h2>
+            
+            <input type="text" id="group-name-input" placeholder="Enter Group Name..." 
+                class="w-full bg-[#111] border border-white/10 rounded-xl py-4 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-[var(--chat-theme)] mb-6 shadow-inner">
+            
+            <h3 class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 pl-1">Search Users</h3>
+            <input type="text" id="group-search-user" placeholder="Type to search..." 
+                class="w-full bg-[#111] border border-white/10 rounded-xl py-3 px-4 text-sm text-white placeholder-gray-500 focus:outline-none mb-4 shadow-inner">
+            
+            <div id="group-search-results" class="flex-1 overflow-y-auto hide-scrollbar flex flex-col gap-2 pb-4">
+                <div class="text-center py-8 text-gray-600 text-xs uppercase tracking-widest">Type to search users...</div>
             </div>
-            <div class="grid grid-cols-5 gap-4" id="theme-colors-container"></div>
-        </div>
-    </div>
 
-    <!-- IMAGE EDITOR MODAL -->
-    <div id="image-editor-modal" class="fixed inset-0 bg-black/95 z-[100] hidden flex-col">
-        <div class="flex items-center justify-between p-4 bg-gradient-to-b from-black/80 to-transparent absolute w-full z-10">
-            <button onclick="window.closeImageEditor()" class="text-white bg-black/50 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md"><i class="fas fa-times"></i></button>
-            <div class="flex items-center gap-2">
-                <input type="color" id="draw-color" value="#F47521" class="w-8 h-8 rounded cursor-pointer border-none p-0 bg-transparent">
-                <button onclick="window.addTextToCanvas()" class="text-white bg-black/50 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md"><i class="fas fa-font"></i></button>
-                <button onclick="window.clearCanvas()" class="text-white bg-black/50 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md"><i class="fas fa-eraser"></i></button>
-            </div>
-        </div>
-        
-        <div class="flex-1 flex items-center justify-center overflow-hidden relative" id="canvas-container">
-            <canvas id="img-canvas" class="max-w-full max-h-full object-contain"></canvas>
-        </div>
-
-        <div class="p-4 bg-[#0a0a0a] border-t border-white/10 flex items-center gap-3">
-            <input type="text" id="img-caption-input" placeholder="Add a caption..." class="flex-1 bg-[#111] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#F47521] transition-colors">
-            <button id="send-img-btn" onclick="window.sendEditedImage()" class="w-12 h-12 rounded-full theme-bg text-black font-black flex items-center justify-center hover:scale-105 shadow-[0_4px_15px_rgba(244,117,33,0.3)]">
-                <i class="fas fa-paper-plane ml-[-2px]"></i>
+            <!-- Selected Users Pill Container -->
+            <div id="selected-group-users" class="flex flex-wrap gap-2 mb-4 min-h-[30px]"></div>
+            
+            <button onclick="window.app.createGroupAction()" class="w-full theme-bg text-black py-4 rounded-xl font-black uppercase tracking-widest hover:scale-[1.02] transition-transform shadow-[0_4px_15px_rgba(244,117,33,0.3)]">
+                Create Group
             </button>
         </div>
     </div>
 
+    <!-- External Components -->
+    <script src="/header.js"></script>
+    <script src="/bottomnav.js"></script>
+
+    <!-- Firebase & Logic -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot, query, orderBy, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+        import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js';
+        import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js';
+        import { getFirestore, collection, onSnapshot, query, where, orderBy, deleteDoc, doc, getDocs, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js';
 
         const firebaseConfig = {
             apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
             authDomain: "blaze-x-db2f5.firebaseapp.com",
             projectId: "blaze-x-db2f5"
         };
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
 
-        // State variables
-        window.activeUserUid = null;
-        window.targetUserId = null;
-        window.chatRoomId = null;
-        let chatBlocked = false;
-        let replyingToId = null;
-        let editingId = null;
-        let targetMsgId = null;
-        let reactionMsgId = null;
-        let messages = [];
+        const fApp = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
+        const auth = getAuth(fApp);
+        const db = getFirestore(fApp);
 
-        // Swipe / Long Press State
-        let touchStartX = 0;
-        let touchStartY = 0;
-        let swipeMsgEl = null;
-        let isSwiping = false;
-        let longPressTimer;
+        window.app = window.app || {};
+        
+        let currentUser = null;
+        let allChats = [];
+        let currentTab = 'chats';
+        let groupSelectedUsers = [];
+        let pressTimer = null; 
 
-        // Canvas State
-        let canvas, ctx;
-        let isDrawing = false;
-        let originalImage = null;
-
-        const THEMES = [
-            { name: 'Orange', hex: '#F47521', shadow: 'rgba(244,117,33,0.3)' },
-            { name: 'Blue', hex: '#3b82f6', shadow: 'rgba(59,130,246,0.3)' },
-            { name: 'Red', hex: '#ef4444', shadow: 'rgba(239,68,68,0.3)' },
-            { name: 'Green', hex: '#22c55e', shadow: 'rgba(34,197,94,0.3)' },
-            { name: 'Purple', hex: '#a855f7', shadow: 'rgba(168,85,247,0.3)' }
-        ];
-
-        // --- CUSTOM MODAL UTILITY ---
+        // --- CUSTOM UI MODAL (Matches chat.html) ---
         window.ui = {
             openModal: (title, message, showInput = false, showCancel = false) => {
                 return new Promise((resolve) => {
@@ -261,8 +185,11 @@
                         elInput.classList.add('hidden');
                     }
 
-                    if(showCancel) btnCancel.classList.remove('hidden');
-                    else btnCancel.classList.add('hidden');
+                    if(showCancel) {
+                        btnCancel.classList.remove('hidden');
+                    } else {
+                        btnCancel.classList.add('hidden');
+                    }
 
                     modal.classList.remove('hidden');
                     modal.classList.add('flex');
@@ -286,620 +213,369 @@
             },
             alert: (msg) => window.ui.openModal("Notice", msg, false, false),
             confirm: (msg) => window.ui.openModal("Confirm", msg, false, true),
-            prompt: (msg) => window.ui.openModal("Input", msg, true, true)
         };
 
-        // --- INIT & AUTH ---
-        onAuthStateChanged(auth, async (user) => {
-            if (!user) { window.location.href = '/index.html'; return; }
-            window.activeUserUid = user.uid;
-            
-            const urlParams = new URLSearchParams(window.location.search);
-            const userA = urlParams.get('userA');
-            const userB = urlParams.get('userB');
-            
-            if (!userA || !userB) { await window.ui.alert("Invalid Chat URL"); return; }
-            
-            window.targetUserId = (user.uid === userA) ? userB : userA;
-            // Generate standard unique chat ID
-            window.chatRoomId = [userA, userB].sort().join('_');
-
-            initUI();
-            await loadTargetProfile();
-            listenToMessages();
-        });
-
-        async function loadTargetProfile() {
-            try {
-                const docRef = doc(db, "users", window.targetUserId);
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    document.getElementById('chat-header-name').innerText = data.displayName || data.username || "User";
-                    if (data.photoURL) document.getElementById('chat-header-pfp').src = data.photoURL;
+        // --- TAB MANAGEMENT ---
+        window.app.setTab = (tab) => {
+            currentTab = tab;
+            document.querySelectorAll('.tab-pill').forEach(pill => {
+                if (pill.dataset.tab === tab) {
+                    pill.className = "tab-pill px-6 py-2 rounded-full text-xs font-bold uppercase tracking-wider theme-bg text-black transition-all shadow-md";
+                } else {
+                    pill.className = "tab-pill px-6 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-[#111] text-gray-400 border border-white/10 hover:bg-white/5 transition-all";
                 }
-            } catch (e) { console.error("Error loading profile"); }
-        }
-
-        // --- MESSAGING LOGIC ---
-        function listenToMessages() {
-            const q = query(collection(db, "chats", window.chatRoomId, "messages"), orderBy("timestamp", "asc"));
-            onSnapshot(q, (snapshot) => {
-                const newMessages = [];
-                snapshot.forEach(doc => newMessages.push({ id: doc.id, ...doc.data() }));
-                
-                const wasAtBottom = isUserAtBottom();
-                messages = newMessages;
-                renderMessages();
-                
-                // Auto-scroll logic if user was already at bottom or if it's their own message
-                if (wasAtBottom) window.scrollToBottom();
             });
-        }
+            renderMainFeed();
+        };
 
-        function isUserAtBottom() {
-            const box = document.getElementById('chat-box');
-            return box.scrollHeight - box.scrollTop - box.clientHeight < 100; // 100px threshold
-        }
-
-        function renderMessages() {
-            const container = document.getElementById('messages-container');
-            container.innerHTML = '';
+        // --- CORE NAVIGATION & PARENT DOC CREATOR ---
+        window.app.startDirectChat = async (targetId) => {
+            if (!currentUser) return;
+            const chatRoomId = [currentUser.uid, targetId].sort().join('_');
             
-            messages.forEach(msg => {
-                const isMe = msg.senderId === window.activeUserUid;
-                const isEmoji = isEmojiOnly(msg.text) && !msg.imageUrl;
+            // To ensure it shows up in this list page in the future, we seed the parent document.
+            try {
+                const chatRef = doc(db, "chats", chatRoomId);
+                const chatSnap = await getDoc(chatRef);
+                if (!chatSnap.exists()) {
+                    await setDoc(chatRef, {
+                        type: 'direct',
+                        participants: [currentUser.uid, targetId],
+                        createdAt: serverTimestamp(),
+                        lastMessage: 'Chat started',
+                        lastMessageTime: serverTimestamp()
+                    }, { merge: true });
+                }
+            } catch(e) { console.error(e); }
+
+            // Navigate to your exact chat room UI
+            window.location.href = `/chat.html?userA=${currentUser.uid}&userB=${targetId}`;
+        };
+
+        // --- RENDER MAIN FEED ---
+        const renderMainFeed = () => {
+            const feed = document.getElementById('main-feed');
+            
+            let filtered = [];
+            if (currentTab === 'chats') filtered = allChats.filter(c => c.type === 'direct');
+            else if (currentTab === 'groups') filtered = allChats.filter(c => c.type === 'group');
+            else if (currentTab === 'requests') filtered = allChats.filter(c => c.isRequest); 
+
+            if (filtered.length === 0) {
+                feed.innerHTML = `
+                    <div class="text-center py-20 text-gray-600 flex flex-col items-center">
+                        <i class="fas fa-comment-slash text-4xl mb-4 opacity-30"></i>
+                        <p class="text-xs font-black tracking-widest uppercase">No ${currentTab} found</p>
+                    </div>`;
+                return;
+            }
+
+            let html = '';
+            filtered.forEach(chat => {
+                const title = chat.type === 'group' ? chat.groupName : (chat.otherUserName || 'Unknown User');
+                const img = chat.type === 'group' ? (chat.groupIcon || 'https://via.placeholder.com/150/333/fff?text=GRP') : (chat.otherUserImg || 'https://via.placeholder.com/150/111/fff?text=U');
+                const subtext = chat.lastMessage || 'Started a conversation...';
                 
-                let replyHtml = '';
-                if (msg.replyTo) {
-                    const parentMsg = messages.find(m => m.id === msg.replyTo);
-                    if (parentMsg) {
-                        const parentName = parentMsg.senderId === window.activeUserUid ? 'You' : 'User';
-                        replyHtml = `
-                            <div class="text-[10px] bg-black/30 rounded pl-2 pr-4 py-1 mb-1.5 border-l-2 ${isMe ? 'border-white/50 text-white/80' : 'theme-border theme-text'} max-w-xs truncate cursor-pointer hover:opacity-80 transition-opacity" onclick="window.highlightMsg('${parentMsg.id}')">
-                                <span class="font-black">${parentName}</span><br>
-                                <span class="opacity-70">${parentMsg.text || 'Image'}</span>
+                let timeStr = '';
+                if(chat.lastMessageTime) {
+                    const date = chat.lastMessageTime.toDate ? chat.lastMessageTime.toDate() : new Date();
+                    timeStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                }
+
+                html += `
+                    <div data-id="${chat.id}" data-target="${chat.otherUserId || ''}" class="chat-item flex items-center gap-4 p-3.5 bg-[#111] border border-white/5 hover:border-[var(--chat-theme)] hover:bg-white/5 rounded-2xl cursor-pointer transition-all active:scale-[0.98]" oncontextmenu="return false;">
+                        <img src="${img}" class="w-14 h-14 rounded-full object-cover shadow-md border border-white/10 shrink-0 pointer-events-none">
+                        <div class="flex-1 min-w-0 pointer-events-none">
+                            <div class="flex justify-between items-baseline mb-1">
+                                <h3 class="text-white font-bold text-[15px] truncate tracking-wide">${title}</h3>
+                                <span class="text-[10px] text-gray-500 font-bold tracking-wider">${timeStr}</span>
                             </div>
-                        `;
-                    }
-                }
-
-                let bubbleClass = isMe 
-                    ? `theme-bg text-black rounded-tl-2xl rounded-tr-2xl rounded-bl-2xl rounded-br-sm` 
-                    : `bg-[#1a1a1a] border border-white/10 text-gray-100 rounded-tl-2xl rounded-tr-2xl rounded-br-2xl rounded-bl-sm`;
-                
-                let extraClasses = '';
-                if (isEmoji) bubbleClass = `msg-emoji-only ${isMe ? 'text-right' : 'text-left'}`;
-                else extraClasses = 'px-4 py-2.5 shadow-md';
-
-                let contentHtml = '';
-                if (msg.imageUrl) {
-                    contentHtml += `<img src="${msg.imageUrl}" class="w-full max-w-[200px] rounded-lg mb-2 object-cover border border-black/10 cursor-pointer hover:opacity-90" onclick="window.open('${msg.imageUrl}', '_blank')">`;
-                }
-                if (msg.text) {
-                    contentHtml += `<span class="text-sm leading-relaxed">${msg.text}</span>`;
-                }
-                
-                if (msg.reaction) {
-                    contentHtml += `<div class="absolute -bottom-2 ${isMe ? '-left-2' : '-right-2'} bg-[#222] border border-white/10 rounded-full px-1.5 py-0.5 text-[10px] shadow-sm z-10">${msg.reaction}</div>`;
-                }
-
-                const editedHtml = msg.isEdited ? `<span class="text-[8px] opacity-60 ml-1 italic">(edited)</span>` : '';
-                const wrapperClass = isMe ? 'self-end flex-row-reverse' : 'self-start flex-row';
-                
-                const timeString = msg.timestamp ? new Date(msg.timestamp.toMillis()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...';
-                
-                let seenHtml = '';
-                if (isMe) {
-                    seenHtml = msg.isSeen ? `<span class="ml-1 text-[8px] text-blue-400 font-bold tracking-wide">Seen</span>` : `<i class="fas fa-check-double text-[8px] theme-text ml-0.5"></i>`;
-                }
-
-                const msgHtml = `
-                    <div class="msg-container flex gap-2 w-full max-w-[85%] relative ${wrapperClass}" id="msg-el-${msg.id}" data-id="${msg.id}">
-                        <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-full">
-                            <div class="${bubbleClass} ${extraClasses} relative group break-words min-w-[50px] transition-transform duration-200">
-                                ${replyHtml}
-                                ${contentHtml}
-                            </div>
-                            <div class="flex items-center gap-1 mt-1 text-[9px] text-gray-500 font-medium ${isMe ? 'mr-1' : 'ml-1'}">
-                                <span>${timeString}</span>
-                                ${editedHtml}
-                                ${seenHtml}
-                            </div>
-                        </div>
-                        <div class="msg-actions flex items-center shrink-0 self-center ${isMe ? 'mr-2' : 'ml-2'}">
-                            <button onclick="window.openMessageDropdown(event, '${msg.id}')" class="w-7 h-7 rounded-full bg-[#111] border border-white/10 text-gray-400 hover:text-white hover:theme-border transition-all flex items-center justify-center shadow-sm">
-                                <i class="fas fa-ellipsis-h text-[10px]"></i>
-                            </button>
+                            <p class="text-gray-400 text-xs truncate">${subtext}</p>
                         </div>
                     </div>
                 `;
-                container.insertAdjacentHTML('beforeend', msgHtml);
             });
-            attachGestures();
-        }
 
-        window.sendMessage = async () => {
-            if (chatBlocked) { await window.ui.alert("Chat is blocked."); return; }
-            const input = document.getElementById('msg-input');
-            const text = input.value.trim();
-            if (!text) return;
-
-            const msgRef = editingId 
-                ? doc(db, "chats", window.chatRoomId, "messages", editingId) 
-                : doc(collection(db, "chats", window.chatRoomId, "messages"));
-
-            const payload = editingId ? {
-                text: text,
-                isEdited: true
-            } : {
-                text: text,
-                senderId: window.activeUserUid,
-                timestamp: serverTimestamp(),
-                isEdited: false,
-                replyTo: replyingToId,
-                imageUrl: null,
-                isSeen: false
-            };
-
-            input.value = '';
-            input.style.height = 'auto';
-            window.cancelReplyEdit();
-
-            try {
-                if (editingId) await updateDoc(msgRef, payload);
-                else {
-                    await setDoc(msgRef, payload);
-                    
-                    // Maintain "chats" parent document for Recent Chats view processing
-                    const parentChatRef = doc(db, "chats", window.chatRoomId);
-                    await setDoc(parentChatRef, {
-                        participants: [window.activeUserUid, window.targetUserId],
-                        lastMessage: text,
-                        lastMessageTime: serverTimestamp(),
-                        type: 'direct'
-                    }, { merge: true });
-                }
-                setTimeout(() => window.scrollToBottom(), 50);
-            } catch(e) { console.error("Send failed", e); }
+            feed.innerHTML = html;
+            attachLongPressListeners();
         };
 
-        // --- GESTURE & ACTIONS LOGIC ---
-        function attachGestures() {
-            const container = document.getElementById('chat-box');
-            container.addEventListener('touchstart', (e) => {
-                const msgEl = e.target.closest('.msg-container');
-                if(msgEl) {
-                    swipeMsgEl = msgEl;
-                    touchStartX = e.touches[0].clientX;
-                    touchStartY = e.touches[0].clientY;
-                    isSwiping = false;
-                    swipeMsgEl.style.transition = 'none';
-                    
-                    longPressTimer = setTimeout(() => {
-                        window.openReactionPopup(e, swipeMsgEl.dataset.id);
-                        swipeMsgEl = null; 
-                    }, 500);
-                }
-            }, {passive: true});
-
-            container.addEventListener('touchmove', (e) => {
-                if(longPressTimer) clearTimeout(longPressTimer); 
-                if(!swipeMsgEl) return;
+        const attachLongPressListeners = () => {
+            const items = document.querySelectorAll('.chat-item');
+            items.forEach(item => {
+                const id = item.dataset.id;
+                const targetUid = item.dataset.target;
                 
-                const diffX = touchStartX - e.touches[0].clientX;
-                const diffY = Math.abs(touchStartY - e.touches[0].clientY);
-                
-                if (!isSwiping) {
-                    if (diffX > 10 && diffX > diffY) isSwiping = true;
-                    else if (diffY > 10) {
-                        swipeMsgEl.style.transform = '';
-                        swipeMsgEl = null;
-                        return;
-                    }
-                }
-
-                if (isSwiping && diffX > 0) {
-                    const move = Math.min(diffX, 70);
-                    swipeMsgEl.style.transform = `translateX(-${move}px)`;
-                }
-            }, {passive: true});
-
-            container.addEventListener('touchend', (e) => {
-                if(longPressTimer) clearTimeout(longPressTimer);
-                window.hideReactionPopup(); 
-
-                if(swipeMsgEl && isSwiping) {
-                    const diffX = touchStartX - e.changedTouches[0].clientX;
-                    swipeMsgEl.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
-                    swipeMsgEl.style.transform = 'translateX(0)';
-                    
-                    if (diffX > 50) {
-                        targetMsgId = swipeMsgEl.dataset.id;
-                        window.actionReply();
-                    }
-                }
-                swipeMsgEl = null;
-                isSwiping = false;
-            });
-        }
-
-        window.openReactionPopup = (e, msgId) => {
-            reactionMsgId = msgId;
-            const popup = document.getElementById('reaction-popup');
-            const touch = e.touches ? e.touches[0] : e;
-            const yOffset = touch.clientY > window.innerHeight / 2 ? -60 : 40; 
-            
-            popup.style.top = `${touch.clientY + yOffset}px`;
-            popup.style.left = `50%`;
-            popup.style.transform = `translateX(-50%) scale(1)`;
-            popup.classList.remove('hidden');
-            if (navigator.vibrate) navigator.vibrate(50);
-        };
-
-        window.hideReactionPopup = () => {
-            const popup = document.getElementById('reaction-popup');
-            popup.style.transform = `translateX(-50%) scale(0)`;
-            setTimeout(() => popup.classList.add('hidden'), 200);
-        };
-
-        window.submitReaction = async (emoji) => {
-            if(!reactionMsgId) return;
-            window.hideReactionPopup();
-            try {
-                await updateDoc(doc(db, "chats", window.chatRoomId, "messages", reactionMsgId), { reaction: emoji });
-            } catch(e) { console.error("Reaction failed"); }
-        };
-
-        window.openMoreReactions = async () => {
-            window.hideReactionPopup();
-            const emoji = await window.ui.prompt("Type or paste an emoji:");
-            if (emoji && isEmojiOnly(emoji)) window.submitReaction(emoji);
-            else if(emoji) await window.ui.alert("Please enter a valid single emoji.");
-        };
-
-        const isEmojiOnly = (str) => {
-            if(!str) return false;
-            const noSpaces = str.replace(/\s/g, '');
-            if (!noSpaces || noSpaces.length === 0) return false;
-            const stripped = noSpaces.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}\uFE0F\u200D]/gu, '');
-            if (stripped.length > 0) return false;
-            const emojiCount = [...new Intl.Segmenter().segment(noSpaces)].length;
-            return emojiCount > 0 && emojiCount <= 4;
-        };
-
-        // --- DROPDOWN & ACTIONS ---
-        window.openMessageDropdown = (e, id) => {
-            e.stopPropagation();
-            targetMsgId = id;
-            const msg = messages.find(m => m.id === id);
-            if(!msg) return;
-
-            const dropdown = document.getElementById('msg-dropdown-template');
-            const isMe = msg.senderId === window.activeUserUid;
-            
-            document.getElementById('btn-action-edit').style.display = (isMe && !msg.imageUrl) ? 'block' : 'none';
-            document.getElementById('btn-action-unsend').style.display = isMe ? 'block' : 'none';
-
-            dropdown.classList.remove('hidden');
-            dropdown.classList.add('flex');
-            
-            const rect = e.currentTarget.getBoundingClientRect();
-            let top = rect.bottom + window.scrollY;
-            let left = rect.left + window.scrollX;
-
-            if (isMe) left = left - dropdown.offsetWidth + 20;
-            if (top + dropdown.offsetHeight > window.innerHeight) top = rect.top + window.scrollY - dropdown.offsetHeight;
-
-            dropdown.style.top = `${top}px`;
-            dropdown.style.left = `${left}px`;
-        };
-
-        window.closeDropdowns = () => {
-            document.getElementById('header-menu').classList.add('hidden');
-            document.getElementById('msg-dropdown-template').classList.add('hidden');
-        };
-
-        window.actionReply = () => {
-            const msg = messages.find(m => m.id === targetMsgId);
-            if(!msg) return;
-            replyingToId = msg.id;
-            editingId = null;
-
-            document.getElementById('reply-preview').classList.remove('hidden');
-            document.getElementById('reply-text').innerText = msg.text || 'Image Attachment';
-            document.getElementById('msg-input').focus();
-            window.closeDropdowns();
-        };
-
-        window.actionEdit = () => {
-            const msg = messages.find(m => m.id === targetMsgId);
-            if(!msg || msg.senderId !== window.activeUserUid) return;
-            
-            editingId = msg.id;
-            replyingToId = null;
-            document.getElementById('reply-preview').classList.remove('hidden');
-            document.getElementById('reply-text').innerText = "Editing: " + msg.text;
-
-            const input = document.getElementById('msg-input');
-            input.value = msg.text;
-            input.focus();
-            window.closeDropdowns();
-        };
-
-        window.actionUnsend = async () => {
-            const confirm = await window.ui.confirm("Unsend this message for everyone?");
-            if (confirm) {
-                try {
-                    await deleteDoc(doc(db, "chats", window.chatRoomId, "messages", targetMsgId));
-                    if (replyingToId === targetMsgId || editingId === targetMsgId) window.cancelReplyEdit();
-                } catch(e) {}
-            }
-            window.closeDropdowns();
-        };
-
-        window.actionDelete = async () => {
-            const confirm = await window.ui.confirm("Delete this message for you?");
-            if(confirm) {
-                try { await deleteDoc(doc(db, "chats", window.chatRoomId, "messages", targetMsgId)); } catch(e) {}
-            }
-            window.closeDropdowns();
-        };
-
-        window.cancelReplyEdit = () => {
-            replyingToId = null;
-            editingId = null;
-            document.getElementById('reply-preview').classList.add('hidden');
-            if(!editingId) document.getElementById('msg-input').value = '';
-        };
-
-        window.highlightMsg = (id) => {
-            const el = document.getElementById(`msg-el-${id}`);
-            if(el) {
-                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                el.classList.add('opacity-50', 'scale-[0.98]');
-                setTimeout(() => el.classList.remove('opacity-50', 'scale-[0.98]'), 800);
-            }
-        };
-
-        window.scrollToBottom = () => {
-            const box = document.getElementById('chat-box');
-            box.scrollTop = box.scrollHeight;
-        };
-
-        // --- IMAGE CANVAS ---
-        window.openImageEditor = (event) => {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                document.getElementById('image-editor-modal').classList.remove('hidden');
-                document.getElementById('image-editor-modal').classList.add('flex');
-                
-                canvas = document.getElementById('img-canvas');
-                ctx = canvas.getContext('2d');
-                originalImage = new Image();
-                
-                originalImage.onload = () => {
-                    const maxWidth = window.innerWidth;
-                    const maxHeight = window.innerHeight - 150;
-                    let width = originalImage.width;
-                    let height = originalImage.height;
-
-                    if (width > maxWidth || height > maxHeight) {
-                        const ratio = Math.min(maxWidth / width, maxHeight / height);
-                        width *= ratio;
-                        height *= ratio;
-                    }
-                    canvas.width = width;
-                    canvas.height = height;
-                    ctx.drawImage(originalImage, 0, 0, width, height);
-                    setupCanvasDrawing();
+                const startTimer = (e) => {
+                    pressTimer = setTimeout(async () => {
+                        const confirm = await window.ui.confirm("Are you sure you want to delete this chat history?");
+                        if (confirm) {
+                            try {
+                                await deleteDoc(doc(db, "chats", id));
+                                // Subcollections (messages) require a cloud function to fully delete, 
+                                // but deleting the parent hides it from this list.
+                            } catch(err) {
+                                window.ui.alert("Could not delete chat.");
+                            }
+                        }
+                    }, 600); // 600ms long press
                 };
-                originalImage.src = e.target.result;
-            };
-            reader.readAsDataURL(file);
+
+                const clearTimer = () => { if (pressTimer) clearTimeout(pressTimer); };
+
+                item.addEventListener('touchstart', startTimer, {passive: true});
+                item.addEventListener('touchend', clearTimer);
+                item.addEventListener('touchmove', clearTimer);
+                item.addEventListener('mousedown', startTimer);
+                item.addEventListener('mouseup', clearTimer);
+                item.addEventListener('mouseleave', clearTimer);
+                
+                // Normal Click routing
+                item.addEventListener('click', (e) => {
+                    if (document.getElementById('system-modal').classList.contains('flex')) return;
+                    
+                    if(targetUid) {
+                        window.app.startDirectChat(targetUid);
+                    } else {
+                        // Group logic routing (if supported in your app)
+                        window.location.href = `/chat.html?groupId=${id}`;
+                    }
+                });
+            });
         };
 
-        window.closeImageEditor = () => {
-            document.getElementById('image-editor-modal').classList.add('hidden');
-            document.getElementById('image-editor-modal').classList.remove('flex');
-            document.getElementById('img-upload-input').value = '';
-            document.getElementById('img-caption-input').value = '';
+        // --- SEARCH GLOBAL USERS ---
+        const searchInput = document.getElementById('search-input');
+        const clearBtn = document.getElementById('clear-search');
+        const mainFeed = document.getElementById('main-feed');
+        const searchFeed = document.getElementById('search-feed');
+        const categoryPills = document.getElementById('category-pills');
+
+        searchInput.addEventListener('input', (e) => {
+            const val = e.target.value.trim().toLowerCase();
+            if (val.length > 0) {
+                clearBtn.classList.remove('hidden');
+                mainFeed.classList.add('hidden');
+                categoryPills.classList.add('hidden');
+                searchFeed.classList.remove('hidden');
+                performGlobalSearch(val);
+            } else {
+                resetSearchUI();
+            }
+        });
+
+        clearBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            resetSearchUI();
+        });
+
+        const resetSearchUI = () => {
+            clearBtn.classList.add('hidden');
+            mainFeed.classList.remove('hidden');
+            categoryPills.classList.remove('hidden');
+            searchFeed.classList.add('hidden');
         };
 
-        function setupCanvasDrawing() {
-            const getPos = (e) => {
-                const rect = canvas.getBoundingClientRect();
-                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                const scaleX = canvas.width / rect.width;
-                const scaleY = canvas.height / rect.height;
-                return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
-            };
+        const performGlobalSearch = async (queryText) => {
+            try {
+                const usersRef = collection(db, "users");
+                // Simple prefix search using Firestore ranges
+                const q = query(usersRef, orderBy("username"), where("username", ">=", queryText), where("username", "<=", queryText + '\uf8ff'));
+                const snap = await getDocs(q);
+                
+                const globalUsers = [];
+                snap.forEach(doc => {
+                    if (doc.id !== currentUser.uid) { 
+                        globalUsers.push({ id: doc.id, ...doc.data() });
+                    }
+                });
 
-            const startDraw = (e) => { 
-                e.preventDefault(); 
-                isDrawing = true; 
-                const pos = getPos(e);
-                ctx.beginPath(); 
-                ctx.moveTo(pos.x, pos.y); 
-            };
-            
-            const draw = (e) => { 
-                if(!isDrawing) return; 
-                e.preventDefault();
-                const pos = getPos(e);
-                ctx.lineTo(pos.x, pos.y);
-                ctx.strokeStyle = document.getElementById('draw-color').value;
-                ctx.lineWidth = 4;
-                ctx.lineCap = 'round';
-                ctx.stroke();
-            };
-            
-            const stopDraw = () => { isDrawing = false; ctx.closePath(); };
+                const container = document.getElementById('search-users-results');
+                if (globalUsers.length === 0) {
+                    container.innerHTML = '<div class="text-[11px] text-gray-600 uppercase tracking-widest pl-2 pt-4">No users found.</div>';
+                    return;
+                }
 
-            canvas.onmousedown = startDraw; canvas.onmousemove = draw;
-            canvas.onmouseup = stopDraw; canvas.onmouseleave = stopDraw;
-            canvas.ontouchstart = startDraw; canvas.ontouchmove = draw;
-            canvas.ontouchend = stopDraw;
-        }
-
-        window.addTextToCanvas = async () => {
-            const text = await window.ui.prompt("Enter text to add to image:");
-            if(text) {
-                ctx.font = "bold 30px Arial";
-                ctx.fillStyle = document.getElementById('draw-color').value;
-                ctx.textAlign = "center";
-                ctx.shadowColor = "black";
-                ctx.shadowBlur = 4;
-                ctx.fillText(text, canvas.width/2, canvas.height/2);
-                ctx.shadowBlur = 0; 
+                let html = '';
+                globalUsers.forEach(item => {
+                    html += `
+                        <div onclick="window.app.startDirectChat('${item.id}')" class="flex items-center gap-4 p-3 bg-[#111] rounded-2xl border border-white/5 cursor-pointer hover:border-[var(--chat-theme)] hover:bg-white/5 transition-all">
+                            <img src="${item.photoURL || 'https://via.placeholder.com/150/111/fff?text=U'}" class="w-12 h-12 rounded-full object-cover border border-white/10">
+                            <div class="flex-1 min-w-0">
+                                <h4 class="text-white font-bold text-sm truncate">${item.username || item.displayName || 'Unknown User'}</h4>
+                                <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest truncate mt-0.5">Tap to chat</p>
+                            </div>
+                            <div class="w-8 h-8 rounded-full theme-bg text-black flex items-center justify-center shrink-0">
+                                <i class="fas fa-paper-plane text-xs ml-[-2px]"></i>
+                            </div>
+                        </div>`;
+                });
+                container.innerHTML = html;
+            } catch (err) {
+                console.error("Global search error", err);
             }
         };
 
-        window.clearCanvas = () => {
-            if (originalImage) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(originalImage, 0, 0, canvas.width, canvas.height);
-            }
+        // --- GROUP CREATION LOGIC ---
+        window.app.openGroupModal = () => {
+            document.getElementById('group-modal').style.display = 'flex';
+            groupSelectedUsers = [];
+            renderSelectedGroupUsers();
+            document.getElementById('group-search-results').innerHTML = '<div class="text-center py-8 text-gray-600 text-xs uppercase tracking-widest">Type to search users...</div>';
+            document.getElementById('group-search-user').value = '';
+            document.getElementById('group-name-input').value = '';
         };
 
-        window.sendEditedImage = async () => {
-            const btn = document.getElementById('send-img-btn');
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            btn.disabled = true;
+        window.app.closeGroupModal = () => {
+            document.getElementById('group-modal').style.display = 'none';
+        };
+
+        document.getElementById('group-search-user').addEventListener('input', async (e) => {
+            const val = e.target.value.trim().toLowerCase();
+            const resultsContainer = document.getElementById('group-search-results');
+            
+            if (val.length === 0) {
+                resultsContainer.innerHTML = '<div class="text-center py-8 text-gray-600 text-xs uppercase tracking-widest">Type to search users...</div>';
+                return;
+            }
 
             try {
-                const base64Data = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
-                const formData = new FormData();
-                formData.append('image', base64Data);
-
-                const res = await fetch('https://api.imgbb.com/1/upload?key=4a683051e76ed12880a42aefa6ed427b', { method: 'POST', body: formData });
-                const data = await res.json();
+                const q = query(collection(db, "users"), orderBy("username"), where("username", ">=", val), where("username", "<=", val + '\uf8ff'));
+                const snap = await getDocs(q);
+                let html = '';
                 
-                if (data.success) {
-                    const caption = document.getElementById('img-caption-input').value.trim();
-                    const msgRef = doc(collection(db, "chats", window.chatRoomId, "messages"));
+                snap.forEach(doc => {
+                    if (doc.id === currentUser.uid) return;
+                    const uData = doc.data();
+                    const isAdded = groupSelectedUsers.find(u => u.id === doc.id);
+                    const safeName = (uData.username || uData.displayName || '').replace(/'/g, "\\'");
                     
-                    await setDoc(msgRef, {
-                        text: caption,
-                        imageUrl: data.data.url,
-                        senderId: window.activeUserUid,
-                        timestamp: serverTimestamp(),
-                        isEdited: false,
-                        replyTo: replyingToId,
-                        isSeen: false
-                    });
-                    
-                    await setDoc(doc(db, "chats", window.chatRoomId), {
-                        participants: [window.activeUserUid, window.targetUserId],
-                        lastMessage: caption || "Sent an image",
-                        lastMessageTime: serverTimestamp(),
-                        type: 'direct'
-                    }, { merge: true });
+                    html += `
+                        <div class="flex justify-between items-center bg-[#111] p-3 rounded-2xl border border-white/5">
+                            <div class="flex items-center gap-3">
+                                <img src="${uData.photoURL || 'https://via.placeholder.com/150/111/fff?text=U'}" class="w-10 h-10 rounded-full object-cover">
+                                <span class="text-sm font-bold text-gray-200">${safeName || 'Unknown'}</span>
+                            </div>
+                            <button onclick="window.app.toggleGroupUser('${doc.id}', '${safeName}')" 
+                                class="text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-full transition-colors ${isAdded ? 'bg-green-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}">
+                                ${isAdded ? '<i class="fas fa-check"></i>' : 'Add'}
+                            </button>
+                        </div>
+                    `;
+                });
+                
+                resultsContainer.innerHTML = html || '<div class="text-center py-8 text-gray-600 text-xs uppercase tracking-widest">No users found</div>';
+            } catch(e) { console.error(e); }
+        });
 
-                    window.closeImageEditor();
-                    window.cancelReplyEdit();
-                } else { throw new Error("Upload Failed"); }
-            } catch (e) {
-                console.error(e);
-                await window.ui.alert("Failed to send image.");
+        window.app.toggleGroupUser = (userId, userName) => {
+            if (groupSelectedUsers.find(u => u.id === userId)) {
+                groupSelectedUsers = groupSelectedUsers.filter(u => u.id !== userId);
+            } else {
+                groupSelectedUsers.push({ id: userId, name: userName });
             }
-            
-            btn.innerHTML = '<i class="fas fa-paper-plane ml-[-2px]"></i>';
-            btn.disabled = false;
+            renderSelectedGroupUsers();
+            document.getElementById('group-search-user').dispatchEvent(new Event('input'));
         };
 
-        // --- GLOBAL UI ---
-        function initUI() {
-            renderThemeSwatches();
-            
-            document.addEventListener('click', (e) => {
-                if (!e.target.closest('#header-menu') && !e.target.closest('header button i.fa-ellipsis-v')) {
-                    document.getElementById('header-menu').classList.add('hidden');
-                }
-                if (!e.target.closest('#msg-dropdown-template') && !e.target.closest('.msg-actions button')) {
-                    document.getElementById('msg-dropdown-template').classList.add('hidden');
-                }
-                if (!e.target.closest('#reaction-popup')) window.hideReactionPopup();
-            });
-
-            const tx = document.getElementById('msg-input');
-            tx.addEventListener('input', function() {
-                this.style.height = 'auto';
-                this.style.height = (this.scrollHeight) + 'px';
-            });
-            tx.addEventListener('keypress', function(e) {
-                if(e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    window.sendMessage();
-                }
-            });
-        }
-
-        window.toggleMenu = (id) => {
-            const menu = document.getElementById(id);
-            if (menu.classList.contains('hidden')) {
-                window.closeDropdowns();
-                menu.classList.remove('hidden');
-                menu.classList.add('flex');
-            } else { menu.classList.add('hidden'); }
-        };
-
-        window.applyTheme = (hex, shadow) => {
-            document.documentElement.style.setProperty('--chat-theme', hex);
-            document.getElementById('send-btn').style.boxShadow = `0 4px 15px ${shadow}`;
-            window.closeThemeModal();
-        };
-
-        const renderThemeSwatches = () => {
-            const container = document.getElementById('theme-colors-container');
-            container.innerHTML = THEMES.map(t => `
-                <button onclick="window.applyTheme('${t.hex}', '${t.shadow}')" class="w-10 h-10 rounded-full shadow-md hover:scale-110 border-2 border-[#111] hover:border-white transition-transform" style="background-color: ${t.hex};"></button>
+        const renderSelectedGroupUsers = () => {
+            const container = document.getElementById('selected-group-users');
+            if (groupSelectedUsers.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+            container.innerHTML = groupSelectedUsers.map(u => `
+                <div class="theme-bg text-black px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 shadow-md">
+                    ${u.name}
+                    <button onclick="window.app.toggleGroupUser('${u.id}', '${u.name}')" class="hover:text-white/80"><i class="fas fa-times"></i></button>
+                </div>
             `).join('');
         };
 
-        window.openThemeModal = () => {
-            window.closeDropdowns();
-            const modal = document.getElementById('theme-modal');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-            setTimeout(() => modal.classList.remove('opacity-0'), 10);
+        window.app.createGroupAction = async () => {
+            const name = document.getElementById('group-name-input').value.trim();
+            if (!name) return window.ui.alert("Please enter a group name.");
+            if (groupSelectedUsers.length === 0) return window.ui.alert("Please add at least one member.");
+
+            try {
+                const participants = [currentUser.uid, ...groupSelectedUsers.map(u => u.id)];
+                
+                // Uses standard auto-ID for groups
+                const groupRef = doc(collection(db, "chats"));
+                await setDoc(groupRef, {
+                    type: 'group',
+                    groupName: name,
+                    participants: participants,
+                    lastMessage: "Group created",
+                    lastMessageTime: serverTimestamp(),
+                    createdAt: serverTimestamp(),
+                    createdBy: currentUser.uid
+                });
+
+                window.app.closeGroupModal();
+                window.location.href = `/chat.html?groupId=${groupRef.id}`;
+            } catch (err) {
+                window.ui.alert("Failed to create group.");
+            }
         };
 
-        window.closeThemeModal = () => {
-            const modal = document.getElementById('theme-modal');
-            modal.classList.add('opacity-0');
-            setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
-        };
+        // --- AUTH & FETCH CHATS ---
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                currentUser = user;
+                
+                // Fetch user's chats (Depends on parent documents having 'participants' array)
+                const q = query(
+                    collection(db, "chats"), 
+                    where("participants", "array-contains", user.uid),
+                    orderBy("lastMessageTime", "desc")
+                );
 
-        window.clearChat = async () => {
-            const confirm = await window.ui.confirm("Are you sure you want to delete all messages?");
-            if (confirm) {
-                try {
-                    // Quick batch delete for messages within the UI (In a full prod app this should run via Cloud Functions)
-                    messages.forEach(async (msg) => {
-                        await deleteDoc(doc(db, "chats", window.chatRoomId, "messages", msg.id));
+                onSnapshot(q, async (snapshot) => {
+                    const rawChats = [];
+                    snapshot.forEach(doc => {
+                        rawChats.push({ id: doc.id, ...doc.data() });
                     });
-                } catch(e) {}
-            }
-            window.closeDropdowns();
-        };
 
-        window.toggleBlock = async () => {
-            chatBlocked = !chatBlocked;
-            const btn = document.getElementById('block-btn');
-            if (chatBlocked) {
-                btn.innerHTML = '<i class="fas fa-unlock w-4 text-center"></i> Unblock User';
-                btn.classList.replace('text-red-500', 'text-green-500');
+                    // Enrich Direct Chats with Other User's Details
+                    allChats = await Promise.all(rawChats.map(async chat => {
+                        if (chat.type === 'direct' || !chat.type) { 
+                            // Fallback if type missing but it's a 2 person chat
+                            chat.type = 'direct';
+                            const otherId = chat.participants.find(id => id !== user.uid);
+                            if (otherId) {
+                                chat.otherUserId = otherId;
+                                try {
+                                    const userDoc = await getDoc(doc(db, "users", otherId));
+                                    if (userDoc.exists()) {
+                                        const uData = userDoc.data();
+                                        chat.otherUserName = uData.username || uData.displayName;
+                                        chat.otherUserImg = uData.photoURL;
+                                    }
+                                } catch (e) {}
+                            }
+                        }
+                        return chat;
+                    }));
+
+                    if (document.getElementById('search-feed').classList.contains('hidden')) {
+                        renderMainFeed();
+                    }
+                }, (err) => {
+                    console.error("Error fetching chats", err);
+                    document.getElementById('main-feed').innerHTML = `<div class="text-center py-12 text-red-500">Failed to load chats.</div>`;
+                });
+
             } else {
-                btn.innerHTML = '<i class="fas fa-ban w-4 text-center"></i> Block User';
-                btn.classList.replace('text-green-500', 'text-red-500');
+                currentUser = null;
+                allChats = [];
+                document.getElementById('main-feed').innerHTML = `
+                    <div class="text-center py-20 text-gray-500 flex flex-col items-center">
+                        <i class="fas fa-lock text-4xl mb-4 opacity-30"></i>
+                        <p class="text-xs font-black tracking-widest uppercase">Please log in to view chats</p>
+                    </div>`;
             }
-            window.closeDropdowns();
-        };
+        });
     </script>
 </body>
 </html>
