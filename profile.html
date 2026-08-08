@@ -6,6 +6,11 @@
     <title>Profile | BlazeX</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Cropper.js for actual image cropping -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
         
@@ -46,7 +51,6 @@
         
         <!-- PROFILE CARD -->
         <div id="profile-card" class="rounded-[2rem] p-6 md:p-8 relative overflow-hidden mb-4 transition-all border border-white/10 bg-[#0a0a0c] bg-cover bg-center">
-            
             <div class="absolute inset-0 bg-black/60 z-0 transition-all duration-300"></div>
 
             <button id="edit-bg-btn" onclick="openBgSearchModal()" class="hidden-el absolute top-4 right-4 z-20 w-8 h-8 bg-black/50 hover:bg-[#F47521] border border-white/20 rounded-full flex items-center justify-center text-white transition-colors cursor-pointer">
@@ -202,6 +206,7 @@
             </button>
         </div>
 
+        <!-- ================= VISITOR VIEW: RICH LIBRARY SLIDER ================= -->
         <div id="visitor-library-container" class="hidden-el space-y-4">
             <div class="flex items-center justify-between px-2">
                 <h3 class="text-lg font-black text-white flex items-center gap-2">
@@ -221,30 +226,34 @@
                 <div id="library-slider" class="flex overflow-x-auto gap-4 snap-x no-scrollbar pb-4 pt-1">
                     <div class="text-sm text-gray-500 italic px-2">Loading library posters...</div>
                 </div>
-                <button onclick="window.location.href='/library.html?user=' + activeProfileUid" class="w-full glass-panel hover:bg-white/10 text-white py-3 rounded-xl text-sm font-bold transition-all mt-2">
-                    View Full Library
+                <!-- Dynamic load more button instead of redirect -->
+                <button id="view-more-library-btn" onclick="expandLibrary()" class="hidden-el w-full glass-panel hover:bg-white/10 text-white py-3 rounded-xl text-sm font-bold transition-all mt-2">
+                    Load More Titles <i class="fas fa-chevron-down ml-1"></i>
                 </button>
             </div>
         </div>
 
     </main>
 
-    <div id="bottomnav-mount" class="fixed bottom-0 w-full z-50"></div>
+    <!-- FIXED BOTTOMNAV CONTAINER ID -->
+    <div id="bottomnav-container" class="fixed bottom-0 w-full z-50"></div>
 
+    <!-- CROPPER MODAL -->
     <div id="crop-modal" class="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center hidden-el p-4">
-        <div class="glass-panel w-full max-w-md rounded-2xl p-6 flex flex-col items-center">
+        <div class="glass-panel w-full max-w-lg rounded-2xl p-6 flex flex-col items-center">
             <h3 class="text-lg font-bold mb-4">Adjust Avatar</h3>
-            <div class="w-48 h-48 border border-white/20 rounded-full mb-6 overflow-hidden relative flex items-center justify-center bg-black/50">
-                <img id="crop-preview" src="" class="object-cover w-full h-full opacity-50">
+            <!-- Wrapper needed for CropperJS -->
+            <div class="w-full h-64 bg-black/50 overflow-hidden relative mb-6">
+                <img id="crop-preview" src="" class="max-w-full block">
             </div>
             <div class="flex gap-3 w-full">
                 <button onclick="closeCropModal()" class="flex-1 bg-white/10 hover:bg-white/20 py-2.5 rounded-xl text-sm font-bold">Cancel</button>
-                <!-- Show Loading state during upload -->
                 <button id="save-pfp-btn" onclick="saveCroppedImage()" class="flex-1 bg-[#F47521] hover:bg-[#e05e0b] py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2">Save</button>
             </div>
         </div>
     </div>
 
+    <!-- AniList Background Search Modal -->
     <div id="bg-search-modal" class="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center hidden-el p-4 backdrop-blur-sm">
         <div class="glass-panel w-full max-w-lg rounded-2xl p-5 flex flex-col max-h-[80vh]">
             <div class="flex justify-between items-center mb-4">
@@ -269,7 +278,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
-        import { getFirestore, doc, getDoc, collection, getDocs, updateDoc, increment, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, collection, getDocs, setDoc, deleteDoc, updateDoc, increment, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
@@ -285,10 +294,21 @@
         let currentAuthenticatedUser = null; 
         let isOwnerMode = true; 
         let cachedProfileData = null;
-        let pendingImageDataUrl = null;
+        
+        // PFP Cropper globals
+        let cropperInstance = null;
+        
+        // Library Globals
+        let fullLibraryItems = [];
+        let currentlyDisplayedLibrary = 0;
 
-        // GLOBAL SLIDER NAVIGATION EFFECT (Reused from your action slider)
+        // Ensure global app state exists
         window.app = window.app || {};
+        window.app.state = window.app.state || {};
+        window.app.state.carouselLibrarySet = new Set();
+        window.app.db = db;
+
+        // GLOBAL SLIDER NAVIGATION EFFECT
         window.app.sliderNavigate = (id, title, image, type, sub, dub) => {
             const overlayHtml = `
                 <div id="page-transition-overlay" class="fixed inset-0 z-[9999] flex flex-col transition-opacity duration-300 opacity-0">
@@ -311,8 +331,49 @@
             }, 300);
         };
 
+        // GLOBAL TOGGLE LIBRARY FUNC (For Slider Cards)
+        window.app.toggleSliderLibrary = async (event, btn, id, title, img) => {
+            event.stopPropagation(); 
+            if (!currentAuthenticatedUser) {
+                alert("Please log in to save to your Library!");
+                return;
+            }
+
+            const docIdStr = String(id);
+            const isAdded = btn.dataset.added === "true";
+            const libDocRef = doc(db, "users", currentAuthenticatedUser.uid, "library", docIdStr);
+
+            const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
+            const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
+
+            try {
+                if (isAdded) {
+                    btn.dataset.added = "false";
+                    btn.innerHTML = unsavedSvg;
+                    btn.classList.replace('bg-black/80', 'bg-black/70');
+                    window.app.state.carouselLibrarySet.delete(docIdStr);
+                    await deleteDoc(libDocRef);
+                } else {
+                    btn.dataset.added = "true";
+                    btn.innerHTML = savedSvg;
+                    btn.classList.replace('bg-black/70', 'bg-black/80');
+                    window.app.state.carouselLibrarySet.add(docIdStr);
+                    await setDoc(libDocRef, { id: docIdStr, title, img, timestamp: Date.now() });
+                }
+            } catch (error) { 
+                console.error("Library sync failed", error);
+            }
+        };
+
         onAuthStateChanged(auth, async (user) => {
             currentAuthenticatedUser = user;
+            
+            // Populate current user's library set so Save buttons show correct state
+            if (user) {
+                const myLibRef = collection(db, "users", user.uid, "library");
+                const myLibSnap = await getDocs(myLibRef);
+                myLibSnap.forEach(doc => window.app.state.carouselLibrarySet.add(doc.id));
+            }
             
             const urlParams = new URLSearchParams(window.location.search);
             let targetQueryId = urlParams.get('user') || urlParams.get('id');
@@ -397,7 +458,7 @@
                 }
 
                 if (!isOwnerMode) {
-                    loadVisitorLibrary(libSnapshot);
+                    await setupVisitorLibrary(libSnapshot);
                 }
 
             } catch (err) {
@@ -447,11 +508,11 @@
             }
         }
 
-        function loadVisitorLibrary(snapshot) {
+        // --- RICH VISITOR LIBRARY WITH ANILIST & LOAD MORE ---
+        async function setupVisitorLibrary(snapshot) {
             const privateMsg = document.getElementById('visitor-library-private');
             const publicSlider = document.getElementById('visitor-library-public');
-            const sliderMount = document.getElementById('library-slider');
-
+            
             if (cachedProfileData.hideLibrary) {
                 privateMsg.classList.remove('hidden-el');
                 publicSlider.classList.add('hidden-el');
@@ -461,32 +522,118 @@
             privateMsg.classList.add('hidden-el');
             publicSlider.classList.remove('hidden-el');
 
-            if (snapshot.empty) {
-                sliderMount.innerHTML = `<div class="text-sm text-gray-600 px-2 py-4">No entries yet.</div>`;
+            fullLibraryItems = snapshot.docs.map(doc => doc.data());
+            
+            if (fullLibraryItems.length === 0) {
+                document.getElementById('library-slider').innerHTML = `<div class="text-sm text-gray-600 px-2 py-4">No entries yet.</div>`;
                 return;
             }
 
+            // Load initial 15
+            currentlyDisplayedLibrary = 0; 
+            await renderLibraryBatch(0, 15);
+        }
+
+        async function renderLibraryBatch(start, end) {
+            const batch = fullLibraryItems.slice(start, end);
+            if(batch.length === 0) return;
+            
+            // 1. Fetch high quality posters & genres from AniList in a single query
+            const graphqlQuery = `
+                query {
+                    ${batch.map((item, index) => {
+                        const cleanTitle = (item.title || 'Untitled').replace(/"/g, '').replace(/\\/g, '');
+                        return `anime${index}: Media(search: "${cleanTitle}", type: ANIME) { coverImage { extraLarge } genres }`;
+                    }).join('\n')}
+                }
+            `;
+            
+            let anilistData = {};
+            try {
+                const res = await fetch('https://graphql.anilist.co', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: graphqlQuery })
+                });
+                const json = await res.json();
+                anilistData = json.data || {};
+            } catch(e) { console.error("Anilist batch fetch failed"); }
+
+            // 2. Render the rich cards
             let htmlPayload = "";
-            snapshot.docs.slice(0, 15).forEach((itemDoc) => {
-                const item = itemDoc.data();
+            batch.forEach((item, i) => {
                 const safeTitle = (item.title || 'Untitled').replace(/'/g, "\\'");
+                const aniMatch = anilistData[`anime${i}`];
                 
-                // Triggers the exact same app.sliderNavigate animation used in action_slider
+                const poster = aniMatch?.coverImage?.extraLarge || item.coverImage || 'https://via.placeholder.com/150x225?text=No+Cover';
+                const genre = aniMatch?.genres?.[0] || 'Anime';
+                const type = item.type || 'TV';
+                const sub = item.sub || '?';
+                const dub = item.dub || 0;
+                
+                const docIdStr = String(item.id);
+                const isAdded = window.app.state.carouselLibrarySet.has(docIdStr);
+
+                const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
+                const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
+
                 htmlPayload += `
-                    <div class="snap-start shrink-0 w-32 h-48 relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-10"
-                         onclick="window.app.sliderNavigate('${item.id}', '${safeTitle}', '${item.coverImage}', '${item.type || 'TV'}', '${item.sub || '?'}', '${item.dub || 0}')">
+                <div class="snap-start shrink-0 w-[140px] md:w-[190px] relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-10"
+                     onclick="window.app.sliderNavigate('${item.id}', '${safeTitle}', '${poster}', '${type}', '${sub}', '${dub}')">
+                    
+                    <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden shadow-lg border border-white/10 group-hover:border-[#F47521]/70 transition-colors bg-[#111]">
+                        <img src="${poster}" loading="lazy" class="w-full h-full object-cover">
                         
-                        <div class="relative w-full h-full rounded-xl overflow-hidden shadow-lg border border-white/10 group-hover:border-[#F47521]/70 transition-colors bg-[#111]">
-                            <img src="${item.coverImage || 'https://via.placeholder.com/150x225?text=No+Cover'}" class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity">
-                            <div class="absolute bottom-0 w-full bg-gradient-to-t from-black via-black/80 to-transparent p-3 pt-12">
-                                <p class="text-xs font-bold text-white line-clamp-2 leading-tight drop-shadow-md">${item.title || 'Untitled'}</p>
+                        <button onclick="window.app.toggleSliderLibrary(event, this, '${item.id}', '${safeTitle}', '${poster}')" 
+                                data-added="${isAdded}"
+                                class="absolute top-2 right-2 z-30 p-2 rounded bg-black/70 backdrop-blur-md border border-white/10 shadow-lg hover:bg-black transition-all flex items-center justify-center">
+                            ${isAdded ? savedSvg : unsavedSvg}
+                        </button>
+                        
+                        <div class="absolute top-0 left-0 p-2 flex flex-col gap-1.5 items-start z-10 pointer-events-none">
+                            <span class="bg-black/80 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded border border-white/10 font-bold uppercase shadow-md">${genre}</span>
+                            <div class="flex gap-1">
+                                <span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-1.5 py-0.5 rounded shadow-md font-bold">CC ${sub}</span>
+                                ${dub > 0 ? `<span class="bg-purple-600/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-1.5 py-0.5 rounded shadow-md font-bold"><i class="fas fa-microphone text-[9px]"></i> ${dub}</span>` : ''}
                             </div>
                         </div>
                     </div>
+                    
+                    <h3 class="mt-2 text-sm md:text-base text-gray-100 font-bold truncate group-hover:text-white transition-colors drop-shadow-md">${item.title}</h3>
+                </div>
                 `;
             });
-            sliderMount.innerHTML = htmlPayload;
+            
+            const sliderMount = document.getElementById('library-slider');
+            if (start === 0) {
+                sliderMount.innerHTML = htmlPayload;
+            } else {
+                sliderMount.insertAdjacentHTML('beforeend', htmlPayload);
+            }
+            
+            currentlyDisplayedLibrary = end;
+            
+            // Toggle "Load More" button visibility
+            const btn = document.getElementById('view-more-library-btn');
+            if (currentlyDisplayedLibrary >= fullLibraryItems.length) {
+                btn.classList.add('hidden-el');
+            } else {
+                btn.classList.remove('hidden-el');
+            }
         }
+
+        // Global expand function called by HTML button
+        window.expandLibrary = async () => {
+            const btn = document.getElementById('view-more-library-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+            btn.disabled = true;
+            
+            await renderLibraryBatch(currentlyDisplayedLibrary, currentlyDisplayedLibrary + 15);
+            
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        };
 
         // --- Profile Name & Bio Editor ---
         window.openProfileEditor = () => {
@@ -515,47 +662,57 @@
                 document.getElementById('user-bio').innerText = newBio || "No bio set.";
                 
                 closeProfileEditor();
-            } catch(e) {
-                console.error("Failed saving profile", e);
-            }
+            } catch(e) { console.error("Failed saving profile", e); }
         };
 
-        // --- Profile Picture Upload (ImgBB Integration) ---
+        // --- CROPPER.JS IMAGE UPLOAD (ImgBB) ---
         window.handleImageUpload = (event) => {
             const file = event.target.files[0];
             if (!file) return;
 
             const reader = new FileReader();
             reader.onload = (e) => {
-                pendingImageDataUrl = e.target.result;
-                document.getElementById('crop-preview').src = pendingImageDataUrl;
+                const previewImg = document.getElementById('crop-preview');
+                previewImg.src = e.target.result;
                 document.getElementById('crop-modal').classList.remove('hidden-el');
+                
+                // Initialize Cropper JS
+                if(cropperInstance) cropperInstance.destroy();
+                cropperInstance = new Cropper(previewImg, {
+                    aspectRatio: 1, // Enforce Square
+                    viewMode: 1,    // Restrict crop box to not exceed canvas
+                    background: false
+                });
             };
             reader.readAsDataURL(file);
         };
 
         window.closeCropModal = () => {
             document.getElementById('crop-modal').classList.add('hidden-el');
-            pendingImageDataUrl = null;
+            if(cropperInstance) cropperInstance.destroy();
+            cropperInstance = null;
             document.getElementById('pfp-upload').value = ''; 
-            document.getElementById('save-pfp-btn').innerHTML = 'Save';
-            document.getElementById('save-pfp-btn').disabled = false;
+            const btn = document.getElementById('save-pfp-btn');
+            btn.innerHTML = 'Save';
+            btn.disabled = false;
         };
 
         window.saveCroppedImage = async () => {
-            if (!pendingImageDataUrl || !currentAuthenticatedUser) return;
+            if (!cropperInstance || !currentAuthenticatedUser) return;
             
             const btn = document.getElementById('save-pfp-btn');
             btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Uploading...';
             btn.disabled = true;
 
             try {
-                // 1. Convert Base64 back to Blob for ImgBB
-                const base64Data = pendingImageDataUrl.split(',')[1];
+                // Get cropped image data
+                const canvas = cropperInstance.getCroppedCanvas({ width: 400, height: 400 });
+                const base64Data = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
+                
                 const formData = new FormData();
                 formData.append('image', base64Data);
 
-                // 2. Upload to ImgBB
+                // Upload to ImgBB
                 const imgbbResponse = await fetch('https://api.imgbb.com/1/upload?key=4a683051e76ed12880a42aefa6ed427b', {
                     method: 'POST',
                     body: formData
@@ -566,7 +723,7 @@
                 if (imgbbData.success) {
                     const hostedUrl = imgbbData.data.url;
 
-                    // 3. Save ImgBB URL to Firestore
+                    // Save ImgBB URL to Firestore
                     const userDocRef = doc(db, "users", currentAuthenticatedUser.uid);
                     await updateDoc(userDocRef, { photoURL: hostedUrl });
                     
@@ -587,10 +744,7 @@
             document.getElementById('bg-search-modal').classList.remove('hidden-el');
             document.getElementById('anilist-search-input').focus();
         };
-
-        window.closeBgSearchModal = () => {
-            document.getElementById('bg-search-modal').classList.add('hidden-el');
-        };
+        window.closeBgSearchModal = () => document.getElementById('bg-search-modal').classList.add('hidden-el');
 
         window.searchAniList = async () => {
             const query = document.getElementById('anilist-search-input').value.trim();
@@ -613,7 +767,7 @@
             try {
                 const response = await fetch('https://graphql.anilist.co', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ query: graphqlQuery, variables: { search: query } })
                 });
 
@@ -621,7 +775,7 @@
                 const animes = data.data.Page.media.filter(a => a.bannerImage);
                 
                 if (animes.length === 0) {
-                    resultsDiv.innerHTML = `<p class="text-sm text-center text-gray-400 py-4">No backdrop images found for this title.</p>`;
+                    resultsDiv.innerHTML = `<p class="text-sm text-center text-gray-400 py-4">No backdrop images found.</p>`;
                     return;
                 }
 
@@ -629,18 +783,14 @@
                 animes.forEach(anime => {
                     const title = anime.title.english || anime.title.romaji;
                     const bgUrl = anime.bannerImage;
-                    
                     html += `
                         <div class="glass-panel p-2 rounded-xl flex flex-col gap-2 cursor-pointer hover:bg-white/10 transition-colors" onclick="setProfileBackground('${bgUrl}')">
                             <img src="${bgUrl}" class="w-full h-24 object-cover rounded-lg border border-white/10">
-                            <div class="px-1">
-                                <p class="text-sm font-bold text-white line-clamp-1">${title}</p>
-                            </div>
+                            <div class="px-1"><p class="text-sm font-bold text-white line-clamp-1">${title}</p></div>
                         </div>
                     `;
                 });
                 resultsDiv.innerHTML = html;
-
             } catch(e) {
                 resultsDiv.innerHTML = `<p class="text-sm text-center text-red-500 py-4">Error fetching AniList.</p>`;
             }
@@ -653,9 +803,7 @@
                 await updateDoc(userDocRef, { bgImage: imageUrl });
                 document.getElementById('profile-card').style.backgroundImage = `url('${imageUrl}')`;
                 closeBgSearchModal();
-            } catch(e) {
-                console.error("Failed setting background.", e);
-            }
+            } catch(e) { console.error("Failed setting background.", e); }
         };
 
         // --- Toggles & Actions ---
@@ -670,9 +818,7 @@
                 if (checkedVal && !isOwnerMode) {
                     document.getElementById('stat-library-count').innerText = "Locked";
                 }
-            } catch(e) {
-                console.error(e);
-            }
+            } catch(e) {}
         };
 
         window.handleIncognitoToggle = async () => {
@@ -681,9 +827,7 @@
             try {
                 const userDocRef = doc(db, "users", currentAuthenticatedUser.uid);
                 await updateDoc(userDocRef, { incognitoMode: checkedVal });
-            } catch(e) {
-                console.error(e);
-            }
+            } catch(e) {}
         };
 
         window.handleProfileLike = async () => {
@@ -713,9 +857,7 @@
                     if (!cachedProfileData.likedByArray) cachedProfileData.likedByArray = [];
                     cachedProfileData.likedByArray.push(currentAuthenticatedUser.uid);
                 }
-            } catch (err) {
-                console.error(err);
-            }
+            } catch (err) {}
         };
 
         window.navigateToChat = () => {
@@ -730,9 +872,7 @@
             try {
                 await signOut(auth);
                 window.location.href = '/index.html'; 
-            } catch (error) {
-                console.error(error);
-            }
+            } catch (error) {}
         };
     </script>
 </body>
