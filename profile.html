@@ -42,7 +42,7 @@
         <!-- PROFILE CARD -->
         <div id="profile-card" class="rounded-[2rem] p-6 md:p-8 relative overflow-hidden mb-4 transition-all border border-white/10 bg-[#0a0a0c] bg-cover bg-center">
             
-            <!-- Dark Overlay (NO BLUR, just darkness for readability) -->
+            <!-- Dark Overlay (For text readability on background images) -->
             <div class="absolute inset-0 bg-black/60 z-0 transition-all duration-300"></div>
 
             <!-- BG Edit Button (Owner Only) -->
@@ -54,7 +54,7 @@
                 
                 <!-- Avatar (Left) -->
                 <div class="relative group cursor-pointer shrink-0">
-                    <div class="w-24 h-24 md:w-28 md:h-28 rounded-full p-1 bg-gradient-to-br from-[#F47521] to-[#8a3a0c] transition-transform duration-300 group-hover:scale-105">
+                    <div class="w-24 h-24 md:w-28 md:h-28 rounded-full p-1 bg-gradient-to-br from-[#F47521] to-[#8a3a0c] transition-transform duration-300 group-hover:scale-105 shadow-xl">
                         <img id="user-avatar" src="https://ui-avatars.com/api/?name=User&background=111&color=F47521" alt="Profile" class="w-full h-full rounded-full object-cover border-4 border-[#030305] bg-[#111]">
                     </div>
                     
@@ -64,7 +64,7 @@
                     <input type="file" id="pfp-upload" class="hidden" accept="image/*" onchange="handleImageUpload(event)">
                 </div>
                 
-                <!-- User Details (Right) -->
+                <!-- User Details & Bio (Right) -->
                 <div class="flex flex-col flex-1 text-left justify-center">
                     
                     <!-- Display Mode -->
@@ -94,7 +94,7 @@
                 </div>
             </div>
 
-            <!-- Visitor Actions -->
+            <!-- VISITOR ACTIONS (Like & Message) -->
             <div id="visitor-actions" class="hidden-el w-full flex gap-3 mt-6 relative z-10">
                 <button onclick="handleProfileLike()" class="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2">
                     <i id="heart-icon" class="far fa-heart text-gray-400"></i> Like
@@ -105,7 +105,7 @@
             </div>
         </div>
 
-        <!-- STATS BLOCK (Below Profile Card) -->
+        <!-- STATS BLOCK (Total Likes & Total Items in Library) -->
         <div class="flex gap-3 mb-8 relative z-10">
             <div class="flex-1 glass-panel p-4 rounded-2xl flex flex-col items-center justify-center">
                 <h3 id="stat-bottom-likes" class="text-xl md:text-2xl font-black text-[#F47521]">0</h3>
@@ -113,14 +113,13 @@
             </div>
             <div class="flex-1 glass-panel p-4 rounded-2xl flex flex-col items-center justify-center">
                 <h3 id="stat-library-count" class="text-xl md:text-2xl font-black text-[#F47521]">...</h3>
-                <p class="text-[9px] md:text-[10px] text-gray-400 uppercase tracking-widest font-bold mt-0.5">Library Items</p>
+                <p class="text-[9px] md:text-[10px] text-gray-400 uppercase tracking-widest font-bold mt-0.5">Items in Profile</p>
             </div>
         </div>
 
         <!-- ================= OWNER VIEW: MENU BUTTONS ================= -->
         <div id="owner-menu" class="hidden-el space-y-3">
             
-            <!-- Privacy & Settings Group -->
             <div class="mb-6 space-y-2">
                 <!-- Private Library Toggle -->
                 <div class="glass-panel rounded-2xl p-4 flex items-center justify-between">
@@ -157,7 +156,6 @@
                 </div>
             </div>
 
-            <!-- Navigation Buttons -->
             <button onclick="window.location.href='/library.html'" class="w-full glass-panel hover:bg-white/5 p-4 rounded-2xl flex items-center justify-between group transition-all">
                 <div class="flex items-center gap-4">
                     <div class="w-12 h-12 rounded-xl bg-[#F47521]/10 flex items-center justify-center text-[#F47521] group-hover:scale-105 transition-transform">
@@ -211,10 +209,10 @@
             </button>
         </div>
 
-        <!-- ================= VISITOR VIEW: LIBRARY SLIDER ================= -->
+        <!-- ================= VISITOR VIEW: LIBRARY ANIME POSTERS ================= -->
         <div id="visitor-library-container" class="hidden-el space-y-4">
             <div class="flex items-center justify-between px-2">
-                <h3 class="text-md font-bold text-white flex items-center gap-2">
+                <h3 class="text-lg font-black text-white flex items-center gap-2">
                     <i class="fas fa-bookmark text-[#F47521]"></i> User's Library
                 </h3>
             </div>
@@ -224,13 +222,14 @@
                     <i class="fas fa-lock"></i>
                 </div>
                 <p class="font-bold text-white">Library is Private</p>
+                <p class="text-xs text-gray-400 mt-1">This user has chosen to hide their anime collection.</p>
             </div>
 
             <div id="visitor-library-public" class="hidden-el">
-                <div id="library-slider" class="flex overflow-x-auto gap-4 snap-x no-scrollbar pb-4">
-                    <div class="text-sm text-gray-500 italic px-2">Loading library...</div>
+                <div id="library-slider" class="flex overflow-x-auto gap-4 snap-x no-scrollbar pb-4 pt-1">
+                    <div class="text-sm text-gray-500 italic px-2">Loading library posters...</div>
                 </div>
-                <button onclick="window.location.href='/library.html?id=' + activeProfileUid" class="w-full glass-panel hover:bg-white/10 text-white py-3 rounded-xl text-sm font-bold transition-all mt-2">
+                <button onclick="window.location.href='/library.html?user=' + activeProfileUid" class="w-full glass-panel hover:bg-white/10 text-white py-3 rounded-xl text-sm font-bold transition-all mt-2">
                     View Full Library
                 </button>
             </div>
@@ -238,7 +237,6 @@
 
     </main>
 
-    <!-- Bottom Nav Mount -->
     <div id="bottomnav-mount" class="fixed bottom-0 w-full z-50"></div>
 
     <!-- Image Crop Modal Placeholder -->
@@ -269,17 +267,14 @@
             </div>
 
             <div id="anilist-results" class="flex-1 overflow-y-auto space-y-4 no-scrollbar pr-1">
-                <!-- Results populated here -->
                 <p class="text-xs text-gray-500 text-center py-4">Powered by AniList</p>
             </div>
         </div>
     </div>
 
-    <!-- Scripts Loading -->
     <script src="/header.js"></script>
     <script src="/bottomnav.js"></script>
 
-    <!-- Application Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
@@ -304,26 +299,30 @@
         onAuthStateChanged(auth, async (user) => {
             currentAuthenticatedUser = user;
             
-            // PATH BASED ROUTING: Check for UID in the URL path (e.g., /profile.html/USER_ID)
-            const pathSegments = window.location.pathname.split('/').filter(Boolean);
-            let targetQueryId = null;
+            // ROUTING: Check for ?user= or ?id= in the URL
+            const urlParams = new URLSearchParams(window.location.search);
+            let targetQueryId = urlParams.get('user') || urlParams.get('id');
             
-            const profileIndex = pathSegments.findIndex(seg => seg.includes('profile.html'));
-            if (profileIndex !== -1 && pathSegments.length > profileIndex + 1) {
-                targetQueryId = pathSegments[profileIndex + 1];
-            } else {
-                // Fallback to ?id= query param
-                const urlParams = new URLSearchParams(window.location.search);
-                targetQueryId = urlParams.get('id');
+            // PATH ROUTING FALLBACK: Check if ID is just appended to URL path
+            if (!targetQueryId) {
+                const pathSegments = window.location.pathname.split('/').filter(Boolean);
+                const profileIndex = pathSegments.findIndex(seg => seg.includes('profile.html'));
+                if (profileIndex !== -1 && pathSegments.length > profileIndex + 1) {
+                    targetQueryId = pathSegments[profileIndex + 1];
+                }
             }
 
             if (user) {
-                if (!targetQueryId || targetQueryId === user.uid) {
-                    window.activeProfileUid = user.uid;
-                    isOwnerMode = true;
-                } else {
+                if (targetQueryId) {
+                    // IF ANY ID IS IN THE URL, FORCE VIEWER MODE.
+                    // This means if a user types ?user= THEIR_OWN_ID, they will see their profile 
+                    // exactly as the public sees it (Viewer Mode).
                     window.activeProfileUid = targetQueryId;
                     isOwnerMode = false;
+                } else {
+                    // Standard access without URL parameters opens the Owner Dashboard
+                    window.activeProfileUid = user.uid;
+                    isOwnerMode = true;
                 }
                 await renderView();
             } else {
@@ -382,14 +381,12 @@
                 const libRef = collection(db, "users", window.activeProfileUid, "library");
                 const libSnapshot = await getDocs(libRef);
                 
-                // Set the total items stat safely
                 if (!isOwnerMode && cachedProfileData && cachedProfileData.hideLibrary) {
                     document.getElementById('stat-library-count').innerText = "Locked";
                 } else {
                     document.getElementById('stat-library-count').innerText = libSnapshot.size || 0;
                 }
 
-                // If visitor, populate the slider as well
                 if (!isOwnerMode) {
                     loadVisitorLibrary(libSnapshot);
                 }
@@ -461,13 +458,14 @@
             }
 
             let htmlPayload = "";
-            snapshot.docs.slice(0, 5).forEach((itemDoc) => {
+            // Render up to 15 posters in the profile preview slider
+            snapshot.docs.slice(0, 15).forEach((itemDoc) => {
                 const item = itemDoc.data();
                 htmlPayload += `
-                    <div class="snap-center shrink-0 w-28 h-40 rounded-xl overflow-hidden relative group border border-white/10 bg-[#111]">
-                        <img src="${item.coverImage || 'https://via.placeholder.com/150x200?text=No+Cover'}" class="w-full h-full object-cover opacity-80">
-                        <div class="absolute bottom-0 w-full bg-gradient-to-t from-black via-black/80 to-transparent p-2 pt-6">
-                            <p class="text-[10px] font-bold text-white truncate">${item.title || 'Untitled'}</p>
+                    <div class="snap-center shrink-0 w-32 h-48 rounded-xl overflow-hidden relative group border border-white/10 bg-[#111] shadow-lg">
+                        <img src="${item.coverImage || 'https://via.placeholder.com/150x225?text=No+Cover'}" class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity">
+                        <div class="absolute bottom-0 w-full bg-gradient-to-t from-black via-black/80 to-transparent p-3 pt-12">
+                            <p class="text-xs font-bold text-white line-clamp-2 leading-tight drop-shadow-md">${item.title || 'Untitled'}</p>
                         </div>
                     </div>
                 `;
@@ -575,7 +573,6 @@
                 });
 
                 const data = await response.json();
-                // ONLY filter series that contain official banner backdrops
                 const animes = data.data.Page.media.filter(a => a.bannerImage);
                 
                 if (animes.length === 0) {
@@ -624,7 +621,7 @@
                 const userDocRef = doc(db, "users", currentAuthenticatedUser.uid);
                 await updateDoc(userDocRef, { hideLibrary: checkedVal });
                 cachedProfileData.hideLibrary = checkedVal;
-                // Re-evaluate library count visibility instantly
+                
                 if (checkedVal && !isOwnerMode) {
                     document.getElementById('stat-library-count').innerText = "Locked";
                 }
