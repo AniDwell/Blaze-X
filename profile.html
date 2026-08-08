@@ -22,7 +22,6 @@
         
         .hidden-el { display: none !important; }
         
-        /* Clean Glassmorphism without glows */
         .glass-panel {
             background: rgba(255, 255, 255, 0.03);
             backdrop-filter: blur(16px);
@@ -36,17 +35,15 @@
 </head>
 <body class="min-h-screen flex flex-col pb-24 relative overflow-x-hidden">
 
-    <!-- Header Mount -->
     <div id="header-mount" class="relative z-40"></div>
 
-    <!-- MAIN CONTAINER -->
     <main class="flex-1 w-full max-w-2xl mx-auto p-4 pt-6 relative z-10">
         
         <!-- PROFILE CARD -->
-        <div id="profile-card" class="rounded-[2rem] p-6 md:p-8 relative overflow-hidden mb-8 transition-all border border-white/10 bg-[#0a0a0c] bg-cover bg-center">
+        <div id="profile-card" class="rounded-[2rem] p-6 md:p-8 relative overflow-hidden mb-4 transition-all border border-white/10 bg-[#0a0a0c] bg-cover bg-center">
             
-            <!-- Dark Overlay for Text Readability -->
-            <div class="absolute inset-0 bg-black/70 backdrop-blur-[2px] z-0"></div>
+            <!-- Dark Overlay (NO BLUR, just darkness for readability) -->
+            <div class="absolute inset-0 bg-black/60 z-0 transition-all duration-300"></div>
 
             <!-- BG Edit Button (Owner Only) -->
             <button id="edit-bg-btn" onclick="openBgSearchModal()" class="hidden-el absolute top-4 right-4 z-20 w-8 h-8 bg-black/50 hover:bg-[#F47521] border border-white/20 rounded-full flex items-center justify-center text-white transition-colors cursor-pointer">
@@ -94,19 +91,29 @@
                             <button onclick="closeProfileEditor()" class="bg-white/10 text-white px-4 py-1.5 rounded-lg text-xs hover:bg-white/20">Cancel</button>
                         </div>
                     </div>
-
                 </div>
             </div>
 
-            <!-- Stats / Visitor Actions -->
+            <!-- Visitor Actions -->
             <div id="visitor-actions" class="hidden-el w-full flex gap-3 mt-6 relative z-10">
                 <button onclick="handleProfileLike()" class="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2">
-                    <i id="heart-icon" class="far fa-heart text-gray-400"></i>
-                    <span id="stat-likes-count">0</span> Likes
+                    <i id="heart-icon" class="far fa-heart text-gray-400"></i> Like
                 </button>
                 <button onclick="navigateToChat()" class="flex-[2] bg-[#F47521] hover:bg-[#d96216] text-white py-3 rounded-xl text-sm font-black tracking-wide transition-all flex items-center justify-center gap-2">
                     <i class="fas fa-paper-plane"></i> Message User
                 </button>
+            </div>
+        </div>
+
+        <!-- STATS BLOCK (Below Profile Card) -->
+        <div class="flex gap-3 mb-8 relative z-10">
+            <div class="flex-1 glass-panel p-4 rounded-2xl flex flex-col items-center justify-center">
+                <h3 id="stat-bottom-likes" class="text-xl md:text-2xl font-black text-[#F47521]">0</h3>
+                <p class="text-[9px] md:text-[10px] text-gray-400 uppercase tracking-widest font-bold mt-0.5">Total Likes</p>
+            </div>
+            <div class="flex-1 glass-panel p-4 rounded-2xl flex flex-col items-center justify-center">
+                <h3 id="stat-library-count" class="text-xl md:text-2xl font-black text-[#F47521]">...</h3>
+                <p class="text-[9px] md:text-[10px] text-gray-400 uppercase tracking-widest font-bold mt-0.5">Library Items</p>
             </div>
         </div>
 
@@ -151,7 +158,7 @@
             </div>
 
             <!-- Navigation Buttons -->
-            <button onclick="window.location.href='library.html'" class="w-full glass-panel hover:bg-white/5 p-4 rounded-2xl flex items-center justify-between group transition-all">
+            <button onclick="window.location.href='/library.html'" class="w-full glass-panel hover:bg-white/5 p-4 rounded-2xl flex items-center justify-between group transition-all">
                 <div class="flex items-center gap-4">
                     <div class="w-12 h-12 rounded-xl bg-[#F47521]/10 flex items-center justify-center text-[#F47521] group-hover:scale-105 transition-transform">
                         <i class="fas fa-bookmark text-xl"></i>
@@ -163,7 +170,7 @@
                 <i class="fas fa-chevron-right text-gray-600 group-hover:text-white transition-colors"></i>
             </button>
 
-            <button onclick="window.location.href='chats.html'" class="w-full glass-panel hover:bg-white/5 p-4 rounded-2xl flex items-center justify-between group transition-all">
+            <button onclick="window.location.href='/chats.html'" class="w-full glass-panel hover:bg-white/5 p-4 rounded-2xl flex items-center justify-between group transition-all">
                 <div class="flex items-center gap-4">
                     <div class="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-105 transition-transform">
                         <i class="fas fa-comments text-xl"></i>
@@ -175,7 +182,7 @@
                 <i class="fas fa-chevron-right text-gray-600 group-hover:text-white transition-colors"></i>
             </button>
 
-            <button onclick="window.location.href='notifications.html'" class="w-full glass-panel hover:bg-white/5 p-4 rounded-2xl flex items-center justify-between group transition-all">
+            <button onclick="window.location.href='/notifications.html'" class="w-full glass-panel hover:bg-white/5 p-4 rounded-2xl flex items-center justify-between group transition-all">
                 <div class="flex items-center gap-4">
                     <div class="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 group-hover:scale-105 transition-transform">
                         <i class="fas fa-bell text-xl"></i>
@@ -187,7 +194,7 @@
                 <i class="fas fa-chevron-right text-gray-600 group-hover:text-white transition-colors"></i>
             </button>
 
-            <button onclick="window.location.href='history.html'" class="w-full glass-panel hover:bg-white/5 p-4 rounded-2xl flex items-center justify-between group transition-all mt-4">
+            <button onclick="window.location.href='/history.html'" class="w-full glass-panel hover:bg-white/5 p-4 rounded-2xl flex items-center justify-between group transition-all mt-4">
                 <div class="flex items-center gap-4">
                     <div class="w-12 h-12 rounded-xl bg-gray-500/10 flex items-center justify-center text-gray-400 group-hover:scale-105 transition-transform">
                         <i class="fas fa-history text-xl"></i>
@@ -223,7 +230,7 @@
                 <div id="library-slider" class="flex overflow-x-auto gap-4 snap-x no-scrollbar pb-4">
                     <div class="text-sm text-gray-500 italic px-2">Loading library...</div>
                 </div>
-                <button onclick="window.location.href='library.html?id=' + activeProfileUid" class="w-full glass-panel hover:bg-white/10 text-white py-3 rounded-xl text-sm font-bold transition-all mt-2">
+                <button onclick="window.location.href='/library.html?id=' + activeProfileUid" class="w-full glass-panel hover:bg-white/10 text-white py-3 rounded-xl text-sm font-bold transition-all mt-2">
                     View Full Library
                 </button>
             </div>
@@ -232,7 +239,7 @@
     </main>
 
     <!-- Bottom Nav Mount -->
-    <div id="bottomnav-container"></div>
+    <div id="bottomnav-mount" class="fixed bottom-0 w-full z-50"></div>
 
     <!-- Image Crop Modal Placeholder -->
     <div id="crop-modal" class="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center hidden-el p-4">
@@ -252,7 +259,7 @@
     <div id="bg-search-modal" class="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center hidden-el p-4 backdrop-blur-sm">
         <div class="glass-panel w-full max-w-lg rounded-2xl p-5 flex flex-col max-h-[80vh]">
             <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-bold">Search Anime Background</h3>
+                <h3 class="text-lg font-bold">Select Backdrop Image</h3>
                 <button onclick="closeBgSearchModal()" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
             </div>
             
@@ -261,7 +268,7 @@
                 <button onclick="searchAniList()" class="bg-[#F47521] text-white px-4 rounded-xl text-sm font-bold"><i class="fas fa-search"></i></button>
             </div>
 
-            <div id="anilist-results" class="flex-1 overflow-y-auto space-y-3 no-scrollbar pr-1">
+            <div id="anilist-results" class="flex-1 overflow-y-auto space-y-4 no-scrollbar pr-1">
                 <!-- Results populated here -->
                 <p class="text-xs text-gray-500 text-center py-4">Powered by AniList</p>
             </div>
@@ -269,8 +276,8 @@
     </div>
 
     <!-- Scripts Loading -->
-    <script src="header.js"></script>
-    <script src="bottomnav.js"></script>
+    <script src="/header.js"></script>
+    <script src="/bottomnav.js"></script>
 
     <!-- Application Logic -->
     <script type="module">
@@ -296,8 +303,19 @@
 
         onAuthStateChanged(auth, async (user) => {
             currentAuthenticatedUser = user;
-            const urlParams = new URLSearchParams(window.location.search);
-            const targetQueryId = urlParams.get('id');
+            
+            // PATH BASED ROUTING: Check for UID in the URL path (e.g., /profile.html/USER_ID)
+            const pathSegments = window.location.pathname.split('/').filter(Boolean);
+            let targetQueryId = null;
+            
+            const profileIndex = pathSegments.findIndex(seg => seg.includes('profile.html'));
+            if (profileIndex !== -1 && pathSegments.length > profileIndex + 1) {
+                targetQueryId = pathSegments[profileIndex + 1];
+            } else {
+                // Fallback to ?id= query param
+                const urlParams = new URLSearchParams(window.location.search);
+                targetQueryId = urlParams.get('id');
+            }
 
             if (user) {
                 if (!targetQueryId || targetQueryId === user.uid) {
@@ -321,7 +339,7 @@
                             </div>
                             <h2 class="text-2xl font-black text-white mb-2">Login Required</h2>
                             <p class="text-gray-400 text-sm mb-6 max-w-sm">Sign in to manage your BlazeX profile.</p>
-                            <a href="index.html" class="bg-[#F47521] text-white px-6 py-2.5 rounded-xl font-bold">Return Home</a>
+                            <a href="/index.html" class="bg-[#F47521] text-white px-6 py-2.5 rounded-xl font-bold">Return Home</a>
                         </div>
                     `;
                 }
@@ -356,6 +374,30 @@
             }
 
             await loadUserData();
+            await fetchLibraryCountAndData();
+        }
+
+        async function fetchLibraryCountAndData() {
+            try {
+                const libRef = collection(db, "users", window.activeProfileUid, "library");
+                const libSnapshot = await getDocs(libRef);
+                
+                // Set the total items stat safely
+                if (!isOwnerMode && cachedProfileData && cachedProfileData.hideLibrary) {
+                    document.getElementById('stat-library-count').innerText = "Locked";
+                } else {
+                    document.getElementById('stat-library-count').innerText = libSnapshot.size || 0;
+                }
+
+                // If visitor, populate the slider as well
+                if (!isOwnerMode) {
+                    loadVisitorLibrary(libSnapshot);
+                }
+
+            } catch (err) {
+                console.error("Failed to load library size", err);
+                document.getElementById('stat-library-count').innerText = "Error";
+            }
         }
 
         async function loadUserData() {
@@ -375,13 +417,12 @@
                     document.getElementById('user-avatar').src = cachedProfileData.photoURL;
                 }
                 
-                // Apply Profile Background if set
                 if (cachedProfileData.bgImage) {
                     document.getElementById('profile-card').style.backgroundImage = `url('${cachedProfileData.bgImage}')`;
                 }
 
                 let countedLikes = cachedProfileData.likedByArray ? cachedProfileData.likedByArray.length : (cachedProfileData.likesCount || 0);
-                document.getElementById('stat-likes-count').innerText = countedLikes;
+                document.getElementById('stat-bottom-likes').innerText = countedLikes;
 
                 const heartIcon = document.getElementById('heart-icon');
                 if (currentAuthenticatedUser && cachedProfileData.likedByArray && cachedProfileData.likedByArray.includes(currentAuthenticatedUser.uid)) {
@@ -393,8 +434,6 @@
                 if (isOwnerMode) {
                     document.getElementById('toggle-hide-library').checked = cachedProfileData.hideLibrary || false;
                     document.getElementById('toggle-incognito').checked = cachedProfileData.incognitoMode || false;
-                } else {
-                    loadVisitorLibrary();
                 }
 
             } catch (error) {
@@ -402,7 +441,7 @@
             }
         }
 
-        async function loadVisitorLibrary() {
+        function loadVisitorLibrary(snapshot) {
             const privateMsg = document.getElementById('visitor-library-private');
             const publicSlider = document.getElementById('visitor-library-public');
             const sliderMount = document.getElementById('library-slider');
@@ -416,31 +455,24 @@
             privateMsg.classList.add('hidden-el');
             publicSlider.classList.remove('hidden-el');
 
-            try {
-                const libRef = collection(db, "users", window.activeProfileUid, "library");
-                const snapshot = await getDocs(libRef);
-
-                if (snapshot.empty) {
-                    sliderMount.innerHTML = `<div class="text-sm text-gray-600 px-2 py-4">No entries yet.</div>`;
-                    return;
-                }
-
-                let htmlPayload = "";
-                snapshot.docs.slice(0, 5).forEach((itemDoc) => {
-                    const item = itemDoc.data();
-                    htmlPayload += `
-                        <div class="snap-center shrink-0 w-28 h-40 rounded-xl overflow-hidden relative group border border-white/10 bg-[#111]">
-                            <img src="${item.coverImage || 'https://via.placeholder.com/150x200?text=No+Cover'}" class="w-full h-full object-cover opacity-80">
-                            <div class="absolute bottom-0 w-full bg-gradient-to-t from-black via-black/80 to-transparent p-2 pt-6">
-                                <p class="text-[10px] font-bold text-white truncate">${item.title || 'Untitled'}</p>
-                            </div>
-                        </div>
-                    `;
-                });
-                sliderMount.innerHTML = htmlPayload;
-            } catch (err) {
-                sliderMount.innerHTML = `<div class="text-xs text-red-500 py-2">Error loading.</div>`;
+            if (snapshot.empty) {
+                sliderMount.innerHTML = `<div class="text-sm text-gray-600 px-2 py-4">No entries yet.</div>`;
+                return;
             }
+
+            let htmlPayload = "";
+            snapshot.docs.slice(0, 5).forEach((itemDoc) => {
+                const item = itemDoc.data();
+                htmlPayload += `
+                    <div class="snap-center shrink-0 w-28 h-40 rounded-xl overflow-hidden relative group border border-white/10 bg-[#111]">
+                        <img src="${item.coverImage || 'https://via.placeholder.com/150x200?text=No+Cover'}" class="w-full h-full object-cover opacity-80">
+                        <div class="absolute bottom-0 w-full bg-gradient-to-t from-black via-black/80 to-transparent p-2 pt-6">
+                            <p class="text-[10px] font-bold text-white truncate">${item.title || 'Untitled'}</p>
+                        </div>
+                    </div>
+                `;
+            });
+            sliderMount.innerHTML = htmlPayload;
         }
 
         // --- Profile Name & Bio Editor ---
@@ -526,12 +558,11 @@
 
             const graphqlQuery = `
             query ($search: String) {
-                Page(page: 1, perPage: 10) {
+                Page(page: 1, perPage: 15) {
                     media(search: $search, type: ANIME, sort: POPULARITY_DESC) {
                         id
                         title { romaji english }
                         bannerImage
-                        coverImage { extraLarge }
                     }
                 }
             }`;
@@ -544,25 +575,24 @@
                 });
 
                 const data = await response.json();
-                const animes = data.data.Page.media;
+                // ONLY filter series that contain official banner backdrops
+                const animes = data.data.Page.media.filter(a => a.bannerImage);
                 
                 if (animes.length === 0) {
-                    resultsDiv.innerHTML = `<p class="text-sm text-center text-gray-400 py-4">No anime found.</p>`;
+                    resultsDiv.innerHTML = `<p class="text-sm text-center text-gray-400 py-4">No backdrop images found for this title.</p>`;
                     return;
                 }
 
                 let html = '';
                 animes.forEach(anime => {
                     const title = anime.title.english || anime.title.romaji;
-                    // Prefer bannerImage, fallback to coverImage
-                    const bgUrl = anime.bannerImage || anime.coverImage.extraLarge;
+                    const bgUrl = anime.bannerImage;
                     
                     html += `
-                        <div class="glass-panel p-2 rounded-xl flex items-center gap-3 cursor-pointer hover:bg-white/10 transition-colors" onclick="setProfileBackground('${bgUrl}')">
-                            <img src="${anime.coverImage.extraLarge}" class="w-12 h-16 object-cover rounded-lg">
-                            <div class="flex-1">
+                        <div class="glass-panel p-2 rounded-xl flex flex-col gap-2 cursor-pointer hover:bg-white/10 transition-colors" onclick="setProfileBackground('${bgUrl}')">
+                            <img src="${bgUrl}" class="w-full h-24 object-cover rounded-lg border border-white/10">
+                            <div class="px-1">
                                 <p class="text-sm font-bold text-white line-clamp-1">${title}</p>
-                                ${!anime.bannerImage ? '<p class="text-[10px] text-gray-400">No official banner, using cover</p>' : ''}
                             </div>
                         </div>
                     `;
@@ -593,6 +623,11 @@
             try {
                 const userDocRef = doc(db, "users", currentAuthenticatedUser.uid);
                 await updateDoc(userDocRef, { hideLibrary: checkedVal });
+                cachedProfileData.hideLibrary = checkedVal;
+                // Re-evaluate library count visibility instantly
+                if (checkedVal && !isOwnerMode) {
+                    document.getElementById('stat-library-count').innerText = "Locked";
+                }
             } catch(e) {
                 console.error(e);
             }
@@ -616,18 +651,26 @@
             }
             const userDocRef = doc(db, "users", window.activeProfileUid);
             try {
+                let currentLikes = parseInt(document.getElementById('stat-bottom-likes').innerText) || 0;
+                
                 if (cachedProfileData.likedByArray && cachedProfileData.likedByArray.includes(currentAuthenticatedUser.uid)) {
                     await updateDoc(userDocRef, {
                         likedByArray: arrayRemove(currentAuthenticatedUser.uid),
                         likesCount: increment(-1)
                     });
+                    document.getElementById('stat-bottom-likes').innerText = Math.max(0, currentLikes - 1);
+                    document.getElementById('heart-icon').className = "far fa-heart text-gray-400";
+                    cachedProfileData.likedByArray = cachedProfileData.likedByArray.filter(uid => uid !== currentAuthenticatedUser.uid);
                 } else {
                     await updateDoc(userDocRef, {
                         likedByArray: arrayUnion(currentAuthenticatedUser.uid),
                         likesCount: increment(1)
                     });
+                    document.getElementById('stat-bottom-likes').innerText = currentLikes + 1;
+                    document.getElementById('heart-icon').className = "fas fa-heart text-[#F47521]";
+                    if (!cachedProfileData.likedByArray) cachedProfileData.likedByArray = [];
+                    cachedProfileData.likedByArray.push(currentAuthenticatedUser.uid);
                 }
-                await loadUserData();
             } catch (err) {
                 console.error(err);
             }
@@ -638,13 +681,13 @@
                 alert("Please log in to send a message.");
                 return;
             }
-            window.location.href = `chats.html?userA=${currentAuthenticatedUser.uid}&userB=${window.activeProfileUid}`;
+            window.location.href = `/chats.html?userA=${currentAuthenticatedUser.uid}&userB=${window.activeProfileUid}`;
         };
 
         window.handleLogout = async () => {
             try {
                 await signOut(auth);
-                window.location.href = 'index.html'; 
+                window.location.href = '/index.html'; 
             } catch (error) {
                 console.error(error);
             }
