@@ -75,14 +75,17 @@
         <div id="modal-content" class="glass-modal w-full max-w-sm rounded-xl p-6 transform transition-all scale-95 opacity-0 shadow-2xl"></div>
     </div>
 
-    <!-- Layout Fix: 100dvh avoids mobile scroll issues, pt clears header, pb clears bottom nav -->
-    <div id="app-container" class="hidden flex flex-col h-[100dvh] w-full pt-[60px] pb-[70px]">
+    <!-- Layout Fix: Changed to h-[100dvh] flex column to perfectly bound the header, main, and nav without overlapping or dead space -->
+    <div id="app-container" class="hidden flex flex-col h-[100dvh] w-full bg-black">
         
-        <div id="header-container" class="fixed top-0 left-0 w-full z-50 h-[60px]"></div>
+        <!-- Header now stacks naturally at the top -->
+        <div id="header-container" class="flex-none z-50 relative w-full"></div>
 
-        <main id="main-content" class="flex-1 overflow-y-auto overflow-x-hidden relative hide-scrollbar bg-black">
+        <!-- Main content expands to fill remaining space and scrolls internally -->
+        <main id="main-content" class="flex-1 overflow-y-auto overflow-x-hidden relative hide-scrollbar">
             
-            <div id="home-view" class="w-full flex flex-col gap-6 animate-fade-in pt-2 pb-4">
+            <!-- Removed pb-20 and pb-8, replaced with pb-6 for just a subtle cushion at the very bottom of the content -->
+            <div id="home-view" class="w-full flex flex-col gap-6 animate-fade-in pb-6 pt-2">
                 <!-- Sliders sequence -->
                 <div id="carousel-container"></div>
                 <div id="history-container"></div>
@@ -106,7 +109,8 @@
             <div id="dynamic-view" class="hidden w-full"></div>
         </main>
 
-        <div id="bottomnav-container" class="fixed bottom-0 left-0 w-full z-50"></div>
+        <!-- Bottom nav now stacks naturally at the bottom, removed absolute positioning -->
+        <div id="bottomnav-container" class="flex-none w-full z-50 relative"></div>
     </div>
 
     <script>
@@ -253,8 +257,25 @@
     <script src="auth.js"></script>
     <script src="bottomnav.js"></script>
     
+    <!-- Notification System Loaded Here -->
+    <script type="module" src="popup.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+        import { initializeGlobalNotifications } from "./popup.js";
+        
+        // Initialize Firebase specifically for the global notification listener
+        const firebaseConfig = {
+            apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
+            authDomain: "blaze-x-db2f5.firebaseapp.com",
+            projectId: "blaze-x-db2f5"
+        };
+        const app = initializeApp(firebaseConfig);
+        
+        // Start listening to all incoming messages across the app
+        initializeGlobalNotifications(app);
+    </script>
+
     <!-- All Custom Slider Scripts (Loaded safely at the bottom) -->
-    <script type="module" src="popup.js"></script> <!-- Added right here -->
     <script src="carousel.js"></script>
     <script src="continue_watching.js"></script>
     <script src="recent_slider.js"></script> 
