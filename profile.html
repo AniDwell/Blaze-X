@@ -166,7 +166,7 @@
                 <i class="fas fa-chevron-right text-gray-600 group-hover:text-white transition-colors"></i>
             </button>
 
-            <button onclick="window.location.href='/chats.html'" class="w-full glass-panel hover:bg-white/5 p-4 rounded-2xl flex items-center justify-between group transition-all">
+            <button onclick="window.location.href='/chat.html'" class="w-full glass-panel hover:bg-white/5 p-4 rounded-2xl flex items-center justify-between group transition-all">
                 <div class="flex items-center gap-4">
                     <div class="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-105 transition-transform">
                         <i class="fas fa-comments text-xl"></i>
@@ -233,7 +233,6 @@
                             <i class="fas fa-chevron-left text-lg"></i>
                         </button>
                         
-                        <!-- Track matches Action Slider spec exactly -->
                         <div id="library-slider-track" class="flex gap-4 md:gap-5 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-4 pt-2 -mx-4 px-4 md:mx-0 md:px-0">
                             <div class="text-sm text-gray-500 italic">Loading library...</div>
                         </div>
@@ -243,24 +242,24 @@
                         </button>
                     </div>
 
-                    <button id="view-full-library-btn" onclick="showFullGridLibrary()" class="w-full glass-panel hover:bg-white/10 text-white py-3.5 rounded-xl text-sm font-bold transition-all mt-4 border border-[#F47521]/30 text-[#F47521]">
-                        View Full Library Grid <i class="fas fa-th-large ml-1"></i>
+                    <button id="view-full-library-btn" onclick="showFullLibrary()" class="w-full glass-panel hover:bg-white/10 text-white py-3.5 rounded-xl text-sm font-bold transition-all mt-4 border border-[#F47521]/30 text-[#F47521]">
+                        View Full Library <i class="fas fa-layer-group ml-1"></i>
                     </button>
                 </div>
 
-                <!-- THE GRID VIEW (Hidden Initially) -->
-                <div id="library-grid-view" class="hidden-el">
+                <!-- THE FULL LIBRARY VIEW (Genre Sliders) -->
+                <div id="library-full-view" class="hidden-el">
                     <div class="flex items-center justify-between mb-6">
                         <h2 class="text-xl font-black text-white border-l-4 border-[#F47521] pl-3 uppercase tracking-wider">
                             Full Library
                         </h2>
                         <button onclick="showSliderLibrary()" class="text-xs text-gray-400 hover:text-white transition-colors bg-white/5 px-3 py-1.5 rounded-lg border border-white/10">
-                            <i class="fas fa-arrow-left mr-1"></i> Back to Slider
+                            <i class="fas fa-arrow-left mr-1"></i> Back to Recent
                         </button>
                     </div>
                     
-                    <div id="library-grid-mount" class="space-y-8 pb-4">
-                        <!-- Genre Categories injected here -->
+                    <div id="library-full-mount" class="pb-4">
+                        <!-- Genre Category Sliders injected here -->
                     </div>
                 </div>
 
@@ -520,7 +519,7 @@
             } catch (err) { document.getElementById('stat-library-count').innerText = "Error"; }
         }
 
-        // --- RICH VISITOR LIBRARY (Slider & Grid Generation) ---
+        // --- RICH VISITOR LIBRARY (Slider Generation) ---
         async function setupVisitorLibrary(snapshot) {
             const privateMsg = document.getElementById('visitor-library-private');
             const publicSlider = document.getElementById('visitor-library-public');
@@ -542,7 +541,7 @@
                 return;
             }
 
-            // Fetch AniList Data for top 15 recent items for the slider
+            // Fetch AniList Data for top 15 recent items for the initial slider
             const recentBatch = fullLibraryItems.slice(0, 15);
             enrichedLibraryItems = await enrichBatchWithAniList(recentBatch);
             
@@ -620,18 +619,24 @@
             `;
         }
 
+        window.scrollTrack = (trackId, direction) => {
+            const track = document.getElementById(trackId);
+            if (track) {
+                const scrollAmount = window.innerWidth > 768 ? 600 : 300;
+                track.scrollBy({ left: scrollAmount * direction, behavior: 'smooth' });
+            }
+        };
+
         function renderSliderCards(items) {
             const track = document.getElementById('library-slider-track');
             track.innerHTML = items.map(createRichCardHtml).join('');
             
-            // Slider Scrolling Logic
             const leftBtn = document.getElementById('slide-left-btn');
             const rightBtn = document.getElementById('slide-right-btn');
             
             if (leftBtn && rightBtn) {
                 const scrollAmount = window.innerWidth > 768 ? 600 : 300;
                 
-                // Remove old listeners to prevent duplication if re-rendered
                 const newLeft = leftBtn.cloneNode(true);
                 const newRight = rightBtn.cloneNode(true);
                 leftBtn.parentNode.replaceChild(newLeft, leftBtn);
@@ -648,22 +653,20 @@
             }
         }
 
-        // --- GRID VIEW LOGIC ---
-        window.showFullGridLibrary = async () => {
+        // --- FULL LIBRARY SLIDERS LOGIC ---
+        window.showFullLibrary = async () => {
             document.getElementById('library-slider-view').classList.add('hidden-el');
-            document.getElementById('library-grid-view').classList.remove('hidden-el');
+            document.getElementById('library-full-view').classList.remove('hidden-el');
             
-            const gridMount = document.getElementById('library-grid-mount');
-            gridMount.innerHTML = `<div class="text-center text-gray-500 py-10"><i class="fas fa-spinner fa-spin text-2xl text-[#F47521] mb-2"></i><br>Organizing Full Library...</div>`;
+            const mount = document.getElementById('library-full-mount');
+            mount.innerHTML = `<div class="text-center text-gray-500 py-10"><i class="fas fa-spinner fa-spin text-2xl text-[#F47521] mb-2"></i><br>Organizing Full Library...</div>`;
 
-            // If we haven't fetched AniList data for the rest of the library, do it now
             if (fullLibraryItems.length > enrichedLibraryItems.length) {
                 const remaining = fullLibraryItems.slice(enrichedLibraryItems.length);
                 const enrichedRemaining = await enrichBatchWithAniList(remaining);
                 enrichedLibraryItems = [...enrichedLibraryItems, ...enrichedRemaining];
             }
 
-            // Group by Genre
             const grouped = {};
             enrichedLibraryItems.forEach(item => {
                 const g = item.genre || 'Other';
@@ -671,32 +674,33 @@
                 grouped[g].push(item);
             });
 
-            let gridHtml = '';
+            let fullHtml = '';
             for (const [genre, items] of Object.entries(grouped)) {
-                gridHtml += `
-                    <div>
+                const trackId = `track-${genre.replace(/\s+/g, '-')}`;
+                fullHtml += `
+                    <div class="mb-8">
                         <h3 class="text-lg font-bold text-white mb-3 text-gray-300 border-b border-white/10 pb-1">${genre} <span class="text-xs text-gray-500 ml-2">(${items.length})</span></h3>
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            ${items.map(item => `
-                                <div class="w-full relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03]"
-                                     onclick="window.app.sliderNavigate('${item.id}', '${(item.title||'').replace(/'/g, "\\'")}', '${item.poster}', '${item.type}', '${item.sub}', '${item.dub}')">
-                                    <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden border border-white/10 bg-[#111]">
-                                        <img src="${item.poster}" loading="lazy" class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity">
-                                        <div class="absolute bottom-0 w-full bg-gradient-to-t from-black via-black/80 to-transparent p-2 pt-8">
-                                            <p class="text-[11px] font-bold text-white line-clamp-2 leading-tight">${item.title}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            `).join('')}
+                        <div class="relative group/slider">
+                            <button onclick="scrollTrack('${trackId}', -1)" class="hidden md:flex absolute -left-5 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl">
+                                <i class="fas fa-chevron-left text-lg"></i>
+                            </button>
+                            
+                            <div id="${trackId}" class="flex gap-4 md:gap-5 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-4 pt-2 -mx-4 px-4 md:mx-0 md:px-0">
+                                ${items.map(createRichCardHtml).join('')}
+                            </div>
+                            
+                            <button onclick="scrollTrack('${trackId}', 1)" class="hidden md:flex absolute -right-5 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl">
+                                <i class="fas fa-chevron-right text-lg"></i>
+                            </button>
                         </div>
                     </div>
                 `;
             }
-            gridMount.innerHTML = gridHtml;
+            mount.innerHTML = fullHtml;
         };
 
         window.showSliderLibrary = () => {
-            document.getElementById('library-grid-view').classList.add('hidden-el');
+            document.getElementById('library-full-view').classList.add('hidden-el');
             document.getElementById('library-slider-view').classList.remove('hidden-el');
         };
 
@@ -913,7 +917,7 @@
 
         window.navigateToChat = () => {
             if(!currentAuthenticatedUser) { alert("Please log in to send a message."); return; }
-            window.location.href = `/chats.html?userA=${currentAuthenticatedUser.uid}&userB=${window.activeProfileUid}`;
+            window.location.href = `/chat.html?userA=${currentAuthenticatedUser.uid}&userB=${window.activeProfileUid}`;
         };
 
         window.handleLogout = async () => {
