@@ -43,7 +43,7 @@
             line-height: 1.1 !important;
         }
 
-        .msg-container { will-change: transform; }
+        .msg-container { will-change: transform; transition: transform 0.2s ease-out; }
         
         .typing-dot { animation: typing 1.4s infinite ease-in-out both; }
         .typing-dot:nth-child(1) { animation-delay: -0.32s; }
@@ -60,6 +60,22 @@
         
         .modal-enter { transform: scale(0.95); opacity: 0; }
         .modal-enter-active { transform: scale(1); opacity: 1; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+
+        /* Time reveal layout */
+        .msg-time-reveal {
+            position: absolute;
+            right: -60px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 10px;
+            color: #888;
+            opacity: 0;
+            transition: opacity 0.2s;
+            white-space: nowrap;
+        }
+        .swiping-left .msg-time-reveal {
+            opacity: 1;
+        }
     </style>
 </head>
 <body class="flex flex-col h-[100dvh]">
@@ -71,12 +87,16 @@
             </button>
             <div class="relative cursor-pointer" onclick="window.location.href='/profile.html?id=' + targetUserId">
                 <img id="chat-header-pfp" src="https://ui-avatars.com/api/?name=User&background=111&color=F47521" alt="Profile" class="w-10 h-10 rounded-full object-cover border border-white/10 shadow-sm">
-                <div class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-[#0a0a0a] rounded-full"></div>
             </div>
             <div class="flex flex-col cursor-pointer" onclick="window.location.href='/profile.html?id=' + targetUserId">
                 <h2 id="chat-header-name" class="text-white font-bold text-sm leading-tight tracking-wide">Loading...</h2>
-                <div id="status-indicator" class="text-[10px] text-gray-400 font-medium tracking-wide">
-                    <span id="last-seen-text">Online</span>
+                <div id="status-indicator" class="text-[10px] text-gray-400 font-medium tracking-wide h-4 flex items-center hidden">
+                    <span class="theme-text italic flex gap-0.5 items-center">
+                        typing
+                        <span class="w-1 h-1 rounded-full theme-bg typing-dot ml-1"></span>
+                        <span class="w-1 h-1 rounded-full theme-bg typing-dot"></span>
+                        <span class="w-1 h-1 rounded-full theme-bg typing-dot"></span>
+                    </span>
                 </div>
             </div>
         </div>
@@ -93,7 +113,7 @@
         </div>
     </header>
 
-    <main id="chat-box" class="flex-1 overflow-y-auto hide-scrollbar p-4 flex flex-col gap-4 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-fixed relative">
+    <main id="chat-box" class="flex-1 overflow-x-hidden overflow-y-auto hide-scrollbar p-4 flex flex-col gap-4 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-fixed relative">
         <div id="messages-container" class="relative z-10 flex flex-col gap-3 pb-2 flex-1 justify-end"></div>
     </main>
 
@@ -189,7 +209,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot, query, orderBy, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot, query, orderBy, serverTimestamp, getDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
@@ -213,6 +233,7 @@
         let reactionMsgId = null; 
         let messages = [];
         let originalFooterHTML = "";
+        let typingTimeout = null;
 
         // Swipe State
         let touchStartX = 0;
@@ -220,6 +241,7 @@
         let swipeMsgEl = null;
         let isSwiping = false;
         let longPressTimer;
+        let lastTapTime = 0;
 
         // Canvas State
         let canvas, ctx, isDrawing = false, originalImage = null;
@@ -294,6 +316,7 @@
             await loadTargetProfile();
             listenToChatMeta();
             listenToMessages();
+            listenToTyping();
         });
 
         async function loadTargetProfile() {
@@ -306,6 +329,23 @@
                     if (data.photoURL) document.getElementById('chat-header-pfp').src = data.photoURL;
                 }
             } catch (e) { console.error("Error loading profile"); }
+        }
+
+        function listenToTyping() {
+            onSnapshot(doc(db, "chats", window.chatRoomId, "typing", window.targetUserId), (docSnap) => {
+                const indicator = document.getElementById('status-indicator');
+                if (docSnap.exists() && docSnap.data().isTyping) {
+                    indicator.classList.remove('hidden');
+                } else {
+                    indicator.classList.add('hidden');
+                }
+            });
+        }
+
+        function sendTypingStatus(isTyping) {
+            setDoc(doc(db, "chats", window.chatRoomId, "typing", window.activeUserUid), {
+                isTyping: isTyping
+            }, { merge: true });
         }
 
         // --- BLOCKING & CHAT META LOGIC ---
@@ -352,17 +392,7 @@
                 blockBtnMenu.innerHTML = `<i class="fas fa-ban w-4 text-center"></i> Block User`;
                 blockBtnMenu.classList.replace('text-gray-300', 'text-red-500');
                 
-                // Re-bind input events since footer was replaced
-                const tx = document.getElementById('msg-input');
-                if (tx) {
-                    tx.addEventListener('input', function() {
-                        this.style.height = 'auto';
-                        this.style.height = (this.scrollHeight) + 'px';
-                    });
-                    tx.addEventListener('keypress', function(e) {
-                        if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-                    });
-                }
+                initInputs();
             }
         }
 
@@ -398,7 +428,26 @@
             const q = query(collection(db, "chats", window.chatRoomId, "messages"), orderBy("timestamp", "asc"));
             onSnapshot(q, (snapshot) => {
                 messages = [];
-                snapshot.forEach(doc => { messages.push({ id: doc.id, ...doc.data() }); });
+                let unseenMessagesBatch = [];
+
+                snapshot.forEach(docSnap => { 
+                    const data = docSnap.data();
+                    messages.push({ id: docSnap.id, ...data });
+                    
+                    // Auto-mark incoming as seen
+                    if (data.senderId !== window.activeUserUid && !data.isSeen) {
+                        unseenMessagesBatch.push(docSnap.id);
+                    }
+                });
+
+                if (unseenMessagesBatch.length > 0) {
+                    const batch = writeBatch(db);
+                    unseenMessagesBatch.forEach(id => {
+                        batch.update(doc(db, "chats", window.chatRoomId, "messages", id), { isSeen: true });
+                    });
+                    batch.commit().catch(e => console.error("Error marking seen", e));
+                }
+
                 renderMessages();
             });
         }
@@ -407,7 +456,11 @@
             const container = document.getElementById('messages-container');
             container.innerHTML = '';
             
-            messages.forEach(msg => {
+            // Find the last message sent by active user for the seen indicator
+            const myMessages = messages.filter(m => m.senderId === window.activeUserUid);
+            const lastMyMessageId = myMessages.length > 0 ? myMessages[myMessages.length - 1].id : null;
+
+            messages.forEach((msg) => {
                 const isMe = msg.senderId === window.activeUserUid;
                 const isEmoji = isEmojiOnly(msg.text) && !msg.imageUrl;
                 
@@ -441,7 +494,7 @@
                     contentHtml += `<span class="text-sm leading-relaxed">${msg.text}</span>`;
                 }
                 
-                // IG Style Reaction rendering
+                // Reaction rendering
                 if (msg.reaction) {
                     contentHtml += `<div class="absolute -bottom-3 ${isMe ? 'right-2' : 'left-2'} bg-[#222] border border-white/10 rounded-full px-2 py-0.5 text-[11px] shadow-lg z-10 flex items-center gap-1">${msg.reaction}</div>`;
                 }
@@ -450,21 +503,28 @@
                 const wrapperClass = isMe ? 'self-end flex-row-reverse' : 'self-start flex-row';
                 const timeString = msg.timestamp ? new Date(msg.timestamp.toMillis()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...';
                 
+                // Seen Indicator - ONLY ON LATEST MESSAGE
                 let seenHtml = '';
-                if (isMe) {
-                    if (msg.isSeen) seenHtml = `<span class="ml-1 text-[8px] text-blue-400 font-bold tracking-wide">Seen</span>`;
-                    else seenHtml = `<i class="fas fa-check-double text-[8px] theme-text ml-0.5"></i>`;
+                if (isMe && msg.id === lastMyMessageId) {
+                    if (msg.isSeen) seenHtml = `<span class="ml-1 text-[10px] text-blue-400 font-bold tracking-wide"><i class="fas fa-check-double"></i></span>`;
+                    else seenHtml = `<span class="ml-1 text-[10px] text-gray-400 font-bold tracking-wide"><i class="fas fa-check"></i></span>`;
                 }
 
                 const msgHtml = `
                     <div class="msg-container flex gap-2 w-full max-w-[85%] relative ${wrapperClass} ${msg.reaction ? 'mb-3' : ''}" id="msg-el-${msg.id}" data-id="${msg.id}">
-                        <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-full">
+                        <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-full relative">
+                            
                             <div class="${bubbleClass} ${extraClasses} relative group break-words min-w-[50px] transition-transform duration-200">
                                 ${replyHtml}
                                 ${contentHtml}
                             </div>
+                            
+                            <!-- Swipe Reveal Time -->
+                            <div class="msg-time-reveal ${isMe ? 'left-auto -right-12' : 'right-auto -left-12'}">
+                                ${timeString}
+                            </div>
+
                             <div class="flex items-center gap-1 mt-1 text-[9px] text-gray-500 font-medium ${isMe ? 'mr-1' : 'ml-1'}">
-                                <span>${timeString}</span>
                                 ${editedHtml}
                                 ${seenHtml}
                             </div>
@@ -511,19 +571,44 @@
             input.value = '';
             input.style.height = 'auto';
             cancelReplyEdit();
+            sendTypingStatus(false);
 
             try {
                 if (editingId) {
                     await updateDoc(msgRef, payload);
                 } else {
-                    await setDoc(msgRef, payload);
-                    // Update parent doc for 100% working chat lists
-                    await setDoc(parentChatRef, {
+                    const batch = writeBatch(db);
+                    
+                    // 1. Write the message
+                    batch.set(msgRef, payload);
+                    
+                    // 2. Update chat list subcollection for SENDER
+                    const senderListRef = doc(db, "users", window.activeUserUid, "chats_list", window.chatRoomId);
+                    batch.set(senderListRef, {
+                        lastMessage: text,
+                        timestamp: serverTimestamp(),
+                        targetId: window.targetUserId,
+                        unreadCount: 0
+                    }, { merge: true });
+
+                    // 3. Update chat list subcollection for RECEIVER
+                    const receiverListRef = doc(db, "users", window.targetUserId, "chats_list", window.chatRoomId);
+                    batch.set(receiverListRef, {
+                        lastMessage: text,
+                        timestamp: serverTimestamp(),
+                        targetId: window.activeUserUid,
+                        unreadCount: 1 // Example logic to increment
+                    }, { merge: true });
+
+                    // 4. Update parent doc backwards compatibility
+                    batch.set(parentChatRef, {
                         type: 'direct',
                         participants: [window.activeUserUid, window.targetUserId],
                         lastMessage: text,
                         lastMessageTime: serverTimestamp()
                     }, { merge: true });
+
+                    await batch.commit();
                 }
             } catch(e) { console.error("Send failed", e); }
         };
@@ -532,61 +617,112 @@
         function attachGestures() {
             const container = document.getElementById('chat-box');
             
-            container.addEventListener('touchstart', (e) => {
-                const msgEl = e.target.closest('.msg-container');
-                if(msgEl) {
-                    swipeMsgEl = msgEl;
-                    touchStartX = e.touches[0].clientX;
-                    touchStartY = e.touches[0].clientY;
-                    isSwiping = false;
-                    swipeMsgEl.style.transition = 'none'; 
-                    
-                    // Increased hold timing for emoji (800ms)
-                    longPressTimer = setTimeout(() => {
-                        openReactionPopup(e, swipeMsgEl.dataset.id);
-                        swipeMsgEl = null; 
-                    }, 800);
-                }
-            }, {passive: true});
+            // Remove previous listener instances by cloning if needed, but since innerHTML is rewritten, events on children vanish.
+            // We listen on the container via delegation.
+            container.removeEventListener('touchstart', handleTouchStart);
+            container.removeEventListener('touchmove', handleTouchMove);
+            container.removeEventListener('touchend', handleTouchEnd);
+            
+            container.addEventListener('touchstart', handleTouchStart, {passive: false});
+            container.addEventListener('touchmove', handleTouchMove, {passive: false});
+            container.addEventListener('touchend', handleTouchEnd, {passive: false});
+        }
 
-            container.addEventListener('touchmove', (e) => {
-                if(longPressTimer) clearTimeout(longPressTimer); 
-                
-                if(!swipeMsgEl) return;
-                const diffX = touchStartX - e.touches[0].clientX;
-                const diffY = Math.abs(touchStartY - e.touches[0].clientY);
-                
-                if (!isSwiping) {
-                    if (diffX > 10 && diffX > diffY) isSwiping = true;
-                    else if (diffY > 10) {
-                        swipeMsgEl.style.transform = '';
-                        swipeMsgEl = null;
-                        return;
-                    }
-                }
-
-                if (isSwiping && diffX > 0) {
-                    const move = Math.min(diffX, 70);
-                    swipeMsgEl.style.transform = `translateX(-${move}px)`;
-                }
-            }, {passive: true});
-
-            container.addEventListener('touchend', (e) => {
-                if(longPressTimer) clearTimeout(longPressTimer);
-                
-                if(swipeMsgEl && isSwiping) {
-                    const diffX = touchStartX - e.changedTouches[0].clientX;
-                    swipeMsgEl.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
-                    swipeMsgEl.style.transform = 'translateX(0)';
-                    
-                    if (diffX > 50) {
-                        targetMsgId = swipeMsgEl.dataset.id;
-                        actionReply();
-                    }
-                }
-                swipeMsgEl = null;
+        function handleTouchStart(e) {
+            const msgEl = e.target.closest('.msg-container');
+            if(msgEl) {
+                swipeMsgEl = msgEl;
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
                 isSwiping = false;
-            });
+                swipeMsgEl.style.transition = 'none'; 
+                
+                longPressTimer = setTimeout(() => {
+                    openReactionPopup(e, swipeMsgEl.dataset.id);
+                    swipeMsgEl = null; 
+                }, 800);
+            }
+        }
+
+        function handleTouchMove(e) {
+            if(longPressTimer) clearTimeout(longPressTimer); 
+            
+            if(!swipeMsgEl) return;
+            const diffX = touchStartX - e.touches[0].clientX;
+            const diffY = Math.abs(touchStartY - e.touches[0].clientY);
+            
+            if (!isSwiping) {
+                if (Math.abs(diffX) > 10 && Math.abs(diffX) > diffY) {
+                    isSwiping = true;
+                    // Prevent vertical scroll when swiping horizontally
+                    if(e.cancelable) e.preventDefault();
+                }
+                else if (diffY > 10) {
+                    swipeMsgEl.style.transform = '';
+                    swipeMsgEl.classList.remove('swiping-left');
+                    swipeMsgEl = null;
+                    return;
+                }
+            }
+
+            if (isSwiping) {
+                if(e.cancelable) e.preventDefault();
+                // Swiping Left (Reveal Time)
+                if (diffX > 0) {
+                    const move = Math.min(diffX, 50);
+                    swipeMsgEl.style.transform = `translateX(-${move}px)`;
+                    swipeMsgEl.classList.add('swiping-left');
+                } 
+                // Swiping Right (Reply)
+                else if (diffX < 0) {
+                    const move = Math.max(diffX, -70);
+                    swipeMsgEl.style.transform = `translateX(${-move}px)`; // move visually right
+                    swipeMsgEl.classList.remove('swiping-left');
+                }
+            }
+        }
+
+        function handleTouchEnd(e) {
+            if(longPressTimer) clearTimeout(longPressTimer);
+            
+            // Double Tap Logic
+            const currentTime = new Date().getTime();
+            const tapLength = currentTime - lastTapTime;
+            
+            if (tapLength < 300 && tapLength > 0 && !isSwiping) {
+                const msgEl = e.target.closest('.msg-container');
+                if (msgEl) {
+                    e.preventDefault();
+                    toggleDoubleTapReaction(msgEl.dataset.id);
+                }
+            }
+            lastTapTime = currentTime;
+
+            // Swipe Release Logic
+            if(swipeMsgEl && isSwiping) {
+                const diffX = touchStartX - e.changedTouches[0].clientX;
+                swipeMsgEl.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
+                swipeMsgEl.style.transform = 'translateX(0)';
+                swipeMsgEl.classList.remove('swiping-left');
+                
+                // Swiped right enough to reply
+                if (diffX < -50) {
+                    targetMsgId = swipeMsgEl.dataset.id;
+                    actionReply();
+                }
+            }
+            swipeMsgEl = null;
+            isSwiping = false;
+        }
+
+        window.toggleDoubleTapReaction = async (msgId) => {
+            const msg = messages.find(m => m.id === msgId);
+            if (!msg) return;
+            const newReaction = msg.reaction === '❤️' ? null : '❤️';
+            try {
+                const msgRef = doc(db, "chats", window.chatRoomId, "messages", msgId);
+                await updateDoc(msgRef, { reaction: newReaction });
+            } catch(e) { console.error("Reaction failed"); }
         }
 
         window.openReactionPopup = (e, msgId) => {
@@ -616,7 +752,11 @@
             hideReactionPopup();
             try {
                 const msgRef = doc(db, "chats", window.chatRoomId, "messages", reactionMsgId);
-                await updateDoc(msgRef, { reaction: emoji });
+                // Toggle if it's the exact same emoji
+                const msg = messages.find(m => m.id === reactionMsgId);
+                const finalEmoji = (msg && msg.reaction === emoji) ? null : emoji;
+                
+                await updateDoc(msgRef, { reaction: finalEmoji });
             } catch(e) { console.error("Reaction failed"); }
         };
 
@@ -745,7 +885,9 @@
                     const parentChatRef = doc(db, "chats", window.chatRoomId);
                     const msgRef = doc(collection(db, "chats", window.chatRoomId, "messages"));
                     
-                    await setDoc(msgRef, {
+                    const batch = writeBatch(db);
+                    
+                    batch.set(msgRef, {
                         text: caption,
                         imageUrl: data.data.url,
                         senderId: window.activeUserUid,
@@ -755,14 +897,33 @@
                         isSeen: false
                     });
                     
-                    // Update parent doc for chat lists
-                    await setDoc(parentChatRef, {
+                    // Update chat list subcollection for SENDER
+                    const senderListRef = doc(db, "users", window.activeUserUid, "chats_list", window.chatRoomId);
+                    batch.set(senderListRef, {
+                        lastMessage: "Sent an image",
+                        timestamp: serverTimestamp(),
+                        targetId: window.targetUserId,
+                        unreadCount: 0
+                    }, { merge: true });
+
+                    // Update chat list subcollection for RECEIVER
+                    const receiverListRef = doc(db, "users", window.targetUserId, "chats_list", window.chatRoomId);
+                    batch.set(receiverListRef, {
+                        lastMessage: "Sent an image",
+                        timestamp: serverTimestamp(),
+                        targetId: window.activeUserUid,
+                        unreadCount: 1 
+                    }, { merge: true });
+
+                    batch.set(parentChatRef, {
                         type: 'direct',
                         participants: [window.activeUserUid, window.targetUserId],
                         lastMessage: "Sent an image",
                         lastMessageTime: serverTimestamp()
                     }, { merge: true });
                     
+                    await batch.commit();
+
                     closeImageEditor();
                     cancelReplyEdit();
                 } else { throw new Error("Upload Failed"); }
@@ -887,7 +1048,6 @@
         function initUI() {
             renderThemeSwatches();
             
-            // Global click to close menus & reactions
             document.addEventListener('click', (e) => {
                 if (!e.target.closest('#header-menu') && !e.target.closest('header button i.fa-ellipsis-v')) {
                     document.getElementById('header-menu').classList.add('hidden');
@@ -899,11 +1059,23 @@
                     hideReactionPopup();
                 }
             });
+            initInputs();
+        }
 
+        function initInputs() {
             const tx = document.getElementById('msg-input');
             if(tx) {
                 tx.addEventListener('input', function() {
                     this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px';
+                    
+                    // Typing Indicator logic
+                    if (this.value.trim() !== '') {
+                        sendTypingStatus(true);
+                        clearTimeout(typingTimeout);
+                        typingTimeout = setTimeout(() => sendTypingStatus(false), 2000);
+                    } else {
+                        sendTypingStatus(false);
+                    }
                 });
                 tx.addEventListener('keypress', function(e) {
                     if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
