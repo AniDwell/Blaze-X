@@ -6,8 +6,7 @@ window.app.state = window.app.state || {};
 
 // In-memory set to instantly check if a carousel item is in the library
 window.app.state.carouselLibrarySet = new Set();
-// Store unsubscribe function to prevent memory leaks if re-initialized
-if (window.app.state.carouselUnsubscribe) window.app.state.carouselUnsubscribe();
+window.app.state.libraryUnsubscribe = null; // Store listener to avoid duplicates
 
 // --- GLOBAL FIREBASE INITIALIZATION ---
 let app, auth, db;
@@ -58,66 +57,65 @@ window.app.components.carousel = async () => {
         </div>
     `;
 
-    // --- FIREBASE SYNC: LIVE LISTENER (onSnapshot) ---
+    // --- FIREBASE SYNC: Live Listener for Auth & Library ---
     try {
         await initFirebase();
         const { onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
         const { collection, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
 
-        onAuthStateChanged(auth, (user) => {
-            if (user && !user.isAnonymous) {
-                const libRef = collection(db, "users", user.uid, "library");
-                
-                // Real-time listener for instantly updating the Library state
-                window.app.state.carouselUnsubscribe = onSnapshot(libRef, (snapshot) => {
-                    window.app.state.carouselLibrarySet.clear();
-                    snapshot.forEach(doc => {
-                        window.app.state.carouselLibrarySet.add(String(doc.id));
-                    });
+        onAuthStateChanged(auth, async (user) => {
+            if (window.app.state.libraryUnsubscribe) {
+                window.app.state.libraryUnsubscribe(); // Cleanup old listener
+            }
 
-                    // Quick UI update without re-rendering the whole carousel
-                    const btn = document.getElementById('carousel-lib-btn');
-                    if (btn && window.app.state.carouselItems) {
-                        const currentSlide = window.app.state.carouselItems[window.app.state.carouselCurrentIndex];
-                        if (currentSlide) {
-                            const isAdded = window.app.state.carouselLibrarySet.has(String(currentSlide.exactId));
-                            if (isAdded) {
-                                btn.dataset.added = "true";
-                                btn.className = "bg-white text-black px-5 py-2 md:px-6 md:py-3 rounded font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors border border-white flex items-center gap-2 shadow-lg";
-                                btn.innerHTML = `<i class="fas fa-check text-black"></i> Added`; // Removed green color
-                            } else {
-                                btn.dataset.added = "false";
-                                btn.className = "bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2 shadow-lg";
-                                btn.innerHTML = `<i class="fas fa-plus"></i> Library`;
-                            }
+            if (user && !user.isAnonymous) {
+                try {
+                    const libRef = collection(db, "users", user.uid, "library");
+                    
+                    // LIVE LISTENER: Instantly updates memory set when library changes
+                    window.app.state.libraryUnsubscribe = onSnapshot(libRef, (snapshot) => {
+                        window.app.state.carouselLibrarySet.clear();
+                        snapshot.forEach(doc => {
+                            window.app.state.carouselLibrarySet.add(String(doc.id));
+                        });
+
+                        // Re-render the current slide's buttons immediately on data change
+                        if (document.getElementById('carousel-ui-layer')) {
+                            window.app.updateCarouselUI(window.app.state.carouselCurrentIndex);
                         }
-                    }
-                }, (error) => {
-                    console.error("Failed to sync library for carousel:", error);
-                });
+                    });
+                } catch (e) {
+                    console.error("Failed to sync live library for carousel:", e);
+                }
             } else {
                 window.app.state.carouselLibrarySet.clear();
-                if (window.app.state.carouselUnsubscribe) window.app.state.carouselUnsubscribe();
+                if (document.getElementById('carousel-ui-layer')) {
+                    window.app.updateCarouselUI(window.app.state.carouselCurrentIndex);
+                }
             }
         });
     } catch (fbError) {
         console.error("Firebase Auth listener failed in Carousel:", fbError);
     }
 
-    // --- FETCH CAROUSEL DATA (ANILIST -> API) ---
+    // --- FETCH CAROUSEL DATA: AniList First, exact API match second ---
     try {
-        // Step 1: Fetch Top Trending anime of the month from AniList
+        const topSlides = [];
+        const baseUrl = 'https://anikoto-api-xi.vercel.app';
+
+        // Get trending/top of the month from AniList (fetch 20 to account for skips)
         const aniQuery = `
             query { 
-                Page(page: 1, perPage: 15) { 
-                    media(sort: TRENDING_DESC, type: ANIME, isAdult: false, format: TV) { 
-                        title { english romaji } 
+                Page(page: 1, perPage: 20) { 
+                    media(type: ANIME, sort: TRENDING_DESC, isAdult: false) { 
+                        title { romaji english }
+                        description
+                        averageScore
                         coverImage { extraLarge } 
-                        averageScore 
-                        description 
                     } 
                 } 
-            }`;
+            }
+        `;
 
         const aniRes = await fetch('https://graphql.anilist.co', {
             method: 'POST',
@@ -126,43 +124,53 @@ window.app.components.carousel = async () => {
         });
         
         const aniData = await aniRes.json();
-        const topAniList = aniData?.data?.Page?.media || [];
+        const aniListMedia = aniData?.data?.Page?.media || [];
 
-        // Step 2: Search Your API for these specific titles
-        const baseUrl = 'https://anikoto-api-xi.vercel.app';
-        const validSlides = [];
+        // Try matching AniList trending with your Custom API
+        for (const media of aniListMedia) {
+            if (topSlides.length >= 5) break; // Stop when we have 5 matched series
 
-        // We run searches in parallel to save loading time
-        await Promise.all(topAniList.map(async (anime) => {
-            const titleToSearch = anime.title.english || anime.title.romaji;
-            if (!titleToSearch) return;
+            const romaji = media.title.romaji || '';
+            const english = media.title.english || '';
+            const searchKeyword = english || romaji; 
+
+            if (!searchKeyword) continue;
 
             try {
-                // Adjust this search endpoint if your API uses a different path (e.g. /api/search?keyw=...)
-                const searchUrl = `${baseUrl}/api/search?keyword=${encodeURIComponent(titleToSearch)}`;
-                const searchRes = await fetch(searchUrl);
-                
-                if (searchRes.ok) {
-                    const searchData = await searchRes.json();
-                    const results = searchData.data || searchData.results || searchData;
-                    
-                    if (results && results.length > 0) {
-                        const matchedAnime = results[0]; // Take best match
-                        validSlides.push({
-                            exactId: matchedAnime.id,
-                            title: titleToSearch,
-                            finalImage: anime.coverImage?.extraLarge || 'https://via.placeholder.com/1280x720/111/fff?text=No+Image',
-                            finalRating: anime.averageScore || null,
-                            finalDescription: anime.description ? anime.description.replace(/<[^>]*>?/gm, '').trim() : 'No synopsis available.'
-                        });
-                    }
-                }
-            } catch (e) {
-                console.log(`Could not map ${titleToSearch} in custom API.`);
-            }
-        }));
+                // Adjust this search endpoint if your API uses a different path (e.g. /api/anime/search)
+                const searchRes = await fetch(`${baseUrl}/api/search?keyword=${encodeURIComponent(searchKeyword)}`);
+                if (!searchRes.ok) continue;
 
-        if (validSlides.length === 0) {
+                const searchData = await searchRes.json();
+                const apiResults = searchData.data || searchData.results || searchData || [];
+
+                // STRICT EXACT MATCH LOGIC (case-insensitive)
+                const exactMatch = apiResults.find(r => {
+                    const apiTitle = (r.title || '').toLowerCase();
+                    return apiTitle === romaji.toLowerCase() || apiTitle === english.toLowerCase();
+                });
+
+                // Skip if no exact match in your API
+                if (!exactMatch) {
+                    console.log(`Skipped (No Exact API Match): ${searchKeyword}`);
+                    continue;
+                }
+
+                // Push enriched exact match
+                topSlides.push({
+                    exactId: exactMatch.id,
+                    title: searchKeyword,
+                    finalImage: media.coverImage?.extraLarge || 'https://via.placeholder.com/1280x720/111/fff?text=No+Image',
+                    finalRating: media.averageScore || null,
+                    finalDescription: media.description ? media.description.replace(/<[^>]*>?/gm, '').trim() : 'No synopsis available.',
+                });
+
+            } catch (e) {
+                console.log(`Search failed for ${searchKeyword}`, e);
+            }
+        }
+
+        if (topSlides.length === 0) {
             container.innerHTML = `
                 <div class="p-6 text-center text-gray-500 text-xs border border-white/5 mx-4 rounded-xl bg-black tracking-widest uppercase">
                     <i class="fas fa-exclamation-circle mr-1 text-[#F47521]"></i> Stream Offline
@@ -170,9 +178,6 @@ window.app.components.carousel = async () => {
             `;
             return;
         }
-
-        // Keep Top 5 matches
-        const topSlides = validSlides.slice(0, 5);
 
         window.app.state.carouselItems = topSlides; 
         window.app.state.carouselCurrentIndex = 0;
@@ -230,16 +235,17 @@ window.app.updateCarouselUI = (index) => {
     const data = window.app.state.carouselItems[index];
     if (!data) return;
 
+    // Check Memory Set to see if ID exists
     const docIdStr = String(data.exactId);
     const isAdded = window.app.state.carouselLibrarySet.has(docIdStr);
     const safeTitle = (data.title || 'Unknown').replace(/'/g, "\\'");
 
     const ratingHtml = data.finalRating ? `<span class="flex items-center gap-1"><i class="fas fa-star"></i> ${data.finalRating}% SCORE</span>` : '';
 
-    // Standard UI Setup. Real-time updates handled by onSnapshot.
+    // Dynamic Button State (Removed green, using standard dark styling)
     const libraryBtnHtml = isAdded 
         ? `<button id="carousel-lib-btn" onclick="window.app.handleCarouselLibraryClick(event, ${index})" data-added="true" class="bg-white text-black px-5 py-2 md:px-6 md:py-3 rounded font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors border border-white flex items-center gap-2 shadow-lg">
-               <i class="fas fa-check text-black"></i> Added
+               <i class="fas fa-check"></i> Added
            </button>`
         : `<button id="carousel-lib-btn" onclick="window.app.handleCarouselLibraryClick(event, ${index})" data-added="false" class="bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2 shadow-lg">
                <i class="fas fa-plus"></i> Library
@@ -333,6 +339,7 @@ function startAutoRotate() {
 // --- DYNAMIC LIBRARY LOGIC (ADD & REMOVE) ---
 window.app.handleCarouselLibraryClick = async (event, index) => {
     event.stopPropagation(); 
+    
     const btn = event.currentTarget;
     
     try {
@@ -361,7 +368,7 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
         const libDocRef = doc(db, "users", auth.currentUser.uid, "library", docIdStr);
 
         if (isAdded) {
-            // Optimistic Remove UI
+            // Optimistic Remove UI (Listener will also catch this)
             window.app.state.carouselLibrarySet.delete(docIdStr);
             btn.dataset.added = "false";
             btn.className = "bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2 shadow-lg";
@@ -371,11 +378,11 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
             if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
 
         } else {
-            // Optimistic Add UI (Black checkmark)
+            // Optimistic Add UI (Listener will also catch this)
             window.app.state.carouselLibrarySet.add(docIdStr);
             btn.dataset.added = "true";
             btn.className = "bg-white text-black px-5 py-2 md:px-6 md:py-3 rounded font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors border border-white flex items-center gap-2 shadow-lg";
-            btn.innerHTML = `<i class="fas fa-check text-black"></i> Added`; 
+            btn.innerHTML = `<i class="fas fa-check"></i> Added`;
 
             await setDoc(libDocRef, formattedAnime);
             if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
