@@ -16,7 +16,16 @@
             color: white;
             font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
             overflow: hidden; 
-            touch-action: pan-y; /* Prevent browser swipe navigation */
+            touch-action: pan-y;
+            -webkit-touch-callout: none; /* Prevent default long-press menus */
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        /* Re-enable selection for inputs */
+        input, textarea {
+            -webkit-user-select: auto;
+            user-select: auto;
         }
 
         .theme-bg { background-color: var(--chat-theme) !important; }
@@ -35,10 +44,9 @@
             line-height: 1.1 !important;
         }
 
-        /* Swipe Animation */
-        .msg-container { transition: transform 0.2s ease-out; }
-        .swiping-left { transform: translateX(-40px); }
-
+        /* Swipe & Animation Utilities */
+        .msg-container { will-change: transform; }
+        
         .typing-dot { animation: typing 1.4s infinite ease-in-out both; }
         .typing-dot:nth-child(1) { animation-delay: -0.32s; }
         .typing-dot:nth-child(2) { animation-delay: -0.16s; }
@@ -50,8 +58,11 @@
         .msg-container:hover .msg-actions { opacity: 1; visibility: visible; }
         .msg-actions { opacity: 0; visibility: hidden; transition: all 0.2s; }
         
-        /* Canvas Editor */
         #img-canvas { touch-action: none; cursor: crosshair; }
+        
+        /* Modal Transitions */
+        .modal-enter { transform: scale(0.95); opacity: 0; }
+        .modal-enter-active { transform: scale(1); opacity: 1; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
     </style>
 </head>
 <body class="flex flex-col h-[100dvh]">
@@ -61,11 +72,12 @@
             <button onclick="window.history.back()" class="text-gray-400 hover:text-white transition-colors p-2 -ml-2">
                 <i class="fas fa-chevron-left"></i>
             </button>
+            <!-- PFP Click goes to Profile -->
             <div class="relative cursor-pointer" onclick="window.location.href='/profile.html?id=' + targetUserId">
                 <img id="chat-header-pfp" src="https://ui-avatars.com/api/?name=User&background=111&color=F47521" alt="Profile" class="w-10 h-10 rounded-full object-cover border border-white/10 shadow-sm">
                 <div class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-[#0a0a0a] rounded-full"></div>
             </div>
-            <div class="flex flex-col">
+            <div class="flex flex-col cursor-pointer" onclick="window.location.href='/profile.html?id=' + targetUserId">
                 <h2 id="chat-header-name" class="text-white font-bold text-sm leading-tight tracking-wide">Loading...</h2>
                 <div id="status-indicator" class="text-[10px] text-gray-400 font-medium tracking-wide">
                     <span id="last-seen-text">Online</span>
@@ -102,9 +114,6 @@
 
     <footer class="bg-[#0a0a0a] border-t border-white/5 px-3 py-3 shrink-0 relative z-40 flex items-end gap-2 pb-5 md:pb-3">
         <div class="flex-1 bg-[#111] border border-white/10 rounded-2xl flex items-end px-3 py-1.5 focus-within:border-[#F47521] focus-within:theme-border transition-colors shadow-inner relative">
-            <button class="text-gray-500 hover:theme-text transition-colors p-2 shrink-0 h-10 flex items-center justify-center">
-                <i class="fas fa-smile text-lg"></i>
-            </button>
             
             <textarea id="msg-input" rows="1" placeholder="Type a message..." class="w-full bg-transparent text-sm text-white placeholder-gray-500 resize-none outline-none max-h-32 px-2 py-2.5 hide-scrollbar"></textarea>
             
@@ -125,6 +134,28 @@
         <button onclick="actionEdit()" id="btn-action-edit" class="w-full text-left px-4 py-2.5 text-[11px] font-bold text-gray-300 hover:bg-white/5 hover:text-white transition-colors border-b border-white/5"><i class="fas fa-pen mr-2 w-3"></i> Edit</button>
         <button onclick="actionUnsend()" id="btn-action-unsend" class="w-full text-left px-4 py-2.5 text-[11px] font-bold text-yellow-500 hover:bg-yellow-500/10 transition-colors border-b border-white/5"><i class="fas fa-undo mr-2 w-3"></i> Unsend</button>
         <button onclick="actionDelete()" class="w-full text-left px-4 py-2.5 text-[11px] font-bold text-red-500 hover:bg-red-500/10 transition-colors"><i class="fas fa-trash-alt mr-2 w-3"></i> Delete</button>
+    </div>
+
+    <!-- Long Press Reaction Popup -->
+    <div id="reaction-popup" class="fixed z-[150] hidden bg-[#222] border border-white/10 rounded-full px-4 py-3 shadow-2xl flex items-center gap-3 transition-transform transform scale-0 origin-bottom">
+        <button class="text-2xl hover:-translate-y-1 hover:scale-110 transition-transform" onclick="submitReaction('❤️')">❤️</button>
+        <button class="text-2xl hover:-translate-y-1 hover:scale-110 transition-transform" onclick="submitReaction('😂')">😂</button>
+        <button class="text-2xl hover:-translate-y-1 hover:scale-110 transition-transform" onclick="submitReaction('😮')">😮</button>
+        <button class="text-2xl hover:-translate-y-1 hover:scale-110 transition-transform" onclick="submitReaction('😢')">😢</button>
+        <button class="w-8 h-8 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-colors ml-1" onclick="openMoreReactions()"><i class="fas fa-plus text-xs"></i></button>
+    </div>
+
+    <!-- Custom Unified Modal System (Alert/Prompt/Confirm) -->
+    <div id="system-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] hidden items-center justify-center p-4 transition-opacity opacity-0">
+        <div class="bg-[#111] border border-white/10 rounded-2xl w-full max-w-sm p-6 shadow-2xl modal-enter" id="system-modal-content">
+            <h3 id="system-modal-title" class="text-white font-bold text-lg mb-2">Notice</h3>
+            <p id="system-modal-msg" class="text-gray-300 text-sm mb-4"></p>
+            <input type="text" id="system-modal-input" class="hidden bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#F47521] w-full mb-4 transition-colors">
+            <div class="flex justify-end gap-3 mt-2">
+                <button id="system-modal-cancel" class="hidden px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors">Cancel</button>
+                <button id="system-modal-confirm" class="px-5 py-2 text-sm font-bold theme-bg text-black rounded-xl hover:scale-105 transition-transform shadow-md">OK</button>
+            </div>
+        </div>
     </div>
 
     <!-- Theme Modal -->
@@ -186,12 +217,17 @@
         let replyingToId = null;
         let editingId = null;
         let targetMsgId = null;
+        let reactionMsgId = null; // For Long Press Context
         let messages = [];
 
         // Swipe State
         let touchStartX = 0;
         let touchStartY = 0;
-        let swipeMsgId = null;
+        let swipeMsgEl = null;
+        let isSwiping = false;
+
+        // Long Press State
+        let longPressTimer;
 
         // Canvas State
         let canvas, ctx;
@@ -206,6 +242,59 @@
             { name: 'Purple', hex: '#a855f7', shadow: 'rgba(168,85,247,0.3)' }
         ];
 
+        // --- CUSTOM MODAL SYSTEM ---
+        window.ui = {
+            openModal: (title, message, showInput = false, showCancel = false) => {
+                return new Promise((resolve) => {
+                    const modal = document.getElementById('system-modal');
+                    const content = document.getElementById('system-modal-content');
+                    const elTitle = document.getElementById('system-modal-title');
+                    const elMsg = document.getElementById('system-modal-msg');
+                    const elInput = document.getElementById('system-modal-input');
+                    const btnCancel = document.getElementById('system-modal-cancel');
+                    const btnConfirm = document.getElementById('system-modal-confirm');
+
+                    elTitle.innerText = title;
+                    elMsg.innerText = message;
+                    
+                    if(showInput) {
+                        elInput.value = "";
+                        elInput.classList.remove('hidden');
+                    } else {
+                        elInput.classList.add('hidden');
+                    }
+
+                    if(showCancel) {
+                        btnCancel.classList.remove('hidden');
+                    } else {
+                        btnCancel.classList.add('hidden');
+                    }
+
+                    modal.classList.remove('hidden');
+                    modal.classList.add('flex');
+                    setTimeout(() => {
+                        modal.classList.remove('opacity-0');
+                        content.classList.add('modal-enter-active');
+                        if(showInput) elInput.focus();
+                    }, 10);
+
+                    const cleanup = () => {
+                        modal.classList.add('opacity-0');
+                        content.classList.remove('modal-enter-active');
+                        setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 200);
+                        btnCancel.onclick = null;
+                        btnConfirm.onclick = null;
+                    };
+
+                    btnCancel.onclick = () => { cleanup(); resolve(null); };
+                    btnConfirm.onclick = () => { cleanup(); resolve(showInput ? elInput.value : true); };
+                });
+            },
+            alert: (msg) => window.ui.openModal("Notice", msg, false, false),
+            confirm: (msg) => window.ui.openModal("Confirm", msg, false, true),
+            prompt: (msg) => window.ui.openModal("Input", msg, true, true)
+        };
+
         // --- INITIALIZATION ---
         onAuthStateChanged(auth, async (user) => {
             if (!user) { window.location.href = '/index.html'; return; }
@@ -215,7 +304,7 @@
             const userA = urlParams.get('userA');
             const userB = urlParams.get('userB');
             
-            if (!userA || !userB) { alert("Invalid Chat URL"); return; }
+            if (!userA || !userB) { await window.ui.alert("Invalid Chat URL"); return; }
             
             window.targetUserId = (user.uid === userA) ? userB : userA;
             window.chatRoomId = [userA, userB].sort().join('_');
@@ -286,24 +375,40 @@
                 if (msg.text) {
                     contentHtml += `<span class="text-sm leading-relaxed">${msg.text}</span>`;
                 }
+                
+                // Reaction Render Display Placeholder
+                if (msg.reaction) {
+                    contentHtml += `<div class="absolute -bottom-2 ${isMe ? '-left-2' : '-right-2'} bg-[#222] border border-white/10 rounded-full px-1.5 py-0.5 text-[10px] shadow-sm">${msg.reaction}</div>`;
+                }
 
                 const editedHtml = msg.isEdited ? `<span class="text-[8px] opacity-60 ml-1 italic">(edited)</span>` : '';
                 const wrapperClass = isMe ? 'self-end flex-row-reverse' : 'self-start flex-row';
                 
                 // Format Time
                 const timeString = msg.timestamp ? new Date(msg.timestamp.toMillis()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...';
+                
+                // Seen Indicator logic (Assuming msg.isSeen represents read receipts)
+                // For demonstration, if isSeen exists and is true:
+                let seenHtml = '';
+                if (isMe) {
+                    if (msg.isSeen) {
+                        seenHtml = `<span class="ml-1 text-[8px] text-blue-400 font-bold tracking-wide">Seen ${timeString}</span>`;
+                    } else {
+                        seenHtml = `<i class="fas fa-check-double text-[8px] theme-text ml-0.5"></i>`;
+                    }
+                }
 
                 const msgHtml = `
                     <div class="msg-container flex gap-2 w-full max-w-[85%] relative ${wrapperClass}" id="msg-el-${msg.id}" data-id="${msg.id}">
                         <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-full">
-                            <div class="${bubbleClass} ${extraClasses} relative group break-words min-w-[50px] transition-all">
+                            <div class="${bubbleClass} ${extraClasses} relative group break-words min-w-[50px] transition-transform duration-200">
                                 ${replyHtml}
                                 ${contentHtml}
                             </div>
                             <div class="flex items-center gap-1 mt-1 text-[9px] text-gray-500 font-medium ${isMe ? 'mr-1' : 'ml-1'}">
                                 <span>${timeString}</span>
                                 ${editedHtml}
-                                ${isMe ? '<i class="fas fa-check-double text-[8px] theme-text ml-0.5"></i>' : ''}
+                                ${seenHtml}
                             </div>
                         </div>
 
@@ -318,11 +423,11 @@
             });
 
             scrollToBottom();
-            attachSwipeListeners();
+            attachGestures();
         }
 
         window.sendMessage = async () => {
-            if (chatBlocked) { alert("Chat blocked."); return; }
+            if (chatBlocked) { await window.ui.alert("Chat blocked."); return; }
             const input = document.getElementById('msg-input');
             const text = input.value.trim();
             if (!text) return;
@@ -340,7 +445,8 @@
                 timestamp: serverTimestamp(),
                 isEdited: false,
                 replyTo: replyingToId,
-                imageUrl: null
+                imageUrl: null,
+                isSeen: false // Will be updated by recipient
             };
 
             input.value = '';
@@ -353,47 +459,117 @@
             } catch(e) { console.error("Send failed", e); }
         };
 
-        // --- SWIPE TO REPLY ---
-        function attachSwipeListeners() {
+        // --- UNIFIED GESTURES (100% SWIPE & LONG PRESS) ---
+        function attachGestures() {
             const container = document.getElementById('chat-box');
             
             container.addEventListener('touchstart', (e) => {
                 const msgEl = e.target.closest('.msg-container');
                 if(msgEl) {
+                    // Swipe Prep
+                    swipeMsgEl = msgEl;
                     touchStartX = e.touches[0].clientX;
                     touchStartY = e.touches[0].clientY;
-                    swipeMsgId = msgEl.dataset.id;
+                    isSwiping = false;
+                    swipeMsgEl.style.transition = 'none'; // Disable transition for live drag
+                    
+                    // Long Press Prep
+                    longPressTimer = setTimeout(() => {
+                        openReactionPopup(e, swipeMsgEl.dataset.id);
+                        swipeMsgEl = null; // Cancel swipe if long press triggered
+                    }, 500);
                 }
             }, {passive: true});
 
             container.addEventListener('touchmove', (e) => {
-                if(!swipeMsgId) return;
+                if(longPressTimer) clearTimeout(longPressTimer); // Cancel long press on move
+                
+                if(!swipeMsgEl) return;
                 const diffX = touchStartX - e.touches[0].clientX;
                 const diffY = Math.abs(touchStartY - e.touches[0].clientY);
                 
-                // Allow vertical scrolling to interrupt swipe
-                if (diffY > 20) { swipeMsgId = null; return; }
-                
-                const msgEl = document.getElementById(`msg-el-${swipeMsgId}`);
-                if (diffX > 0 && diffX < 60) {
-                    msgEl.style.transform = `translateX(-${diffX}px)`;
+                if (!isSwiping) {
+                    // Detect if movement is primarily horizontal leftward
+                    if (diffX > 10 && diffX > diffY) {
+                        isSwiping = true;
+                    } else if (diffY > 10) {
+                        // It's a vertical scroll, cancel swipe logic entirely
+                        swipeMsgEl.style.transform = '';
+                        swipeMsgEl = null;
+                        return;
+                    }
+                }
+
+                if (isSwiping && diffX > 0) {
+                    const move = Math.min(diffX, 70); // Max drag distance
+                    swipeMsgEl.style.transform = `translateX(-${move}px)`;
                 }
             }, {passive: true});
 
             container.addEventListener('touchend', (e) => {
-                if(!swipeMsgId) return;
-                const diffX = touchStartX - e.changedTouches[0].clientX;
-                const msgEl = document.getElementById(`msg-el-${swipeMsgId}`);
-                
-                msgEl.style.transform = ''; // reset
-                
-                if (diffX > 50) { // Trigger Reply on significant left swipe
-                    targetMsgId = swipeMsgId;
-                    actionReply();
+                if(longPressTimer) clearTimeout(longPressTimer);
+                hideReactionPopup(); // Hide if touching elsewhere
+
+                if(swipeMsgEl && isSwiping) {
+                    const diffX = touchStartX - e.changedTouches[0].clientX;
+                    
+                    // Smooth snap back
+                    swipeMsgEl.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
+                    swipeMsgEl.style.transform = 'translateX(0)';
+                    
+                    if (diffX > 50) { // Threshold for reply
+                        targetMsgId = swipeMsgEl.dataset.id;
+                        actionReply();
+                    }
                 }
-                swipeMsgId = null;
+                swipeMsgEl = null;
+                isSwiping = false;
             });
         }
+
+        // --- LONG PRESS REACTIONS ---
+        window.openReactionPopup = (e, msgId) => {
+            reactionMsgId = msgId;
+            const popup = document.getElementById('reaction-popup');
+            
+            // Calculate Position
+            const touch = e.touches ? e.touches[0] : e;
+            const yOffset = touch.clientY > window.innerHeight / 2 ? -60 : 40; 
+            
+            popup.style.top = `${touch.clientY + yOffset}px`;
+            popup.style.left = `50%`;
+            popup.style.transform = `translateX(-50%) scale(1)`;
+            
+            popup.classList.remove('hidden');
+            
+            // Haptic Feedback (if supported)
+            if (navigator.vibrate) navigator.vibrate(50);
+        };
+
+        window.hideReactionPopup = () => {
+            const popup = document.getElementById('reaction-popup');
+            popup.style.transform = `translateX(-50%) scale(0)`;
+            setTimeout(() => popup.classList.add('hidden'), 200);
+        };
+
+        window.submitReaction = async (emoji) => {
+            if(!reactionMsgId) return;
+            hideReactionPopup();
+            try {
+                const msgRef = doc(db, "chats", window.chatRoomId, "messages", reactionMsgId);
+                await updateDoc(msgRef, { reaction: emoji });
+            } catch(e) { console.error("Reaction failed"); }
+        };
+
+        window.openMoreReactions = async () => {
+            hideReactionPopup();
+            const emoji = await window.ui.prompt("Type or paste an emoji:");
+            if (emoji && isEmojiOnly(emoji)) {
+                submitReaction(emoji);
+            } else if(emoji) {
+                await window.ui.alert("Please enter a valid single emoji.");
+            }
+        };
 
         // --- IMAGE CANVAS EDITOR ---
         window.openImageEditor = (event) => {
@@ -410,7 +586,6 @@
                 originalImage = new Image();
                 
                 originalImage.onload = () => {
-                    // Fit canvas to screen ratio
                     const maxWidth = window.innerWidth;
                     const maxHeight = window.innerHeight - 150;
                     let width = originalImage.width;
@@ -444,7 +619,6 @@
                 const rect = canvas.getBoundingClientRect();
                 const clientX = e.touches ? e.touches[0].clientX : e.clientX;
                 const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                // Adjust for CSS scaling vs internal resolution
                 const scaleX = canvas.width / rect.width;
                 const scaleY = canvas.height / rect.height;
                 return {
@@ -484,18 +658,17 @@
             canvas.ontouchend = stopDraw;
         }
 
-        window.addTextToCanvas = () => {
-            const text = prompt("Enter text to add to image:");
+        window.addTextToCanvas = async () => {
+            const text = await window.ui.prompt("Enter text to add to image:");
             if(text) {
                 ctx.font = "bold 30px Arial";
                 ctx.fillStyle = document.getElementById('draw-color').value;
                 ctx.textAlign = "center";
-                // Add a slight black shadow for readability
                 ctx.shadowColor = "black";
                 ctx.shadowBlur = 4;
                 ctx.lineWidth = 1;
                 ctx.fillText(text, canvas.width/2, canvas.height/2);
-                ctx.shadowBlur = 0; // reset
+                ctx.shadowBlur = 0; 
             }
         };
 
@@ -512,7 +685,6 @@
             btn.disabled = true;
 
             try {
-                // ImgBB Upload
                 const base64Data = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
                 const formData = new FormData();
                 formData.append('image', base64Data);
@@ -534,7 +706,8 @@
                         senderId: window.activeUserUid,
                         timestamp: serverTimestamp(),
                         isEdited: false,
-                        replyTo: replyingToId
+                        replyTo: replyingToId,
+                        isSeen: false
                     });
                     
                     closeImageEditor();
@@ -542,7 +715,7 @@
                 } else { throw new Error("Upload Failed"); }
             } catch (e) {
                 console.error(e);
-                alert("Failed to send image.");
+                await window.ui.alert("Failed to send image.");
             }
             
             btn.innerHTML = '<i class="fas fa-paper-plane ml-[-2px]"></i>';
@@ -597,10 +770,9 @@
         window.actionForward = () => {
             const msg = messages.find(m => m.id === targetMsgId);
             if(msg && window.app && window.app.shareMessage) {
-                // Hook into your share.js implementation
                 window.app.shareMessage(msg); 
             } else {
-                alert("Share script not fully initialized or message missing.");
+                window.ui.alert("Share script not fully initialized or message missing.");
             }
             closeDropdowns();
         };
@@ -622,14 +794,26 @@
         };
 
         window.actionUnsend = async () => {
-            try {
-                await deleteDoc(doc(db, "chats", window.chatRoomId, "messages", targetMsgId));
-                if (replyingToId === targetMsgId || editingId === targetMsgId) cancelReplyEdit();
-            } catch(e) {}
+            const confirm = await window.ui.confirm("Unsend this message for everyone?");
+            if (confirm) {
+                try {
+                    await deleteDoc(doc(db, "chats", window.chatRoomId, "messages", targetMsgId));
+                    if (replyingToId === targetMsgId || editingId === targetMsgId) cancelReplyEdit();
+                } catch(e) {}
+            }
             closeDropdowns();
         };
 
-        window.actionDelete = window.actionUnsend; // Simplify for now
+        window.actionDelete = async () => {
+            const confirm = await window.ui.confirm("Delete this message for you?");
+            if(confirm) {
+                try {
+                    // Assuming similar unsend logic based on rules
+                    await deleteDoc(doc(db, "chats", window.chatRoomId, "messages", targetMsgId));
+                } catch(e) {}
+            }
+            closeDropdowns();
+        };
 
         window.cancelReplyEdit = () => {
             replyingToId = null;
@@ -653,8 +837,8 @@
             const el = document.getElementById(`msg-el-${id}`);
             if(el) {
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                el.classList.add('opacity-50');
-                setTimeout(() => el.classList.remove('opacity-50'), 800);
+                el.classList.add('opacity-50', 'scale-[0.98]');
+                setTimeout(() => el.classList.remove('opacity-50', 'scale-[0.98]'), 800);
             }
         };
 
@@ -673,6 +857,9 @@
                 }
                 if (!e.target.closest('#msg-dropdown-template') && !e.target.closest('.msg-actions button')) {
                     document.getElementById('msg-dropdown-template').classList.add('hidden');
+                }
+                if (!e.target.closest('#reaction-popup')) {
+                    hideReactionPopup();
                 }
             });
 
@@ -707,7 +894,7 @@
         const renderThemeSwatches = () => {
             const container = document.getElementById('theme-colors-container');
             container.innerHTML = THEMES.map(t => `
-                <button onclick="applyTheme('${t.hex}', '${t.shadow}')" class="w-10 h-10 rounded-full shadow-md hover:scale-110 border-2 border-[#111] hover:border-white" style="background-color: ${t.hex};"></button>
+                <button onclick="applyTheme('${t.hex}', '${t.shadow}')" class="w-10 h-10 rounded-full shadow-md hover:scale-110 border-2 border-[#111] hover:border-white transition-transform" style="background-color: ${t.hex};"></button>
             `).join('');
         };
 
