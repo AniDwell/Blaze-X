@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Chats</title>
     
     <!-- Tailwind CSS & FontAwesome -->
@@ -17,31 +17,36 @@
         /* Modal Transitions */
         .modal-enter { opacity: 0; transform: scale(0.95); }
         .modal-enter-active { opacity: 1; transform: scale(1); transition: all 0.2s ease-out; }
-        .modal-leave { opacity: 1; transform: scale(1); }
-        .modal-leave-active { opacity: 0; transform: scale(0.95); transition: all 0.2s ease-in; }
     </style>
 </head>
 <body class="bg-black text-white min-h-screen pb-24 select-none">
 
-    <!-- Header Container (Loads header.js) -->
+    <!-- Header Container -->
     <div id="header-container"></div>
 
-    <main class="container mx-auto px-4 pt-20 max-w-3xl relative">
+    <main class="container mx-auto px-4 pt-16 max-w-3xl relative">
         
-        <!-- Top Bar: Back Button & Search -->
-        <div class="flex gap-3 items-center mb-4 relative z-10">
-            <button onclick="window.history.back()" class="shrink-0 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-all shadow-sm">
+        <!-- Top Bar: Back Button & Title -->
+        <div class="flex items-center gap-4 mb-6">
+            <button onclick="window.history.back()" class="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-colors text-white">
                 <i class="fas fa-arrow-left"></i>
             </button>
+            <h1 class="text-2xl font-black uppercase tracking-wider text-white">Chats</h1>
+        </div>
 
+        <!-- Search & Group Add -->
+        <div class="flex gap-3 items-center mb-4 relative z-10">
             <div class="relative flex-1">
                 <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                <input type="text" id="search-input" placeholder="Search usernames, messages..." 
+                <input type="text" id="search-input" placeholder="Search usernames or messages..." 
                     class="w-full bg-white/10 border border-white/10 rounded-full py-2.5 pl-10 pr-4 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#F47521] focus:bg-white/20 transition-all">
                 <button id="clear-search" class="hidden absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
+            <button onclick="window.app.openGroupModal()" class="shrink-0 w-10 h-10 bg-[#F47521] hover:bg-[#d8651a] rounded-full flex items-center justify-center text-white shadow-[0_0_15px_rgba(244,117,33,0.3)] transition-all">
+                <i class="fas fa-plus"></i>
+            </button>
         </div>
 
         <!-- Category Pills -->
@@ -61,12 +66,14 @@
 
         <!-- Search Results Feed (Hidden by default) -->
         <div id="search-feed" class="hidden flex-col gap-6">
-            <!-- Matched Chats -->
             <div>
                 <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 border-b border-white/10 pb-1">Matched Chats</h3>
                 <div id="search-chats-results" class="flex flex-col gap-2"></div>
             </div>
-            <!-- Global Users -->
+            <div>
+                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 border-b border-white/10 pb-1">Matched Messages</h3>
+                <div id="search-messages-results" class="flex flex-col gap-2"></div>
+            </div>
             <div>
                 <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 border-b border-white/10 pb-1">Global Users</h3>
                 <div id="search-users-results" class="flex flex-col gap-2"></div>
@@ -74,40 +81,32 @@
         </div>
     </main>
 
-    <!-- Floating Action Button: Create Group -->
-    <button onclick="window.app.openGroupModal()" class="fixed bottom-24 right-6 z-[60] w-14 h-14 bg-[#F47521] hover:bg-[#d8651a] rounded-full flex items-center justify-center text-white text-xl shadow-[0_4px_20px_rgba(244,117,33,0.5)] transition-transform hover:scale-110">
-        <i class="fas fa-users"></i>
-        <span class="absolute -top-1 -right-1 bg-black border border-white/10 text-[#F47521] text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-sm"><i class="fas fa-plus"></i></span>
-    </button>
-
     <!-- Bottom Nav Container -->
     <div id="bottomnav-container"></div>
 
     <!-- ========================================== -->
-    <!-- CUSTOM CSS MODALS & DROPDOWNS              -->
+    <!-- MODALS & DROPDOWNS                         -->
     <!-- ========================================== -->
 
-    <!-- Chat Item Dropdown Menu (3-dots) -->
-    <div id="chat-options-menu" class="absolute hidden bg-[#111] border border-white/10 rounded-xl shadow-2xl z-[80] flex-col overflow-hidden w-40 origin-top-right">
-        <button id="btn-pin-chat" onclick="window.app.actionPinChat()" class="w-full text-left px-4 py-3 text-xs font-bold text-gray-300 hover:bg-white/5 hover:text-white transition-colors border-b border-white/5"><i class="fas fa-thumbtack mr-2 w-4 text-center"></i> <span>Pin Chat</span></button>
-        <button onclick="window.app.actionBlockUser()" class="w-full text-left px-4 py-3 text-xs font-bold text-red-500 hover:bg-red-500/10 transition-colors border-b border-white/5"><i class="fas fa-ban mr-2 w-4 text-center"></i> Block User</button>
-        <button onclick="window.app.actionDeleteChat()" class="w-full text-left px-4 py-3 text-xs font-bold text-red-500 hover:bg-red-500/10 transition-colors"><i class="fas fa-trash-alt mr-2 w-4 text-center"></i> Delete Chat</button>
+    <!-- Chat Options Dropdown Menu -->
+    <div id="chat-options-menu" class="fixed hidden bg-[#111] border border-white/10 rounded-xl shadow-2xl z-[150] flex-col overflow-hidden w-36 origin-top-right transform transition-all scale-95 opacity-0">
+        <button id="btn-pin-chat" class="w-full text-left px-4 py-3 text-xs font-bold text-gray-300 hover:bg-white/5 hover:text-white transition-colors border-b border-white/5"><i class="fas fa-thumbtack mr-2 w-4 text-center"></i> <span>Pin Chat</span></button>
+        <button id="btn-block-user" class="w-full text-left px-4 py-3 text-xs font-bold text-yellow-500 hover:bg-yellow-500/10 transition-colors border-b border-white/5"><i class="fas fa-ban mr-2 w-4 text-center"></i> Block</button>
+        <button id="btn-delete-chat" class="w-full text-left px-4 py-3 text-xs font-bold text-red-500 hover:bg-red-500/10 transition-colors"><i class="fas fa-trash-alt mr-2 w-4 text-center"></i> Delete</button>
     </div>
 
     <!-- Custom Alert Overlay -->
-    <div id="custom-alert" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+    <div id="custom-alert" class="fixed inset-0 z-[200] hidden items-center justify-center bg-black/80 backdrop-blur-sm p-4">
         <div class="bg-[#111] border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center">
             <div id="alert-icon" class="text-4xl mb-4 text-[#F47521]"><i class="fas fa-exclamation-circle"></i></div>
             <h3 id="alert-title" class="text-lg font-black uppercase tracking-wider mb-2">Notice</h3>
             <p id="alert-message" class="text-sm text-gray-400 mb-6 leading-relaxed">Message goes here.</p>
-            <div class="flex gap-3 justify-center" id="alert-buttons">
-                <!-- Buttons injected dynamically -->
-            </div>
+            <div class="flex gap-3 justify-center" id="alert-buttons"></div>
         </div>
     </div>
 
     <!-- Create Group Modal -->
-    <div id="group-modal" class="fixed inset-0 z-[90] hidden flex-col bg-black/95 backdrop-blur-md pt-20 px-4 pb-4">
+    <div id="group-modal" class="fixed inset-0 z-[90] hidden flex-col bg-black/95 backdrop-blur-md pt-20 px-4 pb-0">
         <div class="max-w-md w-full mx-auto flex flex-col h-full relative">
             <button onclick="window.app.closeGroupModal()" class="absolute -top-12 right-0 text-gray-400 hover:text-white text-2xl">
                 <i class="fas fa-times"></i>
@@ -116,22 +115,24 @@
             <h2 class="text-2xl font-black uppercase tracking-wider mb-6 text-[#F47521]">Create Group</h2>
             
             <input type="text" id="group-name-input" placeholder="Enter Group Name..." 
-                class="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-[#F47521] mb-6">
+                class="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-[#F47521] mb-6 shadow-inner">
             
-            <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Search Mutual Friends</h3>
-            <input type="text" id="group-search-user" placeholder="Search by username..." 
+            <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Add Participants</h3>
+            <input type="text" id="group-search-user" placeholder="Search usernames..." 
                 class="w-full bg-white/5 border border-white/10 rounded-xl py-2 px-4 text-sm text-white placeholder-gray-500 focus:outline-none mb-4">
             
-            <div id="group-search-results" class="flex-1 overflow-y-auto flex flex-col gap-2 pb-4">
-                <!-- Default suggestions load here -->
+            <div id="selected-group-users" class="flex flex-wrap gap-2 mb-2"></div>
+            
+            <div id="group-search-results" class="flex-1 overflow-y-auto flex flex-col gap-2 pb-24 scrollbar-hide">
+                <!-- Auto-populated with frequent chats by default -->
             </div>
 
-            <!-- Selected Users Pill Container -->
-            <div id="selected-group-users" class="flex flex-wrap gap-2 mb-4"></div>
-            
-            <button onclick="window.app.createGroupAction()" class="w-full bg-[#F47521] text-white py-3 rounded-xl font-bold uppercase tracking-widest hover:bg-[#d8651a] transition-colors shadow-lg">
-                Create Group
-            </button>
+            <!-- Absolute positioned above standard bottom nav area -->
+            <div class="absolute bottom-24 left-0 right-0 pt-4 bg-gradient-to-t from-black via-black to-transparent">
+                <button onclick="window.app.createGroupAction()" class="w-full bg-[#F47521] text-white py-3.5 rounded-xl font-bold uppercase tracking-widest hover:bg-[#d8651a] transition-colors shadow-[0_0_20px_rgba(244,117,33,0.3)]">
+                    Create Group
+                </button>
+            </div>
         </div>
     </div>
 
@@ -146,37 +147,28 @@
         import { getFirestore, collection, onSnapshot, query, where, orderBy, deleteDoc, doc, getDocs, getDoc, addDoc, serverTimestamp, writeBatch, updateDoc } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js';
 
         window.app = window.app || {};
-        window.app.state = window.app.state || {};
         
-        // State
         let currentUser = null;
         let allChats = [];
         let currentTab = 'chats';
         let groupSelectedUsers = [];
-        
-        // Action state
-        let selectedMenuChatId = null;
-        let selectedMenuIsPinned = false;
+        let activeContextMenu = null; 
 
         const firebaseConfig = {
             apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
             authDomain: "blaze-x-db2f5.firebaseapp.com",
-            projectId: "blaze-x-db2f5",
-            storageBucket: "blaze-x-db2f5.firebasestorage.app",
-            messagingSenderId: "770812306638",
-            appId: "1:770812306638:web:eaf5ded647861f32c25c9f"
+            projectId: "blaze-x-db2f5"
         };
 
         const fApp = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
         const auth = getAuth(fApp);
         const db = getFirestore(fApp);
 
-        // Close dropdown globally
+        // --- GLOBAL CLICK LISTENER FOR DROPDOWN ---
         document.addEventListener('click', (e) => {
             const menu = document.getElementById('chat-options-menu');
-            if (!e.target.closest('.chat-options-btn') && !e.target.closest('#chat-options-menu')) {
-                menu.classList.add('hidden');
-                menu.classList.remove('flex');
+            if (activeContextMenu && !e.target.closest('#chat-options-menu') && !e.target.closest('.chat-options-btn')) {
+                window.app.closeChatOptions();
             }
         });
 
@@ -188,33 +180,27 @@
             const iconEl = document.getElementById('alert-icon');
             const btnContainer = document.getElementById('alert-buttons');
 
-            titleEl.innerText = title;
-            msgEl.innerText = message;
+            titleEl.innerText = title; msgEl.innerText = message;
             
             if(type === 'error') iconEl.innerHTML = '<i class="fas fa-times-circle text-red-500"></i>';
             else if(type === 'warning') iconEl.innerHTML = '<i class="fas fa-exclamation-triangle text-yellow-500"></i>';
             else iconEl.innerHTML = '<i class="fas fa-check-circle text-green-500"></i>';
 
             btnContainer.innerHTML = '';
-            
             if (onConfirm) {
                 const cancelBtn = document.createElement('button');
                 cancelBtn.className = "px-6 py-2 rounded-lg bg-white/10 text-white font-bold text-sm tracking-widest uppercase";
-                cancelBtn.innerText = "Cancel";
-                cancelBtn.onclick = () => { modal.style.display = 'none'; };
+                cancelBtn.innerText = "Cancel"; cancelBtn.onclick = () => { modal.style.display = 'none'; };
                 
                 const confirmBtn = document.createElement('button');
                 confirmBtn.className = "px-6 py-2 rounded-lg bg-red-500 text-white font-bold text-sm tracking-widest uppercase shadow-lg";
-                confirmBtn.innerText = "Confirm";
-                confirmBtn.onclick = () => { onConfirm(); modal.style.display = 'none'; };
+                confirmBtn.innerText = "Confirm"; confirmBtn.onclick = () => { onConfirm(); modal.style.display = 'none'; };
                 
-                btnContainer.appendChild(cancelBtn);
-                btnContainer.appendChild(confirmBtn);
+                btnContainer.appendChild(cancelBtn); btnContainer.appendChild(confirmBtn);
             } else {
                 const okBtn = document.createElement('button');
                 okBtn.className = "px-8 py-2 rounded-lg bg-[#F47521] text-white font-bold text-sm tracking-widest uppercase shadow-lg";
-                okBtn.innerText = "OK";
-                okBtn.onclick = () => { modal.style.display = 'none'; };
+                okBtn.innerText = "OK"; okBtn.onclick = () => { modal.style.display = 'none'; };
                 btnContainer.appendChild(okBtn);
             }
             modal.style.display = 'flex';
@@ -224,11 +210,8 @@
         window.app.setTab = (tab) => {
             currentTab = tab;
             document.querySelectorAll('.tab-pill').forEach(pill => {
-                if (pill.dataset.tab === tab) {
-                    pill.className = "tab-pill px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-[#F47521] text-white transition-all shadow-lg";
-                } else {
-                    pill.className = "tab-pill px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-white/10 text-gray-400 hover:bg-white/20 transition-all";
-                }
+                if (pill.dataset.tab === tab) pill.className = "tab-pill px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-[#F47521] text-white transition-all shadow-lg";
+                else pill.className = "tab-pill px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-white/10 text-gray-400 hover:bg-white/20 transition-all";
             });
             renderMainFeed();
         };
@@ -242,11 +225,10 @@
             else if (currentTab === 'groups') filtered = allChats.filter(c => c.type === 'group');
             else if (currentTab === 'requests') filtered = allChats.filter(c => c.isRequest); 
 
-            // Sort: Pinned first, then by timestamp
+            // Sort by pinned first, then timestamp
             filtered.sort((a, b) => {
-                if (a.isPinned && !b.isPinned) return -1;
-                if (!a.isPinned && b.isPinned) return 1;
-                return (b.lastMessageTime?.toMillis() || 0) - (a.lastMessageTime?.toMillis() || 0);
+                if (a.pinned === b.pinned) return (b.lastMessageTime?.toMillis() || 0) - (a.lastMessageTime?.toMillis() || 0);
+                return a.pinned ? -1 : 1;
             });
 
             if (filtered.length === 0) {
@@ -260,43 +242,40 @@
 
             let html = '';
             filtered.forEach(chat => {
-                const title = chat.type === 'group' ? chat.groupName : (chat.otherUserName || chat.otherUserUsername || 'Unknown User');
-                const img = chat.type === 'group' ? (chat.groupIcon || 'https://via.placeholder.com/150/333/fff?text=GRP') : (chat.otherUserImg || 'https://ui-avatars.com/api/?name=U&background=111&color=F47521');
+                const title = chat.type === 'group' ? chat.groupName : (chat.otherUserName || chat.otherUsername || 'Unknown User');
+                const img = chat.type === 'group' ? (chat.groupIcon || 'https://via.placeholder.com/150/333/fff?text=GRP') : (chat.otherUserImg || 'https://via.placeholder.com/150/111/fff?text=U');
                 const subtext = chat.lastMessage || 'Started a conversation...';
                 const timeStr = chat.lastMessageTime ? new Date(chat.lastMessageTime.toMillis()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
                 
                 const unreadBadge = (chat.unreadCount && chat.unreadCount > 0) 
-                    ? `<div class="bg-green-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 shadow-sm">${chat.unreadCount}</div>` 
-                    : '';
+                    ? `<div class="bg-green-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 shadow-sm">${chat.unreadCount}</div>` : '';
+                
+                const pinIcon = chat.pinned ? `<i class="fas fa-thumbtack text-[10px] text-[#F47521] rotate-45 ml-1"></i>` : '';
 
-                const pinIcon = chat.isPinned ? `<i class="fas fa-thumbtack text-[#F47521] text-[10px] mr-1"></i>` : '';
-
-                // Link mapping: Direct chats route to chat.html, Groups route to group-chat.html
+                // Safe routing format as requested
                 const routeUrl = chat.type === 'direct' 
-                    ? `/chat.html?userA=${currentUser.uid}&userB=${chat.targetId}` 
+                    ? `/chats.html?userA=${currentUser.uid}&userB=${chat.targetId}` 
                     : `/group-chat.html?id=${chat.id}`;
 
                 html += `
-                    <div class="chat-item relative flex items-center bg-white/5 border border-white/5 hover:bg-white/10 rounded-xl transition-all cursor-pointer">
+                    <div onclick="window.location.href='${routeUrl}'" class="chat-item flex items-center gap-4 p-3 bg-white/5 border border-white/5 hover:bg-white/10 rounded-xl cursor-pointer transition-all active:scale-[0.98] select-none relative group">
+                        <img src="${img}" class="w-12 h-12 rounded-full object-cover shadow-md border border-white/10 shrink-0 pointer-events-none">
                         
-                        <!-- Clickable Area -->
-                        <div class="flex-1 flex items-center gap-4 p-3" onclick="window.location.href='${routeUrl}'">
-                            <img src="${img}" class="w-12 h-12 rounded-full object-cover shadow-md border border-white/10 shrink-0">
-                            <div class="flex-1 min-w-0 pr-8">
-                                <div class="flex justify-between items-baseline mb-0.5">
-                                    <h3 class="text-white font-bold text-sm truncate flex items-center">${pinIcon} ${title}</h3>
-                                    <div class="flex items-center">
-                                        <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">${timeStr}</span>
-                                        ${unreadBadge}
-                                    </div>
+                        <div class="flex-1 min-w-0 pointer-events-none pr-6">
+                            <div class="flex justify-between items-baseline mb-0.5">
+                                <h3 class="text-white font-bold text-sm truncate flex items-center">${title} ${pinIcon}</h3>
+                                <div class="flex items-center">
+                                    <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">${timeStr}</span>
+                                    ${unreadBadge}
                                 </div>
-                                <p class="${chat.unreadCount > 0 ? 'text-white font-semibold' : 'text-gray-400'} text-xs truncate">${subtext}</p>
                             </div>
+                            <p class="${chat.unreadCount > 0 ? 'text-white font-semibold' : 'text-gray-400'} text-xs truncate">${subtext}</p>
                         </div>
-
-                        <!-- 3-Dot Options Button -->
-                        <button onclick="window.app.openChatMenu(event, '${chat.id}', ${chat.isPinned || false})" class="chat-options-btn absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white transition-colors z-20">
-                            <i class="fas fa-ellipsis-v"></i>
+                        
+                        <!-- Options Button -->
+                        <button onclick="window.app.openChatOptions(event, '${chat.id}', ${chat.pinned ? 'true' : 'false'}, '${chat.targetId || ''}', '${chat.type}')" 
+                                class="chat-options-btn absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 text-gray-400 hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                            <i class="fas fa-ellipsis-v text-sm pointer-events-none"></i>
                         </button>
                     </div>
                 `;
@@ -305,73 +284,80 @@
             feed.innerHTML = html;
         };
 
-        // --- CHAT OPTIONS MENU ACTIONS ---
-        window.app.openChatMenu = (e, chatId, isPinned) => {
-            e.stopPropagation();
-            selectedMenuChatId = chatId;
-            selectedMenuIsPinned = isPinned;
+        // --- CHAT OPTIONS MENU LOGIC ---
+        window.app.openChatOptions = (e, chatId, isPinned, targetId, chatType) => {
+            e.stopPropagation(); 
+            activeContextMenu = { chatId, isPinned, targetId, chatType };
 
             const menu = document.getElementById('chat-options-menu');
             const pinBtn = document.getElementById('btn-pin-chat');
+            const blockBtn = document.getElementById('btn-block-user');
             
-            // Toggle text based on current state
-            if (isPinned) pinBtn.innerHTML = `<i class="fas fa-thumbtack mr-2 w-4 text-center"></i> <span>Unpin Chat</span>`;
-            else pinBtn.innerHTML = `<i class="fas fa-thumbtack mr-2 w-4 text-center"></i> <span>Pin Chat</span>`;
+            // Configure Pin Text
+            pinBtn.innerHTML = isPinned 
+                ? `<i class="fas fa-thumbtack mr-2 w-4 text-center opacity-50"></i> Unpin Chat` 
+                : `<i class="fas fa-thumbtack mr-2 w-4 text-center text-[#F47521]"></i> Pin Chat`;
+            
+            // Hide Block option for groups
+            blockBtn.style.display = chatType === 'group' ? 'none' : 'block';
 
-            menu.classList.remove('hidden');
-            menu.classList.add('flex');
-
+            // Positioning Logic
             const rect = e.currentTarget.getBoundingClientRect();
-            let top = rect.bottom + window.scrollY;
-            let left = rect.left + window.scrollX - 120; // offset to left
+            let top = rect.bottom + window.scrollY - 10;
+            let left = rect.left + window.scrollX - 110; // offset to left
 
-            if (top + 150 > window.innerHeight) top = rect.top + window.scrollY - 130;
+            if (top + 150 > window.innerHeight + window.scrollY) {
+                top = rect.top + window.scrollY - 130; 
+            }
 
             menu.style.top = `${top}px`;
             menu.style.left = `${left}px`;
+            
+            menu.classList.remove('hidden');
+            setTimeout(() => {
+                menu.classList.remove('scale-95', 'opacity-0');
+            }, 10);
+
+            // Bind Actions
+            pinBtn.onclick = () => window.app.togglePinChat(chatId, isPinned);
+            blockBtn.onclick = () => window.app.blockUser(targetId);
+            document.getElementById('btn-delete-chat').onclick = () => window.app.deleteChatListEntry(chatId);
         };
 
-        window.app.actionPinChat = async () => {
+        window.app.closeChatOptions = () => {
             const menu = document.getElementById('chat-options-menu');
-            menu.classList.add('hidden'); menu.classList.remove('flex');
-            if(!selectedMenuChatId) return;
+            menu.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => { menu.classList.add('hidden'); }, 150);
+            activeContextMenu = null;
+        };
 
+        window.app.togglePinChat = async (chatId, currentStatus) => {
+            window.app.closeChatOptions();
             try {
-                await updateDoc(doc(db, "users", currentUser.uid, "chats_list", selectedMenuChatId), {
-                    isPinned: !selectedMenuIsPinned
+                await updateDoc(doc(db, "users", currentUser.uid, "chats_list", chatId), {
+                    pinned: !currentStatus
                 });
-            } catch (e) {
-                window.app.showAlert("Error", "Could not pin chat", "error");
-            }
+            } catch(e) { window.app.showAlert("Error", "Could not pin/unpin chat.", "error"); }
         };
 
-        window.app.actionDeleteChat = () => {
-            const menu = document.getElementById('chat-options-menu');
-            menu.classList.add('hidden'); menu.classList.remove('flex');
-
-            window.app.showAlert("Delete Chat", "Are you sure you want to remove this chat from your list?", "warning", async () => {
+        window.app.blockUser = (targetId) => {
+            window.app.closeChatOptions();
+            window.app.showAlert("Block User", "Are you sure you want to block this user? They will not be able to message you.", "warning", async () => {
                 try {
-                    await deleteDoc(doc(db, "users", currentUser.uid, "chats_list", selectedMenuChatId));
-                } catch(err) {
-                    window.app.showAlert("Error", "Could not delete chat.", "error");
-                }
+                    // Chat blocking architecture applied to global chat doc
+                    const roomIds = [currentUser.uid, targetId].sort();
+                    const roomId = roomIds.join('_');
+                    await updateDoc(doc(db, "chats", roomId), { blockedBy: currentUser.uid });
+                    window.app.showAlert("Success", "User blocked.", "success");
+                } catch(e) { console.error(e); window.app.showAlert("Error", "Failed to block user.", "error"); }
             });
         };
 
-        window.app.actionBlockUser = () => {
-            const menu = document.getElementById('chat-options-menu');
-            menu.classList.add('hidden'); menu.classList.remove('flex');
-
-            window.app.showAlert("Block User", "Are you sure you want to block this user? They will not be able to message you.", "warning", async () => {
-                try {
-                    // Update global chat room block status
-                    await updateDoc(doc(db, "chats", selectedMenuChatId), {
-                        blockedBy: currentUser.uid
-                    });
-                    window.app.showAlert("Success", "User blocked successfully", "success");
-                } catch(err) {
-                    window.app.showAlert("Error", "Could not block user.", "error");
-                }
+        window.app.deleteChatListEntry = (chatId) => {
+            window.app.closeChatOptions();
+            window.app.showAlert("Delete Chat", "Remove this chat from your list? (This won't delete the messages for the other person).", "warning", async () => {
+                try { await deleteDoc(doc(db, "users", currentUser.uid, "chats_list", chatId)); } 
+                catch(e) { window.app.showAlert("Error", "Could not delete chat.", "error"); }
             });
         };
 
@@ -408,28 +394,32 @@
         };
 
         const performSearch = async (queryText) => {
+            // Local Chat Search
             const matchedChats = allChats.filter(c => {
-                // Search against username or displayName
-                const name = (c.type === 'group' ? c.groupName : (c.otherUserUsername || c.otherUserName)) || '';
+                const name = (c.type === 'group' ? c.groupName : (c.otherUserName || c.otherUsername)) || '';
                 return name.toLowerCase().includes(queryText);
             });
             renderSearchResults('search-chats-results', matchedChats, 'chat');
 
-            // Global User Search by 'username'
+            // Local Message Search
+            const matchedMsgs = allChats.filter(c => {
+                const msg = c.lastMessage || '';
+                return msg.toLowerCase().includes(queryText);
+            });
+            renderSearchResults('search-messages-results', matchedMsgs, 'msg');
+
+            // Global User Search (By Username)
             try {
                 const usersRef = collection(db, "users");
+                // Searching by 'username' field
                 const q = query(usersRef, orderBy("username"), where("username", ">=", queryText), where("username", "<=", queryText + '\uf8ff'));
                 const snap = await getDocs(q);
                 const globalUsers = [];
                 snap.forEach(doc => {
-                    if (doc.id !== currentUser.uid) { 
-                        globalUsers.push({ id: doc.id, ...doc.data() });
-                    }
+                    if (doc.id !== currentUser.uid) { globalUsers.push({ id: doc.id, ...doc.data() }); }
                 });
                 renderSearchResults('search-users-results', globalUsers, 'user');
-            } catch (err) {
-                console.error("Global search error", err);
-            }
+            } catch (err) { console.error("Global search error", err); }
         };
 
         const renderSearchResults = (containerId, data, type) => {
@@ -441,23 +431,24 @@
 
             let html = '';
             data.forEach(item => {
-                if (type === 'chat') {
-                    const title = item.type === 'group' ? item.groupName : (item.otherUserUsername || item.otherUserName);
+                if (type === 'chat' || type === 'msg') {
+                    const title = item.type === 'group' ? item.groupName : (item.otherUserName || item.otherUsername);
                     const img = item.type === 'group' ? item.groupIcon : item.otherUserImg;
-                    const routeUrl = item.type === 'direct' ? `/chat.html?userA=${currentUser.uid}&userB=${item.targetId}` : `/group-chat.html?id=${item.id}`;
+                    const sub = type === 'msg' ? `<span class="text-[#F47521]">Match:</span> ${item.lastMessage}` : 'Tap to open chat';
+                    const routeUrl = item.type === 'direct' ? `/chats.html?userA=${currentUser.uid}&userB=${item.targetId}` : `/group-chat.html?id=${item.id}`;
                     
                     html += `
                         <div onclick="window.location.href='${routeUrl}'" class="flex items-center gap-3 p-2 bg-white/5 rounded-lg border border-white/5 cursor-pointer hover:bg-white/10">
-                            <img src="${img || 'https://ui-avatars.com/api/?name=U&background=111&color=F47521'}" class="w-10 h-10 rounded-full object-cover">
+                            <img src="${img || 'https://via.placeholder.com/150'}" class="w-10 h-10 rounded-full object-cover">
                             <div class="flex-1 min-w-0">
                                 <h4 class="text-white font-bold text-sm truncate">${title}</h4>
-                                <p class="text-gray-400 text-xs truncate">Tap to open chat</p>
+                                <p class="text-gray-400 text-xs truncate">${sub}</p>
                             </div>
                         </div>`;
                 } else if (type === 'user') {
                     html += `
-                        <div onclick="window.location.href='/chat.html?userA=${currentUser.uid}&userB=${item.id}'" class="flex items-center gap-3 p-2 bg-white/5 rounded-lg border border-white/5 cursor-pointer hover:bg-white/10">
-                            <img src="${item.photoURL || 'https://ui-avatars.com/api/?name=U&background=111&color=F47521'}" class="w-10 h-10 rounded-full object-cover">
+                        <div onclick="window.location.href='/chats.html?userA=${currentUser.uid}&userB=${item.id}'" class="flex items-center gap-3 p-2 bg-white/5 rounded-lg border border-white/5 cursor-pointer hover:bg-white/10">
+                            <img src="${item.photoURL || 'https://via.placeholder.com/150'}" class="w-10 h-10 rounded-full object-cover">
                             <div class="flex-1 min-w-0">
                                 <h4 class="text-white font-bold text-sm truncate">${item.username || item.displayName || 'Unknown'}</h4>
                                 <p class="text-gray-400 text-xs truncate">Global User</p>
@@ -474,110 +465,112 @@
             document.getElementById('group-modal').style.display = 'flex';
             groupSelectedUsers = [];
             renderSelectedGroupUsers();
-            
             document.getElementById('group-search-user').value = '';
             document.getElementById('group-name-input').value = '';
-
-            // Default display: Users you already chat with
-            const frequentUsers = allChats
-                .filter(c => c.type === 'direct' && c.targetId)
-                .map(c => ({
-                    id: c.targetId,
-                    username: c.otherUserUsername || c.otherUserName,
-                    photoURL: c.otherUserImg
-                }));
-
-            renderGroupSuggestions(frequentUsers, "Frequent Contacts");
+            
+            // Populate default frequent users (from active direct chats)
+            renderDefaultGroupUsers();
         };
 
         window.app.closeGroupModal = () => {
             document.getElementById('group-modal').style.display = 'none';
         };
 
-        const renderGroupSuggestions = (usersArray, label = "") => {
-            const container = document.getElementById('group-search-results');
-            if (usersArray.length === 0) {
-                container.innerHTML = `<div class="text-center py-8 text-gray-600 text-xs uppercase tracking-widest">No users found</div>`;
+        const renderDefaultGroupUsers = () => {
+            const resultsContainer = document.getElementById('group-search-results');
+            const recentUsers = allChats.filter(c => c.type === 'direct').slice(0, 15);
+            
+            if (recentUsers.length === 0) {
+                resultsContainer.innerHTML = '<div class="text-center py-8 text-gray-600 text-xs uppercase tracking-widest">Search to add users...</div>';
                 return;
             }
 
-            let html = label ? `<div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 px-1">${label}</div>` : '';
-            
-            usersArray.forEach(uData => {
-                const isAdded = groupSelectedUsers.find(u => u.id === uData.id);
-                const safeName = (uData.username || 'Unknown').replace(/'/g, "\\'");
+            let html = '<div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1 mt-2">Frequent Chats</div>';
+            recentUsers.forEach(c => {
+                const uName = c.otherUserName || c.otherUsername || 'Unknown';
+                const uId = c.targetId;
+                const img = c.otherUserImg || 'https://via.placeholder.com/150';
+                const isAdded = groupSelectedUsers.find(u => u.id === uId);
+
                 html += `
-                    <div class="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/5 mb-2">
+                    <div class="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/5">
                         <div class="flex items-center gap-3">
-                            <img src="${uData.photoURL || 'https://ui-avatars.com/api/?name=U&background=111&color=F47521'}" class="w-8 h-8 rounded-full object-cover">
-                            <span class="text-sm font-bold">${uData.username || 'Unknown'}</span>
+                            <img src="${img}" class="w-8 h-8 rounded-full object-cover">
+                            <span class="text-sm font-bold">${uName}</span>
                         </div>
-                        <button onclick="window.app.tryAddUserToGroup('${uData.id}', '${safeName}')" 
-                            class="text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full ${isAdded ? 'bg-green-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}">
+                        <button onclick="window.app.tryAddUserToGroup('${uId}', '${uName.replace(/'/g, "\\'")}')" 
+                            class="text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full ${isAdded ? 'bg-green-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'} transition-colors">
                             ${isAdded ? '<i class="fas fa-check"></i>' : 'Add'}
                         </button>
                     </div>
                 `;
             });
-            container.innerHTML = html;
+            resultsContainer.innerHTML = html;
         };
 
         document.getElementById('group-search-user').addEventListener('input', async (e) => {
             const val = e.target.value.trim().toLowerCase();
+            const resultsContainer = document.getElementById('group-search-results');
+            
             if (val.length === 0) {
-                // Revert to frequent contacts
-                const frequentUsers = allChats.filter(c => c.type === 'direct' && c.targetId).map(c => ({
-                    id: c.targetId, username: c.otherUserUsername || c.otherUserName, photoURL: c.otherUserImg
-                }));
-                renderGroupSuggestions(frequentUsers, "Frequent Contacts");
+                renderDefaultGroupUsers();
                 return;
             }
 
             try {
-                // Search users globally by username
+                // Search by username
                 const q = query(collection(db, "users"), orderBy("username"), where("username", ">=", val), where("username", "<=", val + '\uf8ff'));
                 const snap = await getDocs(q);
-                let searchArr = [];
+                let html = '<div class="text-[10px] text-[#F47521] font-bold uppercase tracking-widest mb-1 mt-2">Search Results</div>';
+                let found = false;
+
                 snap.forEach(doc => {
-                    if (doc.id !== currentUser.uid) searchArr.push({ id: doc.id, ...doc.data() });
+                    if (doc.id === currentUser.uid) return;
+                    found = true;
+                    const uData = doc.data();
+                    const uName = uData.username || uData.displayName || 'Unknown';
+                    const isAdded = groupSelectedUsers.find(u => u.id === doc.id);
+                    
+                    html += `
+                        <div class="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/5">
+                            <div class="flex items-center gap-3">
+                                <img src="${uData.photoURL || 'https://via.placeholder.com/150'}" class="w-8 h-8 rounded-full object-cover">
+                                <span class="text-sm font-bold">${uName}</span>
+                            </div>
+                            <button onclick="window.app.tryAddUserToGroup('${doc.id}', '${uName.replace(/'/g, "\\'")}')" 
+                                class="text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full ${isAdded ? 'bg-green-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}">
+                                ${isAdded ? '<i class="fas fa-check"></i>' : 'Add'}
+                            </button>
+                        </div>
+                    `;
                 });
-                renderGroupSuggestions(searchArr, "Search Results");
-            } catch(e) {
-                console.error(e);
-            }
+                
+                resultsContainer.innerHTML = found ? html : '<div class="text-center py-8 text-gray-600 text-xs uppercase tracking-widest">No users found</div>';
+            } catch(e) { console.error(e); }
         });
 
         window.app.tryAddUserToGroup = async (userId, userName) => {
             if (groupSelectedUsers.find(u => u.id === userId)) return;
-
-            // Optional Mutual Like Validation Logic
-            try {
-                const myLikeRef = doc(db, "users", currentUser.uid, "likes", userId);
-                const theirLikeRef = doc(db, "users", userId, "likes", currentUser.uid);
-                
-                const [myLikeSnap, theirLikeSnap] = await Promise.all([getDoc(myLikeRef), getDoc(theirLikeRef)]);
-                
-                if (!myLikeSnap.exists() || !theirLikeSnap.exists()) {
-                    window.app.showAlert("Cannot Add", `${userName} and you must like each other to form a group.`, "error");
-                    return;
-                }
-            } catch(e) {
-                // Assuming it's fine if "likes" collection doesn't exist yet
-            }
-
             groupSelectedUsers.push({ id: userId, name: userName });
             renderSelectedGroupUsers();
             
-            // Re-trigger input to refresh buttons
-            const inputEvent = new Event('input');
-            document.getElementById('group-search-user').dispatchEvent(inputEvent);
+            // Re-render current list to update button state
+            if(document.getElementById('group-search-user').value.trim() === '') {
+                renderDefaultGroupUsers();
+            } else {
+                document.getElementById('group-search-user').dispatchEvent(new Event('input'));
+            }
         };
 
         window.app.removeUserFromGroup = (userId) => {
             groupSelectedUsers = groupSelectedUsers.filter(u => u.id !== userId);
             renderSelectedGroupUsers();
-            const inputEvent = new Event('input');
-            document.getElementById('group-search-user').dispatchEvent(inputEvent);
+            
+            if(document.getElementById('group-search-user').value.trim() === '') {
+                renderDefaultGroupUsers();
+            } else {
+                document.getElementById('group-search-user').dispatchEvent(new Event('input'));
+            }
         };
 
         const renderSelectedGroupUsers = () => {
@@ -587,7 +580,7 @@
                 return;
             }
             container.innerHTML = groupSelectedUsers.map(u => `
-                <div class="bg-[#F47521]/20 border border-[#F47521]/50 text-[#F47521] px-3 py-1 rounded-full text-xs font-bold flex items-center gap-2">
+                <div class="bg-[#F47521]/20 border border-[#F47521]/50 text-[#F47521] px-3 py-1.5 rounded-full text-[10px] font-bold flex items-center gap-2 mb-2">
                     ${u.name}
                     <button onclick="window.app.removeUserFromGroup('${u.id}')" class="hover:text-white"><i class="fas fa-times"></i></button>
                 </div>
@@ -597,7 +590,7 @@
         window.app.createGroupAction = async () => {
             const name = document.getElementById('group-name-input').value.trim();
             if (!name) return window.app.showAlert("Hold up!", "Please enter a group name.", "warning");
-            if (groupSelectedUsers.length === 0) return window.app.showAlert("Hold up!", "Please add at least one mutual friend.", "warning");
+            if (groupSelectedUsers.length === 0) return window.app.showAlert("Hold up!", "Please add at least one participant.", "warning");
 
             try {
                 const participants = [currentUser.uid, ...groupSelectedUsers.map(u => u.id)];
@@ -618,15 +611,15 @@
                         timestamp: serverTimestamp(),
                         targetId: null, 
                         unreadCount: 0,
-                        isPinned: false
+                        pinned: false
                     });
                 });
-                
                 await batch.commit();
 
                 window.app.closeGroupModal();
                 window.app.showAlert("Success", "Group created successfully!", "success");
             } catch (err) {
+                console.error(err);
                 window.app.showAlert("Error", "Failed to create group.", "error");
             }
         };
@@ -641,9 +634,7 @@
 
                 onSnapshot(q, async (snapshot) => {
                     const rawList = [];
-                    snapshot.forEach(doc => {
-                        rawList.push({ id: doc.id, ...doc.data() });
-                    });
+                    snapshot.forEach(doc => { rawList.push({ id: doc.id, ...doc.data() }); });
 
                     allChats = await Promise.all(rawList.map(async chatListDoc => {
                         let chatObj = {
@@ -651,10 +642,10 @@
                             lastMessage: chatListDoc.lastMessage,
                             lastMessageTime: chatListDoc.timestamp,
                             unreadCount: chatListDoc.unreadCount || 0,
-                            isPinned: chatListDoc.isPinned || false,
                             targetId: chatListDoc.targetId,
                             type: chatListDoc.targetId ? 'direct' : 'group',
-                            isRequest: chatListDoc.isRequest || false
+                            isRequest: chatListDoc.isRequest || false,
+                            pinned: chatListDoc.pinned || false
                         };
 
                         if (chatObj.type === 'direct' && chatObj.targetId) {
@@ -662,8 +653,8 @@
                                 const userDoc = await getDoc(doc(db, "users", chatObj.targetId));
                                 if (userDoc.exists()) {
                                     const uData = userDoc.data();
-                                    chatObj.otherUserName = uData.displayName;
-                                    chatObj.otherUserUsername = uData.username;
+                                    chatObj.otherUserName = uData.displayName || "User";
+                                    chatObj.otherUsername = uData.username || "";
                                     chatObj.otherUserImg = uData.photoURL;
                                 }
                             } catch (e) {}
