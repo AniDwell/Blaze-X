@@ -1,12 +1,11 @@
-// carousel.js - Firestore Subcollections Native, Fixed Sync & Auth Listeners
+// carousel.js - HIGH PERFORMANCE OPTIMIZED (Parallel Fetch & Caching)
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
 window.app.state = window.app.state || {};
 
-// In-memory set to instantly check if a carousel item is in the library
 window.app.state.carouselLibrarySet = new Set();
-window.app.state.libraryUnsubscribe = null; // Store listener to avoid duplicates
+window.app.state.libraryUnsubscribe = null; 
 
 // --- GLOBAL FIREBASE INITIALIZATION ---
 let app, auth, db;
@@ -43,6 +42,41 @@ const initFirebase = async () => {
     }
 };
 
+// --- BACKGROUND FIREBASE SYNC ---
+const setupFirebaseSync = async () => {
+    try {
+        await initFirebase();
+        const { onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+        const { collection, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+
+        onAuthStateChanged(auth, (user) => {
+            if (window.app.state.libraryUnsubscribe) {
+                window.app.state.libraryUnsubscribe(); 
+            }
+
+            if (user && !user.isAnonymous) {
+                const libRef = collection(db, "users", user.uid, "library");
+                window.app.state.libraryUnsubscribe = onSnapshot(libRef, (snapshot) => {
+                    window.app.state.carouselLibrarySet.clear();
+                    snapshot.forEach(doc => {
+                        window.app.state.carouselLibrarySet.add(String(doc.id));
+                    });
+                    if (document.getElementById('carousel-ui-layer')) {
+                        window.app.updateCarouselUI(window.app.state.carouselCurrentIndex);
+                    }
+                });
+            } else {
+                window.app.state.carouselLibrarySet.clear();
+                if (document.getElementById('carousel-ui-layer')) {
+                    window.app.updateCarouselUI(window.app.state.carouselCurrentIndex);
+                }
+            }
+        });
+    } catch (fbError) {
+        console.error("Firebase Auth listener failed in Carousel:", fbError);
+    }
+};
+
 window.app.components.carousel = async () => {
     const container = document.getElementById('carousel-container');
     if (!container) return;
@@ -57,117 +91,95 @@ window.app.components.carousel = async () => {
         </div>
     `;
 
-    // --- FIREBASE SYNC: Live Listener for Auth & Library ---
+    // Fire off Firebase sync without blocking the UI rendering
+    setupFirebaseSync();
+
     try {
-        await initFirebase();
-        const { onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
-        const { collection, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-
-        onAuthStateChanged(auth, async (user) => {
-            if (window.app.state.libraryUnsubscribe) {
-                window.app.state.libraryUnsubscribe(); // Cleanup old listener
-            }
-
-            if (user && !user.isAnonymous) {
-                try {
-                    const libRef = collection(db, "users", user.uid, "library");
-                    
-                    // LIVE LISTENER: Instantly updates memory set when library changes
-                    window.app.state.libraryUnsubscribe = onSnapshot(libRef, (snapshot) => {
-                        window.app.state.carouselLibrarySet.clear();
-                        snapshot.forEach(doc => {
-                            window.app.state.carouselLibrarySet.add(String(doc.id));
-                        });
-
-                        // Re-render the current slide's buttons immediately on data change
-                        if (document.getElementById('carousel-ui-layer')) {
-                            window.app.updateCarouselUI(window.app.state.carouselCurrentIndex);
-                        }
-                    });
-                } catch (e) {
-                    console.error("Failed to sync live library for carousel:", e);
-                }
-            } else {
-                window.app.state.carouselLibrarySet.clear();
-                if (document.getElementById('carousel-ui-layer')) {
-                    window.app.updateCarouselUI(window.app.state.carouselCurrentIndex);
-                }
-            }
-        });
-    } catch (fbError) {
-        console.error("Firebase Auth listener failed in Carousel:", fbError);
-    }
-
-    // --- FETCH CAROUSEL DATA: AniList First, exact API match second ---
-    try {
-        const topSlides = [];
-        const baseUrl = 'https://anikoto-api-xi.vercel.app';
-
-        // Get trending/top of the month from AniList (fetch 20 to account for skips)
-        const aniQuery = `
-            query { 
-                Page(page: 1, perPage: 20) { 
-                    media(type: ANIME, sort: TRENDING_DESC, isAdult: false) { 
-                        title { romaji english }
-                        description
-                        averageScore
-                        coverImage { extraLarge } 
-                    } 
-                } 
-            }
-        `;
-
-        const aniRes = await fetch('https://graphql.anilist.co', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({ query: aniQuery })
-        });
+        let topSlides = [];
         
-        const aniData = await aniRes.json();
-        const aniListMedia = aniData?.data?.Page?.media || [];
-
-        // Try matching AniList trending with your Custom API
-        for (const media of aniListMedia) {
-            if (topSlides.length >= 5) break; // Stop when we have 5 matched series
-
-            const romaji = media.title.romaji || '';
-            const english = media.title.english || '';
-            const searchKeyword = english || romaji; 
-
-            if (!searchKeyword) continue;
-
+        // --- OPTIMIZATION 1: SESSION CACHING ---
+        // Check if we already loaded the carousel data this session
+        const cachedCarousel = sessionStorage.getItem('blazex_carousel_cache');
+        if (cachedCarousel) {
             try {
-                const searchRes = await fetch(`${baseUrl}/api/search?keyword=${encodeURIComponent(searchKeyword)}`);
-                if (!searchRes.ok) continue;
-
-                const searchData = await searchRes.json();
-                const apiResults = searchData.data || searchData.results || searchData || [];
-
-                // STRICT EXACT MATCH LOGIC (case-insensitive)
-                const exactMatch = apiResults.find(r => {
-                    const apiTitle = (r.title || '').toLowerCase();
-                    return apiTitle === romaji.toLowerCase() || apiTitle === english.toLowerCase();
-                });
-
-                if (!exactMatch) {
-                    console.log(`Skipped (No Exact API Match): ${searchKeyword}`);
-                    continue;
-                }
-
-                // Push enriched exact match
-                topSlides.push({
-                    exactId: exactMatch.id,
-                    title: searchKeyword,
-                    finalImage: media.coverImage?.extraLarge || 'https://via.placeholder.com/1280x720/111/fff?text=No+Image',
-                    finalRating: media.averageScore || null,
-                    finalDescription: media.description ? media.description.replace(/<[^>]*>?/gm, '').trim() : 'No synopsis available.',
-                });
-
+                topSlides = JSON.parse(cachedCarousel);
             } catch (e) {
-                console.log(`Search failed for ${searchKeyword}`, e);
+                sessionStorage.removeItem('blazex_carousel_cache');
             }
         }
 
+        // --- OPTIMIZATION 2: PARALLEL FETCHING (If no cache) ---
+        if (!topSlides || topSlides.length === 0) {
+            const baseUrl = 'https://anikoto-api-xi.vercel.app';
+
+            // Get trending from AniList
+            const aniQuery = `
+                query { 
+                    Page(page: 1, perPage: 15) { 
+                        media(type: ANIME, sort: TRENDING_DESC, isAdult: false) { 
+                            title { romaji english }
+                            description
+                            averageScore
+                            coverImage { extraLarge } 
+                        } 
+                    } 
+                }
+            `;
+
+            const aniRes = await fetch('https://graphql.anilist.co', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ query: aniQuery })
+            });
+            
+            const aniData = await aniRes.json();
+            const aniListMedia = aniData?.data?.Page?.media || [];
+
+            // Execute API cross-reference in PARALLEL instead of sequentially
+            const searchPromises = aniListMedia.map(async (media) => {
+                const romaji = media.title.romaji || '';
+                const english = media.title.english || '';
+                const searchKeyword = english || romaji; 
+
+                if (!searchKeyword) return null;
+
+                try {
+                    const searchRes = await fetch(`${baseUrl}/api/search?keyword=${encodeURIComponent(searchKeyword)}`);
+                    if (!searchRes.ok) return null;
+
+                    const searchData = await searchRes.json();
+                    const apiResults = searchData.data || searchData.results || searchData || [];
+
+                    const exactMatch = apiResults.find(r => {
+                        const apiTitle = (r.title || '').toLowerCase();
+                        return apiTitle === romaji.toLowerCase() || apiTitle === english.toLowerCase();
+                    });
+
+                    if (!exactMatch) return null;
+
+                    return {
+                        exactId: exactMatch.id,
+                        title: searchKeyword,
+                        finalImage: media.coverImage?.extraLarge || 'https://via.placeholder.com/1280x720/111/fff?text=No+Image',
+                        finalRating: media.averageScore || null,
+                        finalDescription: media.description ? media.description.replace(/<[^>]*>?/gm, '').trim() : 'No synopsis available.',
+                    };
+                } catch (e) {
+                    return null;
+                }
+            });
+
+            // Wait for all fetches to complete simultaneously, filter out failures, keep top 5
+            const resolvedResults = await Promise.all(searchPromises);
+            topSlides = resolvedResults.filter(item => item !== null).slice(0, 5);
+
+            // Save to cache for instant loading on page re-visits
+            if (topSlides.length > 0) {
+                sessionStorage.setItem('blazex_carousel_cache', JSON.stringify(topSlides));
+            }
+        }
+
+        // --- FALLBACK UI ---
         if (topSlides.length === 0) {
             container.innerHTML = `
                 <div class="p-6 text-center text-gray-500 text-xs border border-white/5 mx-4 rounded-xl bg-black tracking-widest uppercase">
@@ -177,6 +189,7 @@ window.app.components.carousel = async () => {
             return;
         }
 
+        // --- RENDER LOGIC ---
         window.app.state.carouselItems = topSlides; 
         window.app.state.carouselCurrentIndex = 0;
 
@@ -199,7 +212,6 @@ window.app.components.carousel = async () => {
             `;
         });
 
-        // 3. RENDER FINAL UI
         container.innerHTML = `
             <div class="relative w-full aspect-[4/5] md:aspect-[21/9] max-h-[75vh] overflow-hidden bg-black border-b border-white/5">
                 <div id="hero-slides" class="absolute inset-0 z-0">
@@ -233,7 +245,6 @@ window.app.updateCarouselUI = (index) => {
     const data = window.app.state.carouselItems[index];
     if (!data) return;
 
-    // Check Memory Set to see if ID exists
     const docIdStr = String(data.exactId);
     const isAdded = window.app.state.carouselLibrarySet.has(docIdStr);
     const safeTitle = (data.title || 'Unknown').replace(/'/g, "\\'");
@@ -336,7 +347,6 @@ function startAutoRotate() {
 // --- DYNAMIC LIBRARY LOGIC (ADD, REMOVE & NOTIFY) ---
 window.app.handleCarouselLibraryClick = async (event, index) => {
     event.stopPropagation(); 
-    
     const btn = event.currentTarget;
     
     try {
@@ -361,22 +371,17 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
 
         const isAdded = btn.dataset.added === "true"; 
 
-        // Import addDoc and collection to push notifications to Firestore
         const { doc, setDoc, deleteDoc, collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const libDocRef = doc(db, "users", auth.currentUser.uid, "library", docIdStr);
         const notifRef = collection(db, "users", auth.currentUser.uid, "notifications");
 
         if (isAdded) {
-            // Optimistic Remove UI (Listener will also catch this)
             window.app.state.carouselLibrarySet.delete(docIdStr);
             btn.dataset.added = "false";
             btn.className = "bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2 shadow-lg";
             btn.innerHTML = `<i class="fas fa-plus"></i> Library`;
 
-            // Delete from library
             await deleteDoc(libDocRef);
-            
-            // Push "Removed" notification
             await addDoc(notifRef, {
                 type: 'library',
                 title: 'Library Updated',
@@ -388,16 +393,12 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
             if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
 
         } else {
-            // Optimistic Add UI (Listener will also catch this)
             window.app.state.carouselLibrarySet.add(docIdStr);
             btn.dataset.added = "true";
             btn.className = "bg-white text-black px-5 py-2 md:px-6 md:py-3 rounded font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors border border-white flex items-center gap-2 shadow-lg";
             btn.innerHTML = `<i class="fas fa-check"></i> Added`;
 
-            // Add to library
             await setDoc(libDocRef, formattedAnime);
-            
-            // Push "Added" notification
             await addDoc(notifRef, {
                 type: 'library',
                 title: 'Library Updated',
