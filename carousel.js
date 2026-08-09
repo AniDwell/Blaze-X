@@ -1,4 +1,4 @@
-// carousel.js - Firestore Subcollections Native, Fixed Sync & Auth Listeners
+// carousel.js - Firestore Subcollections Native, Fixed Sync & Auth Listeners & Share Modal
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
@@ -6,7 +6,7 @@ window.app.state = window.app.state || {};
 
 // In-memory set to instantly check if a carousel item is in the library
 window.app.state.carouselLibrarySet = new Set();
-window.app.state.libraryUnsubscribe = null; // Store listener to avoid duplicates
+window.app.state.libraryUnsubscribe = null; 
 
 // --- GLOBAL FIREBASE INITIALIZATION ---
 let app, auth, db;
@@ -57,6 +57,9 @@ window.app.components.carousel = async () => {
         </div>
     `;
 
+    // Initialize Share Modal in DOM
+    injectShareModal();
+
     // --- FIREBASE SYNC: Live Listener for Auth & Library ---
     try {
         await initFirebase();
@@ -65,21 +68,19 @@ window.app.components.carousel = async () => {
 
         onAuthStateChanged(auth, async (user) => {
             if (window.app.state.libraryUnsubscribe) {
-                window.app.state.libraryUnsubscribe(); // Cleanup old listener
+                window.app.state.libraryUnsubscribe(); 
             }
 
             if (user && !user.isAnonymous) {
                 try {
                     const libRef = collection(db, "users", user.uid, "library");
                     
-                    // LIVE LISTENER: Instantly updates memory set when library changes
                     window.app.state.libraryUnsubscribe = onSnapshot(libRef, (snapshot) => {
                         window.app.state.carouselLibrarySet.clear();
                         snapshot.forEach(doc => {
                             window.app.state.carouselLibrarySet.add(String(doc.id));
                         });
 
-                        // Re-render the current slide's buttons immediately on data change
                         if (document.getElementById('carousel-ui-layer')) {
                             window.app.updateCarouselUI(window.app.state.carouselCurrentIndex);
                         }
@@ -98,12 +99,10 @@ window.app.components.carousel = async () => {
         console.error("Firebase Auth listener failed in Carousel:", fbError);
     }
 
-    // --- FETCH CAROUSEL DATA: AniList First, exact API match second ---
+    // --- FETCH CAROUSEL DATA ---
     try {
         const topSlides = [];
         const baseUrl = 'https://anikoto-api-xi.vercel.app';
-
-        // Get trending/top of the month from AniList (fetch 20 to account for skips)
         const aniQuery = `
             query { 
                 Page(page: 1, perPage: 20) { 
@@ -126,9 +125,8 @@ window.app.components.carousel = async () => {
         const aniData = await aniRes.json();
         const aniListMedia = aniData?.data?.Page?.media || [];
 
-        // Try matching AniList trending with your Custom API
         for (const media of aniListMedia) {
-            if (topSlides.length >= 5) break; // Stop when we have 5 matched series
+            if (topSlides.length >= 5) break; 
 
             const romaji = media.title.romaji || '';
             const english = media.title.english || '';
@@ -137,26 +135,19 @@ window.app.components.carousel = async () => {
             if (!searchKeyword) continue;
 
             try {
-                // Adjust this search endpoint if your API uses a different path (e.g. /api/anime/search)
                 const searchRes = await fetch(`${baseUrl}/api/search?keyword=${encodeURIComponent(searchKeyword)}`);
                 if (!searchRes.ok) continue;
 
                 const searchData = await searchRes.json();
                 const apiResults = searchData.data || searchData.results || searchData || [];
 
-                // STRICT EXACT MATCH LOGIC (case-insensitive)
                 const exactMatch = apiResults.find(r => {
                     const apiTitle = (r.title || '').toLowerCase();
                     return apiTitle === romaji.toLowerCase() || apiTitle === english.toLowerCase();
                 });
 
-                // Skip if no exact match in your API
-                if (!exactMatch) {
-                    console.log(`Skipped (No Exact API Match): ${searchKeyword}`);
-                    continue;
-                }
+                if (!exactMatch) continue;
 
-                // Push enriched exact match
                 topSlides.push({
                     exactId: exactMatch.id,
                     title: searchKeyword,
@@ -201,7 +192,6 @@ window.app.components.carousel = async () => {
             `;
         });
 
-        // 3. RENDER FINAL UI
         container.innerHTML = `
             <div class="relative w-full aspect-[4/5] md:aspect-[21/9] max-h-[75vh] overflow-hidden bg-black border-b border-white/5">
                 <div id="hero-slides" class="absolute inset-0 z-0">
@@ -227,7 +217,6 @@ window.app.components.carousel = async () => {
     }
 };
 
-// --- DYNAMIC UI UPDATER ---
 window.app.updateCarouselUI = (index) => {
     const uiLayer = document.getElementById('carousel-ui-layer');
     if (!uiLayer) return;
@@ -235,14 +224,12 @@ window.app.updateCarouselUI = (index) => {
     const data = window.app.state.carouselItems[index];
     if (!data) return;
 
-    // Check Memory Set to see if ID exists
     const docIdStr = String(data.exactId);
     const isAdded = window.app.state.carouselLibrarySet.has(docIdStr);
     const safeTitle = (data.title || 'Unknown').replace(/'/g, "\\'");
 
     const ratingHtml = data.finalRating ? `<span class="flex items-center gap-1"><i class="fas fa-star"></i> ${data.finalRating}% SCORE</span>` : '';
 
-    // Dynamic Button State (Removed green, using standard dark styling)
     const libraryBtnHtml = isAdded 
         ? `<button id="carousel-lib-btn" onclick="window.app.handleCarouselLibraryClick(event, ${index})" data-added="true" class="bg-white text-black px-5 py-2 md:px-6 md:py-3 rounded font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors border border-white flex items-center gap-2 shadow-lg">
                <i class="fas fa-check"></i> Added
@@ -271,7 +258,7 @@ window.app.updateCarouselUI = (index) => {
                 
                 ${libraryBtnHtml}
                 
-                <button onclick="event.stopPropagation(); window.app.shareAnime('${data.exactId}', '${safeTitle}')" class="bg-white/10 backdrop-blur-md text-white px-4 py-2 md:px-5 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-blue-500 transition-colors border border-white/10 flex items-center gap-2 shadow-lg">
+                <button onclick="event.stopPropagation(); window.app.openShareModal(this, '${data.exactId}', '${safeTitle}')" class="bg-white/10 backdrop-blur-md text-white px-4 py-2 md:px-5 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-[#F47521] hover:border-[#F47521] transition-colors border border-white/10 flex items-center gap-2 shadow-lg">
                     <i class="fas fa-share-nodes"></i>
                 </button>
             </div>
@@ -283,11 +270,8 @@ window.app.updateCarouselUI = (index) => {
 window.app.handleCarouselImageClick = () => {
     const currentIndex = window.app.state.carouselCurrentIndex;
     const currentSlideData = window.app.state.carouselItems[currentIndex];
-    
     if (currentSlideData && currentSlideData.exactId) {
         window.location.href = `info.html?id=${currentSlideData.exactId}`;
-    } else {
-        if (window.app.showCustomAlert) window.app.showCustomAlert("Unable to load details for this series.", "error");
     }
 };
 
@@ -306,15 +290,8 @@ function transitionSlide(oldIndex, newIndex) {
     const newSlide = document.getElementById(`slide-bg-${newIndex}`);
     const newDot = document.getElementById(`dot-${newIndex}`);
 
-    if (oldSlide) {
-        oldSlide.style.opacity = '0';
-        oldSlide.classList.replace('z-20', 'z-10');
-    }
-    if (newSlide) {
-        newSlide.style.opacity = '1';
-        newSlide.classList.replace('z-10', 'z-20');
-    }
-
+    if (oldSlide) { oldSlide.style.opacity = '0'; oldSlide.classList.replace('z-20', 'z-10'); }
+    if (newSlide) { newSlide.style.opacity = '1'; newSlide.classList.replace('z-10', 'z-20'); }
     if (oldDot) oldDot.className = "carousel-dot w-2 h-2 bg-white/30 hover:bg-white/60 transition-all duration-300 cursor-pointer pointer-events-auto shadow-md shrink-0 rounded-sm";
     if (newDot) newDot.className = "carousel-dot w-2 h-8 bg-[#F47521] transition-all duration-300 cursor-pointer pointer-events-auto shadow-md shrink-0 rounded-sm";
     
@@ -329,25 +306,21 @@ function startAutoRotate() {
             return;
         }
         const count = window.app.state.carouselItems.length;
-        const currentIndex = window.app.state.carouselCurrentIndex;
-        const nextIndex = (currentIndex + 1) % count;
-        transitionSlide(currentIndex, nextIndex);
+        const nextIndex = (window.app.state.carouselCurrentIndex + 1) % count;
+        transitionSlide(window.app.state.carouselCurrentIndex, nextIndex);
         window.app.state.carouselCurrentIndex = nextIndex;
     }, 6000); 
 }
 
-// --- DYNAMIC LIBRARY LOGIC (ADD & REMOVE) ---
+// --- DYNAMIC LIBRARY LOGIC (ADD/REMOVE & NOTIFICATION) ---
 window.app.handleCarouselLibraryClick = async (event, index) => {
     event.stopPropagation(); 
-    
     const btn = event.currentTarget;
     
     try {
         await initFirebase(); 
-        
         if (!auth.currentUser || auth.currentUser.isAnonymous) {
             if (window.app.components && window.app.components.auth) window.app.components.auth();
-            else if (window.app.showCustomAlert) window.app.showCustomAlert("Please log in to save to your Library!", "error");
             return;
         }
 
@@ -355,40 +328,257 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
         if (!rawData) return;
         
         const docIdStr = String(rawData.exactId);
-        const formattedAnime = { 
-            id: docIdStr, 
-            title: rawData.title, 
-            img: rawData.finalImage,
-            timestamp: Date.now()
-        };
-
         const isAdded = btn.dataset.added === "true"; 
 
-        const { doc, setDoc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        const { doc, setDoc, deleteDoc, collection } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const libDocRef = doc(db, "users", auth.currentUser.uid, "library", docIdStr);
 
         if (isAdded) {
-            // Optimistic Remove UI (Listener will also catch this)
             window.app.state.carouselLibrarySet.delete(docIdStr);
             btn.dataset.added = "false";
             btn.className = "bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2 shadow-lg";
             btn.innerHTML = `<i class="fas fa-plus"></i> Library`;
 
             await deleteDoc(libDocRef);
-            if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
 
         } else {
-            // Optimistic Add UI (Listener will also catch this)
             window.app.state.carouselLibrarySet.add(docIdStr);
             btn.dataset.added = "true";
             btn.className = "bg-white text-black px-5 py-2 md:px-6 md:py-3 rounded font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors border border-white flex items-center gap-2 shadow-lg";
             btn.innerHTML = `<i class="fas fa-check"></i> Added`;
 
-            await setDoc(libDocRef, formattedAnime);
-            if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
+            await setDoc(libDocRef, { 
+                id: docIdStr, 
+                title: rawData.title, 
+                img: rawData.finalImage,
+                timestamp: Date.now()
+            });
+
+            // Write Notification to Database
+            try {
+                const notifRef = doc(collection(db, "users", auth.currentUser.uid, "notifications"));
+                await setDoc(notifRef, {
+                    title: "Added to Library",
+                    message: `You successfully added ${rawData.title} to your anime library.`,
+                    type: "library",
+                    image: rawData.finalImage,
+                    timestamp: Date.now()
+                });
+            } catch (notifErr) { console.error("Failed to write notification", notifErr); }
         }
     } catch (error) { 
         console.error("Firebase update failed:", error); 
-        if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to sync with cloud.", "error");
+    }
+};
+
+// --- SHARE MODAL & LOGIC ---
+function injectShareModal() {
+    if (document.getElementById('carousel-share-modal')) return;
+    const shareHtml = `
+        <div id="carousel-share-modal" class="fixed inset-0 z-[100] pointer-events-none flex flex-col justify-end" style="visibility: hidden;">
+            <div id="share-modal-bg" class="absolute inset-0 bg-black/60 backdrop-blur-sm opacity-0 transition-opacity duration-300 pointer-events-auto" onclick="window.app.closeShareModal()"></div>
+            
+            <div id="share-modal-content" class="relative bg-[#111] w-full h-[60vh] md:h-[50vh] rounded-t-3xl border-t border-white/10 transform translate-y-full transition-transform duration-300 pointer-events-auto flex flex-col pb-6">
+                <div class="w-full flex justify-center py-4 cursor-pointer" onclick="window.app.closeShareModal()">
+                    <div class="w-12 h-1.5 bg-white/20 rounded-full"></div>
+                </div>
+                
+                <h3 class="text-center font-black text-lg mb-4 uppercase tracking-wider">Share Anime</h3>
+                
+                <div class="px-5 mb-4 flex gap-2">
+                    <div class="relative flex-1">
+                        <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                        <input type="text" id="share-search-input" placeholder="Search chats..." class="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-sm text-white focus:outline-none focus:border-[#F47521] transition-colors">
+                    </div>
+                    <button onclick="window.app.searchShareChats()" class="bg-[#F47521] text-white px-4 rounded-xl shadow-lg hover:bg-[#d9661c] transition-colors flex items-center justify-center">
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+
+                <div id="share-chats-container" class="flex-1 overflow-y-auto px-5 flex flex-col gap-2 mb-2 scrollbar-hide">
+                    <div class="text-center text-gray-500 text-xs py-8 uppercase tracking-widest"><i class="fas fa-spinner fa-spin mr-2"></i>Loading Chats...</div>
+                </div>
+
+                <div class="px-5 pt-4 border-t border-white/10 flex gap-6 overflow-x-auto scrollbar-hide shrink-0 snap-x">
+                    <button onclick="window.app.shareToSocial('whatsapp')" class="flex flex-col items-center gap-2 min-w-[60px] snap-start hover:scale-110 transition-transform">
+                        <div class="w-12 h-12 rounded-full bg-[#25D366] flex items-center justify-center text-white text-xl shadow-lg"><i class="fab fa-whatsapp"></i></div>
+                        <span class="text-[10px] text-gray-400 font-bold tracking-wider">WhatsApp</span>
+                    </button>
+                    <button onclick="window.app.shareToSocial('instagram')" class="flex flex-col items-center gap-2 min-w-[60px] snap-start hover:scale-110 transition-transform">
+                        <div class="w-12 h-12 rounded-full bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888] flex items-center justify-center text-white text-xl shadow-lg"><i class="fab fa-instagram"></i></div>
+                        <span class="text-[10px] text-gray-400 font-bold tracking-wider">Instagram</span>
+                    </button>
+                    <button onclick="window.app.shareToSocial('twitter')" class="flex flex-col items-center gap-2 min-w-[60px] snap-start hover:scale-110 transition-transform">
+                        <div class="w-12 h-12 rounded-full bg-black border border-white/20 flex items-center justify-center text-white text-xl shadow-lg"><i class="fab fa-x-twitter"></i></div>
+                        <span class="text-[10px] text-gray-400 font-bold tracking-wider">X</span>
+                    </button>
+                    <button onclick="window.app.shareToSocial('telegram')" class="flex flex-col items-center gap-2 min-w-[60px] snap-start hover:scale-110 transition-transform">
+                        <div class="w-12 h-12 rounded-full bg-[#0088cc] flex items-center justify-center text-white text-xl shadow-lg"><i class="fab fa-telegram-plane"></i></div>
+                        <span class="text-[10px] text-gray-400 font-bold tracking-wider">Telegram</span>
+                    </button>
+                    <button onclick="window.app.shareToSocial('copy')" class="flex flex-col items-center gap-2 min-w-[60px] snap-start hover:scale-110 transition-transform">
+                        <div class="w-12 h-12 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white text-xl shadow-lg"><i class="fas fa-link"></i></div>
+                        <span class="text-[10px] text-gray-400 font-bold tracking-wider">Copy Link</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', shareHtml);
+}
+
+window.app.openShareModal = async (btn, id, title) => {
+    // Make button orange to indicate active state
+    btn.classList.add('bg-[#F47521]', 'border-[#F47521]', 'scale-95');
+    btn.classList.remove('bg-white/10', 'border-white/10');
+    setTimeout(() => btn.classList.remove('scale-95'), 150);
+
+    // Save current share targets
+    window.app.state.currentShareUrl = `${window.location.origin}/info.html?id=${id}`;
+    window.app.state.currentShareTitle = `Check out ${title} on Blaze-X!`;
+
+    const modal = document.getElementById('carousel-share-modal');
+    const bg = document.getElementById('share-modal-bg');
+    const content = document.getElementById('share-modal-content');
+    
+    modal.style.visibility = 'visible';
+    requestAnimationFrame(() => {
+        bg.classList.add('opacity-100');
+        bg.classList.remove('opacity-0');
+        content.classList.remove('translate-y-full');
+    });
+
+    // Load Chats (Top 5)
+    await loadShareChats();
+};
+
+window.app.closeShareModal = () => {
+    const bg = document.getElementById('share-modal-bg');
+    const content = document.getElementById('share-modal-content');
+    
+    bg.classList.remove('opacity-100');
+    bg.classList.add('opacity-0');
+    content.classList.add('translate-y-full');
+    
+    // Reset Share button styling
+    const btns = document.querySelectorAll('button i.fa-share-nodes');
+    btns.forEach(icon => {
+        const pBtn = icon.closest('button');
+        if (pBtn) {
+            pBtn.classList.remove('bg-[#F47521]', 'border-[#F47521]');
+            pBtn.classList.add('bg-white/10', 'border-white/10');
+        }
+    });
+
+    setTimeout(() => {
+        document.getElementById('carousel-share-modal').style.visibility = 'hidden';
+        document.getElementById('share-search-input').value = '';
+    }, 300);
+};
+
+async function loadShareChats() {
+    const container = document.getElementById('share-chats-container');
+    
+    if (!auth || !auth.currentUser || auth.currentUser.isAnonymous) {
+        container.innerHTML = `<div class="text-center text-gray-500 text-xs py-8 uppercase tracking-widest">Log in to share with friends</div>`;
+        return;
+    }
+
+    try {
+        const { collection, query, limit, getDocs } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        const q = query(collection(db, "users", auth.currentUser.uid, "chat_lists"), limit(5));
+        const snapshot = await getDocs(q);
+
+        if (snapshot.empty) {
+            container.innerHTML = `<div class="text-center text-gray-500 text-xs py-8 uppercase tracking-widest">No recent chats found</div>`;
+            return;
+        }
+
+        let html = '';
+        window.app.state.cachedShareChats = [];
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            window.app.state.cachedShareChats.push({ id: doc.id, ...data });
+            
+            const name = data.name || data.participantName || "Unknown User";
+            const img = data.pfp || data.participantPfp || "https://via.placeholder.com/50/111/fff?text=User";
+
+            html += `
+                <div class="flex items-center justify-between p-3 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-colors">
+                    <div class="flex items-center gap-3">
+                        <img src="${img}" class="w-10 h-10 rounded-full object-cover border border-white/10">
+                        <span class="text-sm font-bold text-white tracking-wide">${name}</span>
+                    </div>
+                    <button onclick="window.app.sendToChat('${doc.id}')" class="text-xs bg-white/10 hover:bg-[#F47521] text-white px-4 py-2 rounded-lg font-bold tracking-wider uppercase transition-colors">Send</button>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+
+    } catch (err) {
+        console.error("Error loading share chats", err);
+        container.innerHTML = `<div class="text-center text-red-500 text-xs py-8 uppercase tracking-widest">Failed to load chats</div>`;
+    }
+}
+
+window.app.searchShareChats = () => {
+    const query = document.getElementById('share-search-input').value.toLowerCase();
+    const container = document.getElementById('share-chats-container');
+    const cached = window.app.state.cachedShareChats || [];
+    
+    if (cached.length === 0) return;
+    
+    const filtered = cached.filter(c => {
+        const name = (c.name || c.participantName || "").toLowerCase();
+        return name.includes(query);
+    });
+
+    if (filtered.length === 0) {
+        container.innerHTML = `<div class="text-center text-gray-500 text-xs py-8 uppercase tracking-widest">No friends found</div>`;
+        return;
+    }
+
+    let html = '';
+    filtered.forEach(data => {
+        const name = data.name || data.participantName || "Unknown User";
+        const img = data.pfp || data.participantPfp || "https://via.placeholder.com/50/111/fff?text=User";
+        html += `
+            <div class="flex items-center justify-between p-3 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-colors">
+                <div class="flex items-center gap-3">
+                    <img src="${img}" class="w-10 h-10 rounded-full object-cover border border-white/10">
+                    <span class="text-sm font-bold text-white tracking-wide">${name}</span>
+                </div>
+                <button onclick="window.app.sendToChat('${data.id}')" class="text-xs bg-white/10 hover:bg-[#F47521] text-white px-4 py-2 rounded-lg font-bold tracking-wider uppercase transition-colors">Send</button>
+            </div>
+        `;
+    });
+    container.innerHTML = html;
+};
+
+window.app.sendToChat = (chatId) => {
+    // Implement direct send to chat database logic here if needed
+    alert("Sent to chat ID: " + chatId);
+    window.app.closeShareModal();
+};
+
+window.app.shareToSocial = (platform) => {
+    const url = encodeURIComponent(window.app.state.currentShareUrl);
+    const text = encodeURIComponent(window.app.state.currentShareTitle);
+
+    if (platform === 'whatsapp') {
+        window.open(`https://wa.me/?text=${text} - ${url}`, '_blank');
+    } else if (platform === 'twitter') {
+        window.open(`https://twitter.com/intent/tweet?url=${url}&text=${text}`, '_blank');
+    } else if (platform === 'telegram') {
+        window.open(`https://t.me/share/url?url=${url}&text=${text}`, '_blank');
+    } else if (platform === 'instagram') {
+        // Instagram doesn't support pre-filled web intents easily. Copy link and redirect to app.
+        navigator.clipboard.writeText(`${window.app.state.currentShareTitle} ${window.app.state.currentShareUrl}`);
+        alert("Link copied! Paste it in Instagram to share.");
+        window.open('https://instagram.com', '_blank');
+    } else if (platform === 'copy') {
+        navigator.clipboard.writeText(`${window.app.state.currentShareTitle} ${window.app.state.currentShareUrl}`);
+        alert("Link copied to clipboard!");
     }
 };
