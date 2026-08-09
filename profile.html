@@ -49,10 +49,10 @@
     <main class="flex-1 w-full max-w-3xl mx-auto p-4 pt-6 relative z-10">
         
         <!-- PROFILE CARD -->
-        <div id="profile-card" class="rounded-[2rem] p-6 md:p-8 relative overflow-hidden mb-4 transition-all border border-white/10 bg-[#0a0a0c] bg-cover bg-center">
+        <div id="profile-card" class="rounded-[2rem] p-6 md:p-8 relative overflow-hidden mb-4 transition-all border border-white/10 bg-[#0a0a0c] bg-cover bg-center shadow-xl">
             <div class="absolute inset-0 bg-black/60 z-0 transition-all duration-300"></div>
 
-            <button id="edit-bg-btn" onclick="openBgSearchModal()" class="hidden-el absolute top-4 right-4 z-20 w-8 h-8 bg-black/50 hover:bg-[#F47521] border border-white/20 rounded-full flex items-center justify-center text-white transition-colors cursor-pointer">
+            <button id="edit-bg-btn" onclick="openBgSearchModal()" class="hidden-el absolute top-4 right-4 z-20 w-8 h-8 bg-black/50 hover:bg-[#F47521] border border-white/20 rounded-full flex items-center justify-center text-white transition-colors cursor-pointer shadow-lg">
                 <i class="fas fa-image text-xs"></i>
             </button>
 
@@ -73,12 +73,12 @@
                     
                     <div id="profile-display-block">
                         <div class="flex items-center gap-3">
-                            <h1 id="user-name" class="text-2xl md:text-3xl font-black tracking-tight text-white line-clamp-1">Loading...</h1>
+                            <h1 id="user-name" class="text-2xl md:text-3xl font-black tracking-tight text-white line-clamp-1 drop-shadow-md">Loading...</h1>
                             <button id="edit-profile-btn" onclick="openProfileEditor()" class="hidden-el text-gray-400 hover:text-[#F47521] transition-colors">
                                 <i class="fas fa-pen text-sm"></i>
                             </button>
                         </div>
-                        <p id="user-bio" class="text-sm text-gray-300 mt-1 line-clamp-2 max-w-sm">No bio set.</p>
+                        <p id="user-bio" class="text-sm text-gray-300 mt-1 line-clamp-2 max-w-sm font-medium">No bio set.</p>
                         
                         <div class="flex items-center gap-2 mt-3">
                             <span id="view-badge" class="bg-white/10 text-gray-300 px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-widest border border-white/5">Authenticating</span>
@@ -97,10 +97,10 @@
             </div>
 
             <div id="visitor-actions" class="hidden-el w-full flex gap-3 mt-6 relative z-10">
-                <button onclick="handleProfileLike()" class="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2">
+                <button onclick="handleProfileLike()" class="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-md">
                     <i id="heart-icon" class="far fa-heart text-gray-400"></i> Like
                 </button>
-                <button onclick="navigateToChat()" class="flex-[2] bg-[#F47521] hover:bg-[#d96216] text-white py-3 rounded-xl text-sm font-black tracking-wide transition-all flex items-center justify-center gap-2">
+                <button onclick="navigateToChat()" class="flex-[2] bg-[#F47521] hover:bg-[#d96216] text-white py-3 rounded-xl text-sm font-black tracking-wide transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(244,117,33,0.3)]">
                     <i class="fas fa-paper-plane"></i> Message User
                 </button>
             </div>
@@ -108,8 +108,8 @@
 
         <!-- STATS BLOCK -->
         <div class="flex gap-3 mb-8 relative z-10">
-            <div class="flex-1 glass-panel p-4 rounded-2xl flex flex-col items-center justify-center">
-                <h3 id="stat-bottom-likes" class="text-xl md:text-2xl font-black text-[#F47521]">0</h3>
+            <div class="flex-1 glass-panel p-4 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-white/10 transition-colors group" onclick="openLikesModal()">
+                <h3 id="stat-bottom-likes" class="text-xl md:text-2xl font-black text-[#F47521] group-hover:scale-110 transition-transform">0</h3>
                 <p class="text-[9px] md:text-[10px] text-gray-400 uppercase tracking-widest font-bold mt-0.5">Total Likes</p>
             </div>
             <div class="flex-1 glass-panel p-4 rounded-2xl flex flex-col items-center justify-center">
@@ -253,7 +253,7 @@
                         <h2 class="text-xl font-black text-white border-l-4 border-[#F47521] pl-3 uppercase tracking-wider">
                             Full Library
                         </h2>
-                        <button onclick="showSliderLibrary()" class="text-xs text-gray-400 hover:text-white transition-colors bg-white/5 px-3 py-1.5 rounded-lg border border-white/10">
+                        <button onclick="showSliderLibrary()" class="text-xs text-gray-400 hover:text-white transition-colors bg-white/5 px-3 py-1.5 rounded-lg border border-white/10 shadow-sm">
                             <i class="fas fa-arrow-left mr-1"></i> Back to Recent
                         </button>
                     </div>
@@ -270,6 +270,24 @@
 
     <div id="bottomnav-container" class="fixed bottom-0 w-full z-50"></div>
 
+    <!-- MODALS -->
+
+    <!-- Likes List Modal -->
+    <div id="likes-modal" class="fixed inset-0 bg-black/80 z-[100] flex flex-col justify-end md:justify-center items-center hidden-el p-0 md:p-4 backdrop-blur-sm transition-opacity">
+        <div class="bg-[#0a0a0c] border border-white/10 w-full md:max-w-md h-[70vh] md:h-auto md:max-h-[80vh] rounded-t-3xl md:rounded-2xl flex flex-col relative shadow-[0_-10px_40px_rgba(0,0,0,0.8)] md:shadow-2xl translate-y-full md:translate-y-0 transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]" id="likes-modal-content">
+            
+            <div class="flex justify-between items-center p-5 border-b border-white/10">
+                <h3 class="text-lg font-black text-white uppercase tracking-wider pl-2 border-l-4 border-[#F47521]">Liked By</h3>
+                <button onclick="closeLikesModal()" class="text-gray-400 hover:text-white w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-[#F47521] transition-colors"><i class="fas fa-times"></i></button>
+            </div>
+            
+            <div id="likes-list-container" class="flex-1 overflow-y-auto no-scrollbar p-2">
+                <!-- Users injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Cropper Modal -->
     <div id="crop-modal" class="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center hidden-el p-4">
         <div class="glass-panel w-full max-w-lg rounded-2xl p-6 flex flex-col items-center">
             <h3 class="text-lg font-bold mb-4">Adjust Avatar</h3>
@@ -283,6 +301,7 @@
         </div>
     </div>
 
+    <!-- Background Search Modal -->
     <div id="bg-search-modal" class="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center hidden-el p-4 backdrop-blur-sm">
         <div class="glass-panel w-full max-w-lg rounded-2xl p-5 flex flex-col max-h-[80vh]">
             <div class="flex justify-between items-center mb-4">
@@ -325,9 +344,7 @@
         let cachedProfileData = null;
         
         let cropperInstance = null;
-        let pendingImageDataUrl = null;
         
-        // Library Globals
         let fullLibraryItems = [];
         let enrichedLibraryItems = []; 
 
@@ -336,7 +353,7 @@
         window.app.state.carouselLibrarySet = new Set();
         window.app.db = db;
 
-        // --- UPCOMING MODAL LOGIC (INJECTED & REUSED) ---
+        // --- UPCOMING MODAL LOGIC (Clean & Reused) ---
         const formatAniListDate = (dateObj) => {
             if (!dateObj || !dateObj.year) return "TBA";
             const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -354,8 +371,7 @@
                             <button onclick="window.app.closeUpcomingModal()" class="absolute top-4 right-4 md:top-6 md:right-6 z-[60] w-10 h-10 bg-black/50 hover:bg-[#F47521] backdrop-blur-md rounded-full text-white flex items-center justify-center transition-colors border border-white/10 shadow-lg">
                                 <i class="fas fa-times text-xl"></i>
                             </button>
-                            <div class="absolute top-3 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-white/30 rounded-full z-[60] md:hidden"></div>
-                            <div id="upcoming-modal-scroll" class="flex-1 overflow-y-auto hide-scrollbar relative pb-20">
+                            <div id="upcoming-modal-scroll" class="flex-1 overflow-y-auto no-scrollbar relative pb-20">
                                 <div id="upcoming-modal-body" class="min-h-full">
                                     <div class="flex flex-col items-center justify-center h-[50vh] text-[#F47521]">
                                         <i class="fas fa-circle-notch fa-spin text-4xl mb-4"></i>
@@ -374,7 +390,7 @@
             const content = document.getElementById('upcoming-modal-content');
             const body = document.getElementById('upcoming-modal-body');
             
-            wrapper.classList.remove('hidden');
+            wrapper.classList.remove('hidden-el');
             void wrapper.offsetWidth;
             backdrop.classList.remove('opacity-0');
             backdrop.classList.add('opacity-100');
@@ -487,7 +503,7 @@
                 content.classList.add('translate-y-full');
                 setTimeout(() => {
                     const wrapper = document.getElementById('upcoming-modal-wrapper');
-                    if (wrapper) wrapper.classList.add('hidden');
+                    if (wrapper) wrapper.classList.add('hidden-el');
                 }, 500); 
             }
         };
@@ -675,7 +691,7 @@
             } catch (err) { document.getElementById('stat-library-count').innerText = "Error"; }
         }
 
-        // --- RICH VISITOR LIBRARY (Slider Generation) ---
+        // --- RICH VISITOR LIBRARY (Slider Generation & CC Fix) ---
         async function setupVisitorLibrary(snapshot) {
             const privateMsg = document.getElementById('visitor-library-private');
             const publicSlider = document.getElementById('visitor-library-public');
@@ -697,16 +713,17 @@
                 return;
             }
 
-            // Fetch AniList Data for top 15 recent items for the initial slider
             const recentBatch = fullLibraryItems.slice(0, 15);
             enrichedLibraryItems = await enrichBatchWithAniList(recentBatch);
             
             renderSliderCards(enrichedLibraryItems);
         }
 
+        // Fixed to properly fetch CC data from custom API if missing
         async function enrichBatchWithAniList(batch) {
             if(batch.length === 0) return [];
             
+            const baseUrl = 'https://anikoto-api-xi.vercel.app';
             const graphqlQuery = `
                 query {
                     ${batch.map((item, index) => {
@@ -727,18 +744,39 @@
                 anilistData = json.data || {};
             } catch(e) {}
 
-            return batch.map((item, i) => {
+            const enriched = await Promise.all(batch.map(async (item, i) => {
                 const aniMatch = anilistData[`anime${i}`];
+                let sub = item.sub;
+                let dub = item.dub;
+                let type = item.type;
+
+                // Dynamically fetch sub/dub if missing to prevent "CC ?" issue
+                if (!sub || sub === '?') {
+                    try {
+                        const cleanTitle = (item.title || '').replace(/"/g, '').replace(/\\/g, '');
+                        const searchRes = await fetch(`${baseUrl}/api/search?keyword=${encodeURIComponent(cleanTitle)}`);
+                        const searchJson = await searchRes.json();
+                        const results = searchJson.data || searchJson.results || [];
+                        if (results.length > 0) {
+                            sub = results[0].tvInfo?.sub || results[0].sub || '?';
+                            dub = results[0].tvInfo?.dub || results[0].dub || 0;
+                            type = results[0].type || type;
+                        }
+                    } catch(e) {}
+                }
+
                 return {
                     ...item,
                     status: aniMatch?.status || 'FINISHED',
                     poster: aniMatch?.coverImage?.extraLarge || item.coverImage || item.image || 'https://via.placeholder.com/150x225?text=No+Cover',
                     genre: aniMatch?.genres?.[0] || 'Uncategorized',
-                    type: item.type || 'TV',
-                    sub: item.sub || item.tvInfo?.sub || '?',
-                    dub: item.dub || item.tvInfo?.dub || 0
+                    type: type || 'TV',
+                    sub: sub,
+                    dub: dub
                 };
-            });
+            }));
+
+            return enriched;
         }
 
         function createRichCardHtml(item) {
@@ -758,6 +796,10 @@
                 ? `<div class="absolute bottom-2 left-2 z-20 pointer-events-none"><span class="bg-[#F47521] text-white text-[9px] md:text-[10px] px-1.5 py-1 rounded shadow-md font-black uppercase tracking-wide">UPCOMING</span></div>` 
                 : '';
 
+            // Clean badging check
+            const ccBadge = (item.sub && item.sub !== '?') ? `<span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-1.5 py-0.5 rounded shadow-md font-bold">CC ${item.sub}</span>` : '';
+            const dubBadge = (item.dub && item.dub > 0) ? `<span class="bg-purple-600/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-1.5 py-0.5 rounded shadow-md font-bold"><i class="fas fa-microphone text-[9px]"></i> ${item.dub}</span>` : '';
+
             return `
             <div class="snap-start shrink-0 w-[140px] md:w-[190px] relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-10"
                  onclick="${clickAction}">
@@ -776,8 +818,8 @@
                     <div class="absolute top-0 left-0 p-2 flex flex-col gap-1.5 items-start z-10 pointer-events-none">
                         <span class="bg-black/80 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded border border-white/10 font-bold uppercase shadow-md">${item.type}</span>
                         <div class="flex gap-1 mt-0.5">
-                            <span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-1.5 py-0.5 rounded shadow-md font-bold">CC ${item.sub}</span>
-                            ${item.dub > 0 ? `<span class="bg-purple-600/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-1.5 py-0.5 rounded shadow-md font-bold"><i class="fas fa-microphone text-[9px]"></i> ${item.dub}</span>` : ''}
+                            ${ccBadge}
+                            ${dubBadge}
                         </div>
                     </div>
                 </div>
@@ -870,6 +912,64 @@
         window.showSliderLibrary = () => {
             document.getElementById('library-full-view').classList.add('hidden-el');
             document.getElementById('library-slider-view').classList.remove('hidden-el');
+        };
+
+        // --- LIKES LIST MODAL ---
+        window.openLikesModal = async () => {
+            if (!cachedProfileData || !cachedProfileData.likedByArray || cachedProfileData.likedByArray.length === 0) {
+                return;
+            }
+
+            const modal = document.getElementById('likes-modal');
+            const content = document.getElementById('likes-modal-content');
+            modal.classList.remove('hidden-el');
+            
+            setTimeout(() => {
+                content.classList.remove('translate-y-full');
+            }, 10);
+
+            const container = document.getElementById('likes-list-container');
+            container.innerHTML = `<div class="flex justify-center py-10"><i class="fas fa-spinner fa-spin text-3xl text-[#F47521]"></i></div>`;
+
+            try {
+                const promises = cachedProfileData.likedByArray.map(async (uid) => {
+                    const userDoc = await getDoc(doc(db, "users", uid));
+                    if (userDoc.exists()) {
+                        const data = userDoc.data();
+                        return {
+                            uid: uid,
+                            username: data.username || "Anime Fan",
+                            photoURL: data.photoURL || `https://ui-avatars.com/api/?name=${data.username || 'User'}&background=111&color=F47521`
+                        };
+                    }
+                    return null;
+                });
+
+                const users = (await Promise.all(promises)).filter(u => u !== null);
+
+                if (users.length === 0) {
+                    container.innerHTML = `<p class="text-center text-gray-500 py-6">Unable to load users.</p>`;
+                } else {
+                    container.innerHTML = users.map(u => `
+                        <div class="flex items-center gap-4 p-4 border-b border-white/5 hover:bg-white/5 cursor-pointer transition-colors" onclick="window.location.href='/profile.html?id=${u.uid}'">
+                            <img src="${u.photoURL}" class="w-12 h-12 rounded-full object-cover border-2 border-[#F47521]/30">
+                            <span class="font-black text-white text-md tracking-wide">${u.username}</span>
+                            <i class="fas fa-chevron-right ml-auto text-gray-600 text-sm"></i>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                container.innerHTML = `<p class="text-center text-red-500 py-6">Failed to load likes.</p>`;
+            }
+        };
+
+        window.closeLikesModal = () => {
+            const modal = document.getElementById('likes-modal');
+            const content = document.getElementById('likes-modal-content');
+            content.classList.add('translate-y-full');
+            setTimeout(() => {
+                modal.classList.add('hidden-el');
+            }, 300);
         };
 
         // --- EDITOR & CROPPER ---
