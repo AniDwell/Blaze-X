@@ -307,7 +307,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
-        import { getFirestore, doc, getDoc, collection, getDocs, setDoc, deleteDoc, updateDoc, increment, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, collection, getDocs, setDoc, deleteDoc, updateDoc, increment, arrayUnion, arrayRemove, addDoc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
@@ -329,12 +329,168 @@
         
         // Library Globals
         let fullLibraryItems = [];
-        let enrichedLibraryItems = []; // Holds items augmented with AniList data
+        let enrichedLibraryItems = []; 
 
         window.app = window.app || {};
         window.app.state = window.app.state || {};
         window.app.state.carouselLibrarySet = new Set();
         window.app.db = db;
+
+        // --- UPCOMING MODAL LOGIC (INJECTED & REUSED) ---
+        const formatAniListDate = (dateObj) => {
+            if (!dateObj || !dateObj.year) return "TBA";
+            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            if (dateObj.month && dateObj.day) return `${months[dateObj.month - 1]} ${dateObj.day}, ${dateObj.year}`;
+            if (dateObj.month) return `${months[dateObj.month - 1]} ${dateObj.year}`;
+            return `${dateObj.year}`;
+        };
+
+        window.app.openUpcomingModal = async (animeId) => {
+            if (!document.getElementById('upcoming-modal-wrapper')) {
+                const modalHtml = `
+                    <div id="upcoming-modal-wrapper" class="fixed inset-0 z-[9999] flex flex-col justify-end pointer-events-none">
+                        <div id="upcoming-modal-backdrop" class="absolute inset-0 bg-black/80 backdrop-blur-sm opacity-0 transition-opacity duration-500 pointer-events-auto" onclick="window.app.closeUpcomingModal()"></div>
+                        <div id="upcoming-modal-content" class="w-full h-[95vh] md:h-[100vh] bg-[#0a0a0a] rounded-t-3xl md:rounded-none transform translate-y-full transition-transform duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] pointer-events-auto flex flex-col overflow-hidden relative shadow-[0_-10px_40px_rgba(0,0,0,0.8)]">
+                            <button onclick="window.app.closeUpcomingModal()" class="absolute top-4 right-4 md:top-6 md:right-6 z-[60] w-10 h-10 bg-black/50 hover:bg-[#F47521] backdrop-blur-md rounded-full text-white flex items-center justify-center transition-colors border border-white/10 shadow-lg">
+                                <i class="fas fa-times text-xl"></i>
+                            </button>
+                            <div class="absolute top-3 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-white/30 rounded-full z-[60] md:hidden"></div>
+                            <div id="upcoming-modal-scroll" class="flex-1 overflow-y-auto hide-scrollbar relative pb-20">
+                                <div id="upcoming-modal-body" class="min-h-full">
+                                    <div class="flex flex-col items-center justify-center h-[50vh] text-[#F47521]">
+                                        <i class="fas fa-circle-notch fa-spin text-4xl mb-4"></i>
+                                        <p class="text-sm font-bold tracking-widest uppercase text-white">Fetching Details...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+            }
+
+            const wrapper = document.getElementById('upcoming-modal-wrapper');
+            const backdrop = document.getElementById('upcoming-modal-backdrop');
+            const content = document.getElementById('upcoming-modal-content');
+            const body = document.getElementById('upcoming-modal-body');
+            
+            wrapper.classList.remove('hidden');
+            void wrapper.offsetWidth;
+            backdrop.classList.remove('opacity-0');
+            backdrop.classList.add('opacity-100');
+            content.classList.remove('translate-y-full');
+            content.classList.add('translate-y-0');
+
+            try {
+                const query = `
+                    query($id: Int) { 
+                        Media(id: $id) { 
+                            title { english romaji native }
+                            coverImage { extraLarge }
+                            bannerImage
+                            format
+                            status
+                            description(asHtml: false)
+                            startDate { year month day }
+                            genres
+                            studios(isMain: true) { nodes { name } }
+                            trailer { id site }
+                        } 
+                    }
+                `;
+                const res = await fetch('https://graphql.anilist.co', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query, variables: { id: parseInt(animeId) } })
+                });
+                const json = await res.json();
+                const data = json.data.Media;
+
+                const title = data.title.english || data.title.romaji;
+                const banner = data.bannerImage || 'https://via.placeholder.com/1200x400/111/111';
+                const cover = data.coverImage.extraLarge;
+                const releaseDate = formatAniListDate(data.startDate);
+                const description = (data.description || "No description available yet.").replace(/<[^>]*>?/gm, '');
+                const studio = data.studios?.nodes?.[0]?.name || "Unknown Studio";
+                
+                let trailerHtml = '';
+                if (data.trailer && data.trailer.site === 'youtube') {
+                    trailerHtml = `
+                        <div class="w-full max-w-4xl mx-auto mt-8 px-4 pb-10">
+                            <h3 class="text-white font-black text-lg mb-3 uppercase tracking-wider border-l-4 border-[#F47521] pl-2">Official Trailer</h3>
+                            <div class="relative w-full aspect-video rounded-xl overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.5)] border border-white/5">
+                                <iframe class="absolute inset-0 w-full h-full" src="https://www.youtube.com/embed/${data.trailer.id}" frameborder="0" allowfullscreen></iframe>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                let genresHtml = (data.genres || []).map(g => `<span class="bg-white/10 border border-white/10 px-3 py-1 rounded-full text-xs font-bold text-gray-300 shadow-sm">${g}</span>`).join('');
+
+                body.innerHTML = `
+                    <div class="relative w-full h-48 md:h-72 bg-[#111]">
+                        <img src="${banner}" class="w-full h-full object-cover opacity-40">
+                        <div class="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/60 to-transparent"></div>
+                        <div class="absolute inset-0 bg-gradient-to-r from-[#0a0a0a]/90 via-transparent to-transparent"></div>
+                    </div>
+                    <div class="relative px-4 md:px-10 -mt-20 md:-mt-32 z-10">
+                        <div class="flex gap-4 md:gap-8 items-end md:items-stretch">
+                            <div class="w-28 md:w-48 shrink-0 relative">
+                                <img src="${cover}" class="w-full aspect-[2/3] object-cover rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.8)] border-2 border-white/10">
+                                <div class="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-[#F47521] text-white text-[9px] md:text-xs font-black uppercase px-3 py-1 rounded shadow-lg whitespace-nowrap">
+                                    ${data.status.replace(/_/g, ' ')}
+                                </div>
+                            </div>
+                            <div class="flex-1 pb-2 md:py-6">
+                                <h2 class="text-xl md:text-4xl font-black text-white leading-tight drop-shadow-lg mb-1 md:mb-2">${title}</h2>
+                                <h3 class="text-xs md:text-sm text-gray-400 font-bold mb-3 line-clamp-1">${data.title.native || ''}</h3>
+                                <div class="flex flex-wrap items-center gap-2 mb-2">
+                                    <span class="bg-white/10 text-white text-[10px] md:text-xs px-2 py-0.5 rounded font-bold uppercase border border-white/5">${data.format || 'TV'}</span>
+                                </div>
+                                <p class="text-gray-300 text-xs md:text-sm font-semibold flex items-center gap-2">
+                                    <i class="far fa-calendar-alt text-[#F47521]"></i> 
+                                    Airing: <span class="text-white">${releaseDate}</span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="px-4 md:px-10 mt-8 max-w-4xl mx-auto">
+                        <div class="flex flex-wrap gap-2 mb-6">
+                            ${genresHtml}
+                        </div>
+                        <div class="bg-white/5 border border-white/5 rounded-xl p-4 md:p-6 shadow-lg">
+                            <div class="flex justify-between items-center mb-3">
+                                <span class="text-gray-400 text-xs font-bold uppercase tracking-widest">Studio</span>
+                                <span class="text-white text-sm md:text-base font-black">${studio}</span>
+                            </div>
+                            <p class="text-sm md:text-base text-gray-300 leading-relaxed font-medium">
+                                ${description}
+                            </p>
+                        </div>
+                    </div>
+                    ${trailerHtml}
+                `;
+
+            } catch (e) {
+                console.error(e);
+                body.innerHTML = `<div class="p-10 text-center text-red-500 font-bold">Failed to load details. Try again.</div>`;
+            }
+        };
+
+        window.app.closeUpcomingModal = () => {
+            const backdrop = document.getElementById('upcoming-modal-backdrop');
+            const content = document.getElementById('upcoming-modal-content');
+            if (backdrop && content) {
+                backdrop.classList.remove('opacity-100');
+                backdrop.classList.add('opacity-0');
+                content.classList.remove('translate-y-0');
+                content.classList.add('translate-y-full');
+                setTimeout(() => {
+                    const wrapper = document.getElementById('upcoming-modal-wrapper');
+                    if (wrapper) wrapper.classList.add('hidden');
+                }, 500); 
+            }
+        };
 
         // --- GLOBAL SLIDER NAVIGATION EFFECT ---
         window.app.sliderNavigate = (id, title, image, type, sub, dub) => {
@@ -376,7 +532,7 @@
             const isAdded = btn.dataset.added === "true";
             const libDocRef = doc(db, "users", currentAuthenticatedUser.uid, "library", docIdStr);
 
-            const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
+            const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>`;
             const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
 
             try {
@@ -555,7 +711,7 @@
                 query {
                     ${batch.map((item, index) => {
                         const cleanTitle = (item.title || 'Untitled').replace(/"/g, '').replace(/\\/g, '');
-                        return `anime${index}: Media(search: "${cleanTitle}", type: ANIME) { coverImage { extraLarge } genres }`;
+                        return `anime${index}: Media(search: "${cleanTitle}", type: ANIME) { status coverImage { extraLarge } genres }`;
                     }).join('\n')}
                 }
             `;
@@ -575,6 +731,7 @@
                 const aniMatch = anilistData[`anime${i}`];
                 return {
                     ...item,
+                    status: aniMatch?.status || 'FINISHED',
                     poster: aniMatch?.coverImage?.extraLarge || item.coverImage || item.image || 'https://via.placeholder.com/150x225?text=No+Cover',
                     genre: aniMatch?.genres?.[0] || 'Uncategorized',
                     type: item.type || 'TV',
@@ -588,26 +745,37 @@
             const safeTitle = (item.title || 'Untitled').replace(/'/g, "\\'");
             const docIdStr = String(item.id);
             const isAdded = window.app.state.carouselLibrarySet.has(docIdStr);
+            const isUpcoming = item.status === 'NOT_YET_RELEASED';
+            
+            const clickAction = isUpcoming 
+                ? `window.app.openUpcomingModal('${item.id}')` 
+                : `window.app.sliderNavigate('${item.id}', '${safeTitle}', '${item.poster}', '${item.type}', '${item.sub}', '${item.dub}')`;
 
-            const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
+            const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>`;
             const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
+
+            const upcomingBadge = isUpcoming 
+                ? `<div class="absolute bottom-2 left-2 z-20 pointer-events-none"><span class="bg-[#F47521] text-white text-[9px] md:text-[10px] px-1.5 py-1 rounded shadow-md font-black uppercase tracking-wide">UPCOMING</span></div>` 
+                : '';
 
             return `
             <div class="snap-start shrink-0 w-[140px] md:w-[190px] relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-10"
-                 onclick="window.app.sliderNavigate('${item.id}', '${safeTitle}', '${item.poster}', '${item.type}', '${item.sub}', '${item.dub}')">
+                 onclick="${clickAction}">
                 
                 <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden shadow-lg border border-white/10 group-hover:border-[#F47521]/70 transition-colors bg-[#111]">
                     <img src="${item.poster}" loading="lazy" class="w-full h-full object-cover">
                     
                     <button onclick="window.app.toggleSliderLibrary(event, this, '${item.id}', '${safeTitle}', '${item.poster}')" 
                             data-added="${isAdded}"
-                            class="absolute top-2 right-2 z-30 p-2 rounded bg-black/70 backdrop-blur-md border border-white/10 shadow-lg hover:bg-black transition-all flex items-center justify-center">
+                            class="absolute top-2 right-2 z-30 p-2 rounded ${isAdded ? 'bg-black/80' : 'bg-black/70'} backdrop-blur-md border border-white/10 shadow-lg hover:bg-black transition-all flex items-center justify-center">
                         ${isAdded ? savedSvg : unsavedSvg}
                     </button>
                     
+                    ${upcomingBadge}
+
                     <div class="absolute top-0 left-0 p-2 flex flex-col gap-1.5 items-start z-10 pointer-events-none">
-                        <span class="bg-black/80 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded border border-white/10 font-bold uppercase shadow-md">${item.genre}</span>
-                        <div class="flex gap-1">
+                        <span class="bg-black/80 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded border border-white/10 font-bold uppercase shadow-md">${item.type}</span>
+                        <div class="flex gap-1 mt-0.5">
                             <span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-1.5 py-0.5 rounded shadow-md font-bold">CC ${item.sub}</span>
                             ${item.dub > 0 ? `<span class="bg-purple-600/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-1.5 py-0.5 rounded shadow-md font-bold"><i class="fas fa-microphone text-[9px]"></i> ${item.dub}</span>` : ''}
                         </div>
@@ -911,6 +1079,18 @@
                     document.getElementById('heart-icon').className = "fas fa-heart text-[#F47521]";
                     if (!cachedProfileData.likedByArray) cachedProfileData.likedByArray = [];
                     cachedProfileData.likedByArray.push(currentAuthenticatedUser.uid);
+
+                    // Push Notification on Like
+                    try {
+                        const notifRef = collection(db, "users", window.activeProfileUid, "notifications");
+                        await addDoc(notifRef, {
+                            type: 'like',
+                            title: 'New Profile Like!',
+                            message: `${currentAuthenticatedUser.displayName || 'Someone'} liked your profile.`,
+                            image: currentAuthenticatedUser.photoURL || 'https://ui-avatars.com/api/?name=User&background=111&color=F47521',
+                            timestamp: Date.now()
+                        });
+                    } catch (notifErr) { console.error("Notification failed", notifErr); }
                 }
             } catch (err) {}
         };
