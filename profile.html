@@ -40,6 +40,28 @@
             0% { transform: translateX(-100%); }
             100% { transform: translateX(200%); }
         }
+
+        /* --- Dynamic Name Scrolling --- */
+        .name-scroll-container {
+            max-width: 170px;
+            overflow: hidden;
+            white-space: nowrap;
+            position: relative;
+        }
+        @media (min-width: 768px) {
+            .name-scroll-container { max-width: 250px; }
+        }
+        .name-scroll {
+            display: inline-block;
+            transition: transform 0.2s;
+        }
+        .name-scroll.is-long {
+            animation: scrollName 4s linear infinite alternate;
+        }
+        @keyframes scrollName {
+            0%, 15% { transform: translateX(0); }
+            85%, 100% { transform: translateX(var(--scroll-dist)); }
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col pb-24 relative overflow-x-hidden">
@@ -48,6 +70,13 @@
 
     <main class="flex-1 w-full max-w-3xl mx-auto p-4 pt-6 relative z-10">
         
+        <!-- VISITOR BACK BUTTON -->
+        <div id="visitor-back-container" class="hidden-el mb-4">
+            <button onclick="history.back()" class="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white transition-colors shadow-sm">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+        </div>
+
         <!-- PROFILE CARD -->
         <div id="profile-card" class="rounded-[2rem] p-6 md:p-8 relative overflow-hidden mb-4 transition-all border border-white/10 bg-[#0a0a0c] bg-cover bg-center shadow-xl">
             <div class="absolute inset-0 bg-black/60 z-0 transition-all duration-300"></div>
@@ -73,12 +102,16 @@
                     
                     <div id="profile-display-block">
                         <div class="flex items-center gap-3">
-                            <h1 id="user-name" class="text-2xl md:text-3xl font-black tracking-tight text-white line-clamp-1 drop-shadow-md">Loading...</h1>
+                            <div class="name-scroll-container">
+                                <h1 id="user-name" class="name-scroll text-2xl md:text-3xl font-black tracking-tight text-white drop-shadow-md">Loading...</h1>
+                            </div>
                             <button id="edit-profile-btn" onclick="openProfileEditor()" class="hidden-el text-gray-400 hover:text-[#F47521] transition-colors">
                                 <i class="fas fa-pen text-sm"></i>
                             </button>
                         </div>
-                        <p id="user-bio" class="text-sm text-gray-300 mt-1 line-clamp-2 max-w-sm font-medium">No bio set.</p>
+                        
+                        <p id="user-bio" class="text-sm text-gray-300 mt-1 line-clamp-2 max-w-sm font-medium transition-colors">No bio set.</p>
+                        <span id="read-more-bio" class="hidden-el text-xs text-[#F47521] font-bold cursor-pointer hover:underline mt-0.5" onclick="openBioModal()">Read more</span>
                         
                         <div class="flex items-center gap-2 mt-3">
                             <span id="view-badge" class="bg-white/10 text-gray-300 px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-widest border border-white/5">Authenticating</span>
@@ -271,6 +304,17 @@
     <div id="bottomnav-container" class="fixed bottom-0 w-full z-50"></div>
 
     <!-- MODALS -->
+
+    <!-- Bio Read More Modal -->
+    <div id="bio-modal" class="fixed inset-0 bg-black/80 z-[100] flex justify-center items-center hidden-el p-4 backdrop-blur-sm transition-opacity">
+        <div class="bg-[#0a0a0c] border border-white/10 w-full max-w-sm rounded-2xl p-6 relative shadow-2xl">
+            <button onclick="closeBioModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white w-8 h-8 rounded-full bg-white/5 flex items-center justify-center transition-colors"><i class="fas fa-times"></i></button>
+            <h3 class="text-lg font-black text-white mb-4 border-l-4 border-[#F47521] pl-2 uppercase tracking-wider">About</h3>
+            <div class="overflow-y-auto max-h-[60vh] no-scrollbar pr-2">
+                <p id="full-bio-text" class="text-sm text-gray-300 leading-relaxed font-medium whitespace-pre-wrap"></p>
+            </div>
+        </div>
+    </div>
 
     <!-- Likes List Modal -->
     <div id="likes-modal" class="fixed inset-0 bg-black/80 z-[100] flex flex-col justify-end md:justify-center items-center hidden-el p-0 md:p-4 backdrop-blur-sm transition-opacity">
@@ -622,6 +666,7 @@
                 document.getElementById('owner-menu').classList.remove('hidden-el');
                 document.getElementById('visitor-actions').classList.add('hidden-el');
                 document.getElementById('visitor-library-container').classList.add('hidden-el');
+                document.getElementById('visitor-back-container').classList.add('hidden-el');
                 
                 document.getElementById('edit-pfp-btn').classList.remove('hidden-el');
                 document.getElementById('edit-profile-btn').classList.remove('hidden-el');
@@ -633,6 +678,7 @@
                 document.getElementById('owner-menu').classList.add('hidden-el');
                 document.getElementById('visitor-actions').classList.remove('hidden-el');
                 document.getElementById('visitor-library-container').classList.remove('hidden-el');
+                document.getElementById('visitor-back-container').classList.remove('hidden-el');
                 
                 document.getElementById('edit-pfp-btn').classList.add('hidden-el');
                 document.getElementById('edit-profile-btn').classList.add('hidden-el');
@@ -643,6 +689,13 @@
             await fetchLibraryCountAndData();
         }
 
+        window.openBioModal = () => {
+            if(!cachedProfileData) return;
+            document.getElementById('full-bio-text').innerText = cachedProfileData.bio || "No bio set.";
+            document.getElementById('bio-modal').classList.remove('hidden-el');
+        };
+        window.closeBioModal = () => document.getElementById('bio-modal').classList.add('hidden-el');
+
         async function loadUserData() {
             try {
                 const userDocRef = doc(db, "users", window.activeProfileUid);
@@ -650,8 +703,35 @@
                 
                 cachedProfileData = userDoc.exists() ? userDoc.data() : { username: "Anime Fan", hideLibrary: false };
 
-                document.getElementById('user-name').innerText = cachedProfileData.username || "Anime Fan";
-                document.getElementById('user-bio').innerText = cachedProfileData.bio || "No bio set.";
+                // Handle Name Marquee Logic
+                const nameEl = document.getElementById('user-name');
+                nameEl.innerText = cachedProfileData.username || "Anime Fan";
+                nameEl.classList.remove('is-long');
+                nameEl.style.transform = 'none';
+
+                // Handle Bio Truncation & Modal Logic
+                const bioEl = document.getElementById('user-bio');
+                bioEl.innerText = cachedProfileData.bio || "No bio set.";
+                const readMoreBtn = document.getElementById('read-more-bio');
+
+                setTimeout(() => {
+                    const container = nameEl.parentElement;
+                    const diff = nameEl.scrollWidth - container.clientWidth;
+                    if (diff > 0) {
+                        nameEl.style.setProperty('--scroll-dist', `-${diff}px`);
+                        nameEl.classList.add('is-long');
+                    }
+
+                    if (bioEl.scrollHeight > bioEl.clientHeight) {
+                        readMoreBtn.classList.remove('hidden-el');
+                        bioEl.classList.add('cursor-pointer', 'hover:text-white');
+                        bioEl.onclick = openBioModal;
+                    } else {
+                        readMoreBtn.classList.add('hidden-el');
+                        bioEl.classList.remove('cursor-pointer', 'hover:text-white');
+                        bioEl.onclick = null;
+                    }
+                }, 50);
                 
                 document.getElementById('input-edit-username').value = cachedProfileData.username || "";
                 document.getElementById('input-edit-bio').value = cachedProfileData.bio || "";
