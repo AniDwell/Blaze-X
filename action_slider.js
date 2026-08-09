@@ -1,18 +1,9 @@
-// action_slider.js - Action Anime Slider (Slightly Smaller)
+// action_slider.js - Action Anime Slider (Slightly Smaller, Live Sync, Notifications)
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
 window.app.state = window.app.state || {};
-
-// In-memory set and listener for live UI updates
-window.app.state.actionSliderLibrarySet = new Set();
-window.app.state.actionSliderLibUnsubscribe = null;
-
-// --- SVG ICONS ---
-// Filled bookmark for saved
-const actionSavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>`;
-// Outline bookmark for unsaved
-const actionUnsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
+if (!window.app.state.carouselLibrarySet) window.app.state.carouselLibrarySet = new Set();
 
 // --- GLOBAL PAGE TRANSITION EFFECT ---
 window.addEventListener('pageshow', (event) => {
@@ -60,18 +51,58 @@ window.app.sliderNavigate = (id, title, image, type, sub, dub) => {
     }, 300);
 };
 
-// --- INSTANT SAVE / LIBRARY SYNC & NOTIFICATIONS ---
+// --- SAFE FIREBASE INIT ---
+let firebaseInitAction = false;
+const initFirebaseAction = async () => {
+    if (firebaseInitAction) return;
+    try {
+        const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js');
+        const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+        const { getFirestore } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
+            authDomain: "blaze-x-db2f5.firebaseapp.com",
+            projectId: "blaze-x-db2f5",
+            storageBucket: "blaze-x-db2f5.firebasestorage.app",
+            messagingSenderId: "770812306638",
+            appId: "1:770812306638:web:eaf5ded647861f32c25c9f"
+        };
+
+        const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
+        window.app.auth = getAuth(app);
+        window.app.db = getFirestore(app);
+        firebaseInitAction = true;
+    } catch (err) {
+        console.error("Firebase Init Error (Action Slider):", err);
+    }
+};
+
+// --- SVG UI UPDATER (Solid Bookmark for Saved) ---
+window.app.updateActionBtnUI = (btn, isAdded) => {
+    if (!btn) return;
+    const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>`;
+    const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
+    
+    btn.dataset.added = isAdded ? "true" : "false";
+    btn.innerHTML = isAdded ? savedSvg : unsavedSvg;
+    
+    btn.classList.remove('bg-black/50', 'bg-black/80');
+    btn.classList.add(isAdded ? 'bg-black/80' : 'bg-black/50');
+};
+
+// --- INSTANT SAVE / NOTIFY LOGIC ---
 window.app.toggleSliderLibrary = async (event, btn, id, title, img) => {
     event.stopPropagation(); 
     
     try {
-        const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+        await initFirebaseAction();
         const { doc, setDoc, deleteDoc, collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         
-        const auth = window.app.auth || getAuth();
+        const auth = window.app.auth;
         const db = window.app.db;
         
-        if (!auth.currentUser || auth.currentUser.isAnonymous) {
+        if (!auth || !auth.currentUser || auth.currentUser.isAnonymous) {
             if (window.app.components && window.app.components.auth) window.app.components.auth();
             else if (window.app.showCustomAlert) window.app.showCustomAlert("Please log in to save to your Library!", "error");
             return;
@@ -83,15 +114,12 @@ window.app.toggleSliderLibrary = async (event, btn, id, title, img) => {
         const notifRef = collection(db, "users", auth.currentUser.uid, "notifications");
 
         if (isAdded) {
-            // Optimistic UI Removal
-            btn.dataset.added = "false";
-            btn.innerHTML = actionUnsavedSvg;
-            btn.classList.replace('bg-black/80', 'bg-black/50');
-            if (window.app.state.actionSliderLibrarySet) window.app.state.actionSliderLibrarySet.delete(docIdStr);
-            
+            // Optimistic UI update
+            window.app.updateActionBtnUI(btn, false);
+            window.app.state.carouselLibrarySet.delete(docIdStr);
+
+            // DB Updates
             await deleteDoc(libDocRef);
-            
-            // Push Notification
             await addDoc(notifRef, {
                 type: 'library',
                 title: 'Library Updated',
@@ -102,15 +130,12 @@ window.app.toggleSliderLibrary = async (event, btn, id, title, img) => {
 
             if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
         } else {
-            // Optimistic UI Addition
-            btn.dataset.added = "true";
-            btn.innerHTML = actionSavedSvg;
-            btn.classList.replace('bg-black/50', 'bg-black/80');
-            if (window.app.state.actionSliderLibrarySet) window.app.state.actionSliderLibrarySet.add(docIdStr);
-            
-            await setDoc(libDocRef, { id: docIdStr, title, img, timestamp: Date.now() });
+            // Optimistic UI update
+            window.app.updateActionBtnUI(btn, true);
+            window.app.state.carouselLibrarySet.add(docIdStr);
 
-            // Push Notification
+            // DB Updates
+            await setDoc(libDocRef, { id: docIdStr, title, img, timestamp: Date.now() });
             await addDoc(notifRef, {
                 type: 'library',
                 title: 'Library Updated',
@@ -122,6 +147,7 @@ window.app.toggleSliderLibrary = async (event, btn, id, title, img) => {
             if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
         }
     } catch (error) { 
+        console.error("Library sync error:", error);
         if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to sync with cloud.", "error");
     }
 };
@@ -142,61 +168,48 @@ window.app.components.actionSlider = async () => {
         </div>
     `;
 
-    // --- SETUP LIVE UI LISTENER FOR SLIDER ---
+    // --- SETUP LIVE LISTENER ---
     try {
-        const { getAuth, onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
-        const { collection, onSnapshot, getFirestore } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-        
-        const auth = window.app.auth || getAuth();
-        const db = window.app.db || getFirestore();
+        await initFirebaseAction();
+        const { onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+        const { collection, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
 
-        onAuthStateChanged(auth, (user) => {
-            if (window.app.state.actionSliderLibUnsubscribe) {
-                window.app.state.actionSliderLibUnsubscribe(); // Cleanup old listener
-            }
-
-            if (user && !user.isAnonymous) {
-                const libRef = collection(db, "users", user.uid, "library");
+        if (window.app.auth) {
+            onAuthStateChanged(window.app.auth, (user) => {
+                if (window.app.state.actionSliderUnsubscribe) {
+                    window.app.state.actionSliderUnsubscribe();
+                }
                 
-                window.app.state.actionSliderLibUnsubscribe = onSnapshot(libRef, (snapshot) => {
-                    window.app.state.actionSliderLibrarySet.clear();
-                    snapshot.forEach(doc => {
-                        window.app.state.actionSliderLibrarySet.add(String(doc.id));
+                if (user && !user.isAnonymous) {
+                    const libRef = collection(window.app.db, "users", user.uid, "library");
+                    window.app.state.actionSliderUnsubscribe = onSnapshot(libRef, (snapshot) => {
+                        window.app.state.carouselLibrarySet.clear();
+                        snapshot.forEach(doc => {
+                            window.app.state.carouselLibrarySet.add(String(doc.id));
+                        });
+                        
+                        // Dynamically update all rendered buttons
+                        document.querySelectorAll('.action-lib-btn').forEach(btn => {
+                            const id = btn.getAttribute('data-id');
+                            if (id) {
+                                const isAdded = window.app.state.carouselLibrarySet.has(id);
+                                window.app.updateActionBtnUI(btn, isAdded);
+                            }
+                        });
                     });
-
-                    // Live update all rendered slider buttons
-                    const buttons = document.querySelectorAll('.action-slider-lib-btn');
-                    buttons.forEach(btn => {
-                        const id = btn.dataset.id;
-                        if (window.app.state.actionSliderLibrarySet.has(id)) {
-                            btn.dataset.added = "true";
-                            btn.innerHTML = actionSavedSvg;
-                            btn.classList.add('bg-black/80');
-                            btn.classList.remove('bg-black/50');
-                        } else {
-                            btn.dataset.added = "false";
-                            btn.innerHTML = actionUnsavedSvg;
-                            btn.classList.add('bg-black/50');
-                            btn.classList.remove('bg-black/80');
-                        }
+                } else {
+                    window.app.state.carouselLibrarySet.clear();
+                    document.querySelectorAll('.action-lib-btn').forEach(btn => {
+                        window.app.updateActionBtnUI(btn, false);
                     });
-                });
-            } else {
-                window.app.state.actionSliderLibrarySet.clear();
-                const buttons = document.querySelectorAll('.action-slider-lib-btn');
-                buttons.forEach(btn => {
-                    btn.dataset.added = "false";
-                    btn.innerHTML = actionUnsavedSvg;
-                    btn.classList.add('bg-black/50');
-                    btn.classList.remove('bg-black/80');
-                });
-            }
-        });
+                }
+            });
+        }
     } catch (fbErr) {
-        console.error("Failed to setup live listener for action slider.", fbErr);
+        console.error("Action Slider Live Listener failed:", fbErr);
     }
 
-    // --- FETCH DATA ---
+    // --- FETCH AND RENDER ANIME LIST ---
     try {
         const aniQuery = `
             query { 
@@ -250,9 +263,11 @@ window.app.components.actionSlider = async () => {
         let cardsHtml = finalSliderItems.map(anime => {
             const safeTitle = anime.title.replace(/'/g, "\\'");
             const docIdStr = String(anime.id);
-            const isAdded = window.app.state.actionSliderLibrarySet && window.app.state.actionSliderLibrarySet.has(docIdStr);
+            const isAdded = window.app.state.carouselLibrarySet && window.app.state.carouselLibrarySet.has(docIdStr);
             
-            // SCALED DOWN CARD SIZES (140px & 190px)
+            const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>`;
+            const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
+
             return `
             <div class="snap-start shrink-0 w-[140px] md:w-[190px] relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-10"
                  onclick="window.app.sliderNavigate('${anime.id}', '${safeTitle}', '${anime.image}', '${anime.type}', '${anime.sub}', '${anime.dub}')">
@@ -262,9 +277,9 @@ window.app.components.actionSlider = async () => {
                     
                     <button onclick="window.app.toggleSliderLibrary(event, this, '${anime.id}', '${safeTitle}', '${anime.image}')" 
                             data-added="${isAdded}"
-                            data-id="${anime.id}"
-                            class="action-slider-lib-btn absolute top-2 right-2 z-30 p-2 rounded ${isAdded ? 'bg-black/80' : 'bg-black/50'} backdrop-blur-md border border-white/10 shadow-lg hover:bg-black transition-all flex items-center justify-center">
-                        ${isAdded ? actionSavedSvg : actionUnsavedSvg}
+                            data-id="${docIdStr}"
+                            class="action-lib-btn absolute top-2 right-2 z-30 p-2 rounded ${isAdded ? 'bg-black/80' : 'bg-black/50'} backdrop-blur-md border border-white/10 shadow-lg hover:bg-black transition-all flex items-center justify-center">
+                        ${isAdded ? savedSvg : unsavedSvg}
                     </button>
                     
                     <div class="absolute top-0 left-0 p-2 flex flex-col gap-1.5 items-start z-10 pointer-events-none">
@@ -320,6 +335,7 @@ window.app.components.actionSlider = async () => {
         }
 
     } catch (error) {
+        console.error("Action Slider Render Error:", error);
         container.innerHTML = ''; 
     }
 };
