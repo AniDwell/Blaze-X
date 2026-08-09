@@ -36,28 +36,6 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        @keyframes loadingSlide {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(200%); }
-        }
-
-        /* --- Dynamic Name Scrolling --- */
-        .name-scroll-container {
-            max-width: 170px;
-            overflow: hidden;
-            white-space: nowrap;
-            position: relative;
-        }
-        @media (min-width: 768px) {
-            .name-scroll-container { max-width: 250px; }
-        }
-        .name-scroll {
-            display: inline-block;
-            transition: transform 0.2s;
-        }
-        .name-scroll.is-long {
-            animation: scrollName 4s linear infinite alternate;
-        }
         @keyframes scrollName {
             0%, 15% { transform: translateX(0); }
             85%, 100% { transform: translateX(var(--scroll-dist)); }
@@ -70,22 +48,21 @@
 
     <main class="flex-1 w-full max-w-3xl mx-auto p-4 pt-6 relative z-10">
         
-        <!-- VISITOR BACK BUTTON -->
-        <div id="visitor-back-container" class="hidden-el mb-4">
-            <button onclick="history.back()" class="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white transition-colors shadow-sm">
-                <i class="fas fa-arrow-left"></i>
-            </button>
-        </div>
-
         <!-- PROFILE CARD -->
         <div id="profile-card" class="rounded-[2rem] p-6 md:p-8 relative overflow-hidden mb-4 transition-all border border-white/10 bg-[#0a0a0c] bg-cover bg-center shadow-xl">
             <div class="absolute inset-0 bg-black/60 z-0 transition-all duration-300"></div>
 
+            <!-- Back Button -->
+            <button onclick="history.back()" class="absolute top-4 left-4 z-20 w-8 h-8 bg-black/50 hover:bg-[#F47521] border border-white/20 rounded-full flex items-center justify-center text-white transition-colors cursor-pointer shadow-lg">
+                <i class="fas fa-arrow-left text-xs"></i>
+            </button>
+
+            <!-- Edit Background Button -->
             <button id="edit-bg-btn" onclick="openBgSearchModal()" class="hidden-el absolute top-4 right-4 z-20 w-8 h-8 bg-black/50 hover:bg-[#F47521] border border-white/20 rounded-full flex items-center justify-center text-white transition-colors cursor-pointer shadow-lg">
                 <i class="fas fa-image text-xs"></i>
             </button>
 
-            <div class="relative z-10 flex flex-row items-center gap-5 md:gap-8">
+            <div class="relative z-10 flex flex-row items-center gap-4 md:gap-8 mt-4 md:mt-2">
                 
                 <div class="relative group cursor-pointer shrink-0">
                     <div class="w-24 h-24 md:w-28 md:h-28 rounded-full p-1 bg-gradient-to-br from-[#F47521] to-[#8a3a0c] transition-transform duration-300 group-hover:scale-105 shadow-xl">
@@ -98,23 +75,31 @@
                     <input type="file" id="pfp-upload" class="hidden" accept="image/*" onchange="handleImageUpload(event)">
                 </div>
                 
-                <div class="flex flex-col flex-1 text-left justify-center">
+                <div class="flex flex-col flex-1 text-left justify-center min-w-0">
                     
-                    <div id="profile-display-block">
-                        <div class="flex items-center gap-3">
-                            <div class="name-scroll-container">
-                                <h1 id="user-name" class="name-scroll text-2xl md:text-3xl font-black tracking-tight text-white drop-shadow-md">Loading...</h1>
+                    <div id="profile-display-block" class="w-full">
+                        <div class="flex items-center gap-3 w-full">
+                            <!-- Scrolling Name Wrapper -->
+                            <div class="overflow-hidden w-full max-w-[140px] md:max-w-[260px] shrink-0" style="mask-image: linear-gradient(to right, black 90%, transparent 100%); -webkit-mask-image: linear-gradient(to right, black 90%, transparent 100%);">
+                                <h1 id="user-name" class="text-2xl md:text-3xl font-black tracking-tight text-white whitespace-nowrap inline-block drop-shadow-md">Loading...</h1>
                             </div>
-                            <button id="edit-profile-btn" onclick="openProfileEditor()" class="hidden-el text-gray-400 hover:text-[#F47521] transition-colors">
+                            <button id="edit-profile-btn" onclick="openProfileEditor()" class="hidden-el text-gray-400 hover:text-[#F47521] transition-colors shrink-0">
                                 <i class="fas fa-pen text-sm"></i>
                             </button>
                         </div>
                         
-                        <p id="user-bio" class="text-sm text-gray-300 mt-1 line-clamp-2 max-w-sm font-medium transition-colors">No bio set.</p>
-                        <span id="read-more-bio" class="hidden-el text-xs text-[#F47521] font-bold cursor-pointer hover:underline mt-0.5" onclick="openBioModal()">Read more</span>
+                        <!-- Bio & Read More -->
+                        <div class="relative max-w-sm mt-1">
+                            <p id="user-bio" class="text-sm text-gray-300 line-clamp-2 font-medium">No bio set.</p>
+                            <span id="read-more-bio" onclick="openBioModal()" class="hidden-el text-[#F47521] text-xs font-bold cursor-pointer hover:underline mt-0.5 inline-block">Read more</span>
+                        </div>
                         
+                        <!-- Badges & Share -->
                         <div class="flex items-center gap-2 mt-3">
                             <span id="view-badge" class="bg-white/10 text-gray-300 px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-widest border border-white/5">Authenticating</span>
+                            <button onclick="copyProfileLink()" class="bg-white/5 hover:bg-white/20 text-gray-300 hover:text-white px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-widest border border-white/10 transition-colors flex items-center gap-1">
+                                <i class="fas fa-link"></i> Share
+                            </button>
                         </div>
                     </div>
 
@@ -305,14 +290,18 @@
 
     <!-- MODALS -->
 
+    <!-- Custom Toast Alert -->
+    <div id="toast-message" class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-gray-900 border border-white/10 text-white px-5 py-3 rounded-xl shadow-2xl z-[150] flex items-center gap-3 w-max max-w-[90vw] transform translate-y-full opacity-0 transition-all duration-300 pointer-events-none">
+        <i class="fas fa-info-circle text-[#F47521] text-lg"></i>
+        <span id="toast-text" class="text-sm font-medium tracking-wide"></span>
+    </div>
+
     <!-- Bio Read More Modal -->
-    <div id="bio-modal" class="fixed inset-0 bg-black/80 z-[100] flex justify-center items-center hidden-el p-4 backdrop-blur-sm transition-opacity">
-        <div class="bg-[#0a0a0c] border border-white/10 w-full max-w-sm rounded-2xl p-6 relative shadow-2xl">
-            <button onclick="closeBioModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white w-8 h-8 rounded-full bg-white/5 flex items-center justify-center transition-colors"><i class="fas fa-times"></i></button>
-            <h3 class="text-lg font-black text-white mb-4 border-l-4 border-[#F47521] pl-2 uppercase tracking-wider">About</h3>
-            <div class="overflow-y-auto max-h-[60vh] no-scrollbar pr-2">
-                <p id="full-bio-text" class="text-sm text-gray-300 leading-relaxed font-medium whitespace-pre-wrap"></p>
-            </div>
+    <div id="bio-modal" class="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center hidden-el p-4 backdrop-blur-sm transition-opacity">
+        <div class="bg-[#0a0a0c] border border-white/10 w-full max-w-md rounded-2xl p-6 relative shadow-2xl">
+            <button onclick="closeBioModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors"><i class="fas fa-times"></i></button>
+            <h3 class="text-lg font-black text-white mb-4 uppercase tracking-wider border-l-4 border-[#F47521] pl-2">About Me</h3>
+            <p id="full-bio-text" class="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap max-h-[50vh] overflow-y-auto no-scrollbar"></p>
         </div>
     </div>
 
@@ -369,7 +358,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
-        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
+        import { getAuth, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
         import { getFirestore, doc, getDoc, collection, getDocs, setDoc, deleteDoc, updateDoc, increment, arrayUnion, arrayRemove, addDoc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -397,7 +386,36 @@
         window.app.state.carouselLibrarySet = new Set();
         window.app.db = db;
 
-        // --- UPCOMING MODAL LOGIC (Clean & Reused) ---
+        // --- CUSTOM TOAST FUNCTION ---
+        let toastTimeout;
+        window.app.showToast = (msg) => {
+            const toast = document.getElementById('toast-message');
+            document.getElementById('toast-text').innerText = msg;
+            toast.classList.remove('translate-y-full', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.add('translate-y-full', 'opacity-0');
+                toast.classList.remove('translate-y-0', 'opacity-100');
+            }, 3000);
+        };
+
+        window.copyProfileLink = () => {
+            const link = `${window.location.origin}/profile.html?id=${window.activeProfileUid}`;
+            navigator.clipboard.writeText(link).then(() => {
+                window.app.showToast("Profile link copied to clipboard!");
+            });
+        };
+
+        // --- BIO MODAL LOGIC ---
+        window.openBioModal = () => {
+            document.getElementById('bio-modal').classList.remove('hidden-el');
+        };
+        window.closeBioModal = () => {
+            document.getElementById('bio-modal').classList.add('hidden-el');
+        };
+
+        // --- UPCOMING MODAL LOGIC ---
         const formatAniListDate = (dateObj) => {
             if (!dateObj || !dateObj.year) return "TBA";
             const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -666,7 +684,6 @@
                 document.getElementById('owner-menu').classList.remove('hidden-el');
                 document.getElementById('visitor-actions').classList.add('hidden-el');
                 document.getElementById('visitor-library-container').classList.add('hidden-el');
-                document.getElementById('visitor-back-container').classList.add('hidden-el');
                 
                 document.getElementById('edit-pfp-btn').classList.remove('hidden-el');
                 document.getElementById('edit-profile-btn').classList.remove('hidden-el');
@@ -678,7 +695,6 @@
                 document.getElementById('owner-menu').classList.add('hidden-el');
                 document.getElementById('visitor-actions').classList.remove('hidden-el');
                 document.getElementById('visitor-library-container').classList.remove('hidden-el');
-                document.getElementById('visitor-back-container').classList.remove('hidden-el');
                 
                 document.getElementById('edit-pfp-btn').classList.add('hidden-el');
                 document.getElementById('edit-profile-btn').classList.add('hidden-el');
@@ -689,13 +705,6 @@
             await fetchLibraryCountAndData();
         }
 
-        window.openBioModal = () => {
-            if(!cachedProfileData) return;
-            document.getElementById('full-bio-text').innerText = cachedProfileData.bio || "No bio set.";
-            document.getElementById('bio-modal').classList.remove('hidden-el');
-        };
-        window.closeBioModal = () => document.getElementById('bio-modal').classList.add('hidden-el');
-
         async function loadUserData() {
             try {
                 const userDocRef = doc(db, "users", window.activeProfileUid);
@@ -703,35 +712,31 @@
                 
                 cachedProfileData = userDoc.exists() ? userDoc.data() : { username: "Anime Fan", hideLibrary: false };
 
-                // Handle Name Marquee Logic
+                // Apply Marquee if username is long
                 const nameEl = document.getElementById('user-name');
                 nameEl.innerText = cachedProfileData.username || "Anime Fan";
-                nameEl.classList.remove('is-long');
-                nameEl.style.transform = 'none';
-
-                // Handle Bio Truncation & Modal Logic
-                const bioEl = document.getElementById('user-bio');
-                bioEl.innerText = cachedProfileData.bio || "No bio set.";
-                const readMoreBtn = document.getElementById('read-more-bio');
-
+                const nameContainer = nameEl.parentElement;
+                
+                // Allow DOM to process text to measure width
                 setTimeout(() => {
-                    const container = nameEl.parentElement;
-                    const diff = nameEl.scrollWidth - container.clientWidth;
-                    if (diff > 0) {
-                        nameEl.style.setProperty('--scroll-dist', `-${diff}px`);
-                        nameEl.classList.add('is-long');
-                    }
-
-                    if (bioEl.scrollHeight > bioEl.clientHeight) {
-                        readMoreBtn.classList.remove('hidden-el');
-                        bioEl.classList.add('cursor-pointer', 'hover:text-white');
-                        bioEl.onclick = openBioModal;
+                    if (nameEl.scrollWidth > nameContainer.clientWidth) {
+                        const dist = nameEl.scrollWidth - nameContainer.clientWidth;
+                        nameEl.style.setProperty('--scroll-dist', `-${dist}px`);
+                        nameEl.style.animation = `scrollName ${Math.max(4, dist / 20)}s linear infinite alternate`;
                     } else {
-                        readMoreBtn.classList.add('hidden-el');
-                        bioEl.classList.remove('cursor-pointer', 'hover:text-white');
-                        bioEl.onclick = null;
+                        nameEl.style.animation = 'none';
                     }
                 }, 50);
+
+                // Handle Long Bio
+                const bioText = cachedProfileData.bio || "No bio set.";
+                document.getElementById('user-bio').innerText = bioText;
+                if (bioText.length > 80) {
+                    document.getElementById('read-more-bio').classList.remove('hidden-el');
+                    document.getElementById('full-bio-text').innerText = bioText;
+                } else {
+                    document.getElementById('read-more-bio').classList.add('hidden-el');
+                }
                 
                 document.getElementById('input-edit-username').value = cachedProfileData.username || "";
                 document.getElementById('input-edit-bio').value = cachedProfileData.bio || "";
@@ -1072,11 +1077,33 @@
             if (!newName || !currentAuthenticatedUser) return;
 
             try {
+                // Update Firebase Auth Profile for Notifications Sync
+                await updateProfile(currentAuthenticatedUser, { displayName: newName });
+                
+                // Update Database
                 const userDocRef = doc(db, "users", currentAuthenticatedUser.uid);
                 await updateDoc(userDocRef, { username: newName, bio: newBio });
                 
                 document.getElementById('user-name').innerText = newName;
+                
+                const nameEl = document.getElementById('user-name');
+                const nameContainer = nameEl.parentElement;
+                if (nameEl.scrollWidth > nameContainer.clientWidth) {
+                    const dist = nameEl.scrollWidth - nameContainer.clientWidth;
+                    nameEl.style.setProperty('--scroll-dist', `-${dist}px`);
+                    nameEl.style.animation = `scrollName ${Math.max(4, dist / 20)}s linear infinite alternate`;
+                } else {
+                    nameEl.style.animation = 'none';
+                }
+
                 document.getElementById('user-bio').innerText = newBio || "No bio set.";
+                if (newBio.length > 80) {
+                    document.getElementById('read-more-bio').classList.remove('hidden-el');
+                    document.getElementById('full-bio-text').innerText = newBio;
+                } else {
+                    document.getElementById('read-more-bio').classList.add('hidden-el');
+                }
+
                 closeProfileEditor();
             } catch(e) { console.error("Failed saving profile", e); }
         };
@@ -1133,6 +1160,11 @@
                 
                 if (imgbbData.success) {
                     const hostedUrl = imgbbData.data.url;
+                    
+                    // Update Firebase Auth Profile for Notifications Sync
+                    await updateProfile(currentAuthenticatedUser, { photoURL: hostedUrl });
+
+                    // Update Database
                     const userDocRef = doc(db, "users", currentAuthenticatedUser.uid);
                     await updateDoc(userDocRef, { photoURL: hostedUrl });
                     
