@@ -1,9 +1,9 @@
 // header.js
 
-// 1. Import Firebase Modular SDKs via CDN
+// 1. Import Firebase Modular SDKs via CDN (Added collection, onSnapshot, query, limit)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
-import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, collection, onSnapshot, query, limit } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
 // 2. Firebase Configuration
 const firebaseConfig = {
@@ -19,6 +19,10 @@ const firebaseConfig = {
 const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
+
+window.app = window.app || {};
+window.app.components = window.app.components || {};
+window.app.state = window.app.state || {};
 
 window.app.firebaseApp = firebaseApp;
 window.app.auth = auth;
@@ -51,8 +55,14 @@ window.app.components.header = () => {
             <div class="flex items-center gap-5 md:gap-6">
                 <i class="fas fa-search text-white text-lg md:text-xl cursor-pointer hover:text-[#F47521] transition-colors" onclick="window.location.href='search.html'"></i>
                 
+                <!-- Notification Bell with Orange Dot -->
+                <div class="relative cursor-pointer transition-transform hover:scale-105" onclick="window.location.href='notifications.html'">
+                    <i class="fas fa-bell text-white text-lg md:text-xl hover:text-[#F47521] transition-colors"></i>
+                    <span id="header-notif-dot" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 bg-[#F47521] rounded-full border-[1.5px] border-[#050505]"></span>
+                </div>
+                
                 <div id="header-profile-btn" class="cursor-pointer transition-transform hover:scale-105" onclick="window.app.handleProfileClick()">
-                    </div>
+                </div>
             </div>
         </nav>
     `;
@@ -61,9 +71,9 @@ window.app.components.header = () => {
     renderProfileIcon();
 
     // 5. Firebase Live Auth Sync
-    // Silently checks the database in the background to ensure PFP and details are up to date
     onAuthStateChanged(auth, async (user) => {
         if (user) {
+            // Check the database for profile updates
             try {
                 const userDocRef = doc(db, "users", user.uid);
                 const docSnap = await getDoc(userDocRef);
@@ -77,6 +87,26 @@ window.app.components.header = () => {
             } catch (err) {
                 console.error("Failed to sync profile from DB:", err);
             }
+
+            // Real-time listener for the notification dot
+            const notifRef = collection(db, "users", user.uid, "notifications");
+            const q = query(notifRef, limit(1)); // Limit 1 because we just need to know if ANY exist
+            
+            onSnapshot(q, (snapshot) => {
+                const dot = document.getElementById('header-notif-dot');
+                if (dot) {
+                    if (!snapshot.empty) {
+                        dot.classList.remove('hidden'); // Show dot
+                    } else {
+                        dot.classList.add('hidden'); // Hide dot
+                    }
+                }
+            });
+
+        } else {
+            // Ensure dot is hidden if the user logs out
+            const dot = document.getElementById('header-notif-dot');
+            if (dot) dot.classList.add('hidden');
         }
     });
 };
