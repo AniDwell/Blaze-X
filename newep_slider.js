@@ -1,14 +1,137 @@
-// newep_slider.js - Upcoming Episodes Slider with Live Countdown Timer
+// newep_slider.js - Upcoming Episodes Slider (Live Sync, Add/Remove Notifs, Auto-Release Notifs)
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
+window.app.state = window.app.state || {};
+if (!window.app.state.carouselLibrarySet) window.app.state.carouselLibrarySet = new Set();
+
+// --- SAFE FIREBASE INIT ---
+let firebaseInitNewEp = false;
+const initFirebaseNewEp = async () => {
+    if (firebaseInitNewEp) return;
+    try {
+        const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js');
+        const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+        const { getFirestore } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
+            authDomain: "blaze-x-db2f5.firebaseapp.com",
+            projectId: "blaze-x-db2f5",
+            storageBucket: "blaze-x-db2f5.firebasestorage.app",
+            messagingSenderId: "770812306638",
+            appId: "1:770812306638:web:eaf5ded647861f32c25c9f"
+        };
+
+        const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
+        window.app.auth = getAuth(app);
+        window.app.db = getFirestore(app);
+        firebaseInitNewEp = true;
+    } catch (err) {
+        console.error("Firebase Init Error (NewEp Slider):", err);
+    }
+};
+
+// --- SVG UI UPDATER ---
+window.app.updateNewEpBtnUI = (btn, isAdded) => {
+    if (!btn) return;
+    const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>`;
+    const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
+    
+    btn.dataset.added = isAdded ? "true" : "false";
+    btn.innerHTML = isAdded ? savedSvg : unsavedSvg;
+    
+    btn.classList.remove('bg-black/50', 'bg-black/70', 'bg-black/80');
+    btn.classList.add(isAdded ? 'bg-black/80' : 'bg-black/70');
+};
+
+// --- INSTANT SAVE & NOTIFY LOGIC ---
+window.app.toggleNewEpLibrary = async (event, btn, id, title, img) => {
+    event.stopPropagation(); 
+    
+    try {
+        await initFirebaseNewEp();
+        const { doc, setDoc, deleteDoc, collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        
+        const auth = window.app.auth;
+        const db = window.app.db;
+        
+        if (!auth || !auth.currentUser || auth.currentUser.isAnonymous) {
+            if (window.app.components && window.app.components.auth) window.app.components.auth();
+            else if (window.app.showCustomAlert) window.app.showCustomAlert("Please log in to save to your Library!", "error");
+            return;
+        }
+
+        const docIdStr = String(id);
+        const isAdded = btn.dataset.added === "true";
+        const libDocRef = doc(db, "users", auth.currentUser.uid, "library", docIdStr);
+        const notifRef = collection(db, "users", auth.currentUser.uid, "notifications");
+
+        if (isAdded) {
+            window.app.updateNewEpBtnUI(btn, false);
+            window.app.state.carouselLibrarySet.delete(docIdStr);
+
+            await deleteDoc(libDocRef);
+            await addDoc(notifRef, {
+                type: 'library',
+                title: 'Library Updated',
+                message: `You removed ${title} from your library.`,
+                image: img,
+                timestamp: Date.now()
+            });
+
+            if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
+        } else {
+            window.app.updateNewEpBtnUI(btn, true);
+            window.app.state.carouselLibrarySet.add(docIdStr);
+
+            await setDoc(libDocRef, { id: docIdStr, title, img, timestamp: Date.now() });
+            await addDoc(notifRef, {
+                type: 'library',
+                title: 'Library Updated',
+                message: `You added ${title} to your library!`,
+                image: img,
+                timestamp: Date.now()
+            });
+
+            if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
+        }
+    } catch (error) { 
+        console.error("Library sync error:", error);
+        if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to sync with cloud.", "error");
+    }
+};
+
+// --- EPISODE RELEASE NOTIFICATION LOGIC ---
+window.app.triggerEpisodeReleaseNotification = async (id, title, img, ep) => {
+    try {
+        await initFirebaseNewEp();
+        const { collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        const auth = window.app.auth;
+        
+        if (auth && auth.currentUser && !auth.currentUser.isAnonymous) {
+            const notifRef = collection(window.app.db, "users", auth.currentUser.uid, "notifications");
+            await addDoc(notifRef, {
+                type: 'library',
+                title: 'New Episode Released!',
+                message: `Episode ${ep} of ${title} is now airing!`,
+                image: img,
+                timestamp: Date.now(),
+                animeId: id 
+            });
+            // Show toast so the user knows it dropped while they were browsing
+            if (window.app.showCustomAlert) window.app.showCustomAlert(`Episode ${ep} of ${title} is out!`, "success");
+        }
+    } catch (err) {
+        console.error("Failed to push release notification", err);
+    }
+};
 
 window.app.components.newEpSlider = async () => {
-    // Hooks into the <div id="newep-container"> in your index.html
     const container = document.getElementById('newep-container');
     if (!container) return;
 
-    // 1. SHOW SKELETON (Matching 140px/190px sizes)
+    // 1. SHOW SKELETON
     container.innerHTML = `
         <div class="px-4 md:px-8 py-6 relative">
             <h2 class="text-xl md:text-2xl font-black text-white mb-4 border-l-4 border-[#F47521] pl-3 uppercase tracking-wider drop-shadow-md">Release Schedule</h2>
@@ -20,8 +143,48 @@ window.app.components.newEpSlider = async () => {
         </div>
     `;
 
+    // --- SETUP LIVE LISTENER ---
     try {
-        // 2. FETCH CURRENTLY RELEASING ANIME WITH SCHEDULE FROM ANILIST
+        await initFirebaseNewEp();
+        const { onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+        const { collection, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+
+        if (window.app.auth) {
+            onAuthStateChanged(window.app.auth, (user) => {
+                if (window.app.state.newEpSliderUnsubscribe) {
+                    window.app.state.newEpSliderUnsubscribe();
+                }
+                
+                if (user && !user.isAnonymous) {
+                    const libRef = collection(window.app.db, "users", user.uid, "library");
+                    window.app.state.newEpSliderUnsubscribe = onSnapshot(libRef, (snapshot) => {
+                        window.app.state.carouselLibrarySet.clear();
+                        snapshot.forEach(doc => {
+                            window.app.state.carouselLibrarySet.add(String(doc.id));
+                        });
+                        
+                        document.querySelectorAll('.newep-lib-btn').forEach(btn => {
+                            const id = btn.getAttribute('data-id');
+                            if (id) {
+                                const isAdded = window.app.state.carouselLibrarySet.has(id);
+                                window.app.updateNewEpBtnUI(btn, isAdded);
+                            }
+                        });
+                    });
+                } else {
+                    window.app.state.carouselLibrarySet.clear();
+                    document.querySelectorAll('.newep-lib-btn').forEach(btn => {
+                        window.app.updateNewEpBtnUI(btn, false);
+                    });
+                }
+            });
+        }
+    } catch (fbErr) {
+        console.error("New Ep Slider Live Listener failed:", fbErr);
+    }
+
+    try {
+        // 2. FETCH ANILIST DATA
         const aniQuery = `
             query { 
                 Page(page: 1, perPage: 25) { 
@@ -46,13 +209,10 @@ window.app.components.newEpSlider = async () => {
         });
         const aniData = await aniRes.json();
         
-        // Filter out anime that don't have a next episode scheduled
         let releasingList = (aniData?.data?.Page?.media || []).filter(anime => anime.nextAiringEpisode);
-
-        // Sort by closest release time
         releasingList.sort((a, b) => a.nextAiringEpisode.timeUntilAiring - b.nextAiringEpisode.timeUntilAiring);
 
-        // 3. CROSS-REFERENCE WITH CUSTOM API
+        // 3. CROSS-REFERENCE API
         const baseUrl = 'https://anikoto-api-xi.vercel.app';
         
         const crossReferenced = await Promise.all(releasingList.map(async (ani) => {
@@ -71,7 +231,7 @@ window.app.components.newEpSlider = async () => {
                         type: match.type || ani.format || 'TV',
                         sub: match.tvInfo?.sub || match.sub || '?',
                         dub: match.tvInfo?.dub || match.dub || 0,
-                        nextEpData: ani.nextAiringEpisode // { episode, airingAt, timeUntilAiring }
+                        nextEpData: ani.nextAiringEpisode
                     };
                 }
             } catch(e) {}
@@ -88,10 +248,11 @@ window.app.components.newEpSlider = async () => {
         // 4. RENDER CARDS
         let cardsHtml = finalSliderItems.map(anime => {
             const safeTitle = anime.title.replace(/'/g, "\\'");
+            const attrTitle = anime.title.replace(/"/g, '&quot;'); // For HTML data attributes
             const docIdStr = String(anime.id);
             const isAdded = window.app.state.carouselLibrarySet && window.app.state.carouselLibrarySet.has(docIdStr);
             
-            const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
+            const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>`;
             const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
 
             const epNumber = anime.nextEpData.episode;
@@ -104,27 +265,32 @@ window.app.components.newEpSlider = async () => {
                 <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden shadow-lg border border-white/10 group-hover:border-[#F47521]/70 transition-colors bg-black">
                     <img src="${anime.image}" loading="lazy" class="w-full h-full object-cover">
                     
-                    <!-- Permanent Dark Gradient ONLY at bottom for timer readability -->
                     <div class="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black via-black/50 to-transparent pointer-events-none"></div>
 
                     <!-- Permanent Save Button -->
-                    <button onclick="window.app.toggleSliderLibrary(event, this, '${anime.id}', '${safeTitle}', '${anime.image}')" 
+                    <button onclick="window.app.toggleNewEpLibrary(event, this, '${anime.id}', '${safeTitle}', '${anime.image}')" 
                             data-added="${isAdded}"
-                            class="absolute top-2 right-2 z-30 p-2 rounded bg-black/70 backdrop-blur-md border border-white/10 shadow-lg hover:bg-black transition-all flex items-center justify-center">
+                            data-id="${docIdStr}"
+                            class="newep-lib-btn absolute top-2 right-2 z-30 p-2 rounded ${isAdded ? 'bg-black/80' : 'bg-black/70'} backdrop-blur-md border border-white/10 shadow-lg hover:bg-black transition-all flex items-center justify-center">
                         ${isAdded ? savedSvg : unsavedSvg}
                     </button>
                     
-                    <!-- Top Left Format Badge -->
                     <div class="absolute top-0 left-0 p-2 flex flex-col gap-1.5 items-start z-10 pointer-events-none">
                         <span class="bg-black/80 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded border border-white/10 font-bold uppercase shadow-md">${anime.type}</span>
                     </div>
 
-                    <!-- Live Timer & Episode Data at Bottom -->
+                    <!-- Live Timer -->
                     <div class="absolute bottom-0 left-0 w-full p-2 z-20 flex flex-col items-center justify-end pointer-events-none">
                         <span class="text-white text-[10px] md:text-xs font-black uppercase tracking-widest drop-shadow-md mb-1 border-b border-white/20 pb-1">
                             Episode ${epNumber}
                         </span>
-                        <div class="live-ep-timer bg-[#F47521] text-black text-[10px] md:text-xs font-mono font-black px-2 py-1 rounded shadow-[0_0_10px_rgba(244,117,33,0.5)] tracking-tight w-full text-center" data-target="${targetTimestampMs}">
+                        <div class="live-ep-timer bg-[#F47521] text-black text-[10px] md:text-xs font-mono font-black px-2 py-1 rounded shadow-[0_0_10px_rgba(244,117,33,0.5)] tracking-tight w-full text-center" 
+                             data-target="${targetTimestampMs}"
+                             data-id="${docIdStr}"
+                             data-title="${attrTitle}"
+                             data-image="${anime.image}"
+                             data-ep="${epNumber}"
+                             data-notified="false">
                             Calculating...
                         </div>
                     </div>
@@ -159,8 +325,7 @@ window.app.components.newEpSlider = async () => {
             </div>
         `;
 
-        // 5. START LIVE COUNTDOWN TIMER
-        // Clear any existing interval to avoid duplicates when navigating
+        // 5. START LIVE COUNTDOWN TIMER & AUTO-NOTIFY LOGIC
         if (window.app.state.newEpTimerInterval) {
             clearInterval(window.app.state.newEpTimerInterval);
         }
@@ -179,6 +344,20 @@ window.app.components.newEpSlider = async () => {
                     el.innerHTML = '<i class="fas fa-broadcast-tower animate-pulse mr-1"></i> AIRING NOW';
                     el.classList.add('bg-red-500', 'text-white');
                     el.classList.remove('bg-[#F47521]', 'text-black');
+
+                    // Trigger Push Notification if they have it saved and it just hit zero
+                    if (el.getAttribute('data-notified') === 'false') {
+                        el.setAttribute('data-notified', 'true');
+                        
+                        const aId = el.getAttribute('data-id');
+                        const aTitle = el.getAttribute('data-title');
+                        const aImg = el.getAttribute('data-image');
+                        const aEp = el.getAttribute('data-ep');
+
+                        if (window.app.state.carouselLibrarySet && window.app.state.carouselLibrarySet.has(aId)) {
+                            window.app.triggerEpisodeReleaseNotification(aId, aTitle, aImg, aEp);
+                        }
+                    }
                     return;
                 }
 
@@ -195,7 +374,7 @@ window.app.components.newEpSlider = async () => {
             });
         };
         
-        updateTimers(); // Run once immediately
+        updateTimers(); 
         window.app.state.newEpTimerInterval = setInterval(updateTimers, 1000);
 
         // 6. ATTACH SCROLL LOGIC
