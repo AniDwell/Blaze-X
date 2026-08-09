@@ -16,17 +16,19 @@
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
-<body class="bg-black text-white min-h-screen pb-24">
+<body class="bg-black text-white min-h-screen pb-10"> <!-- Reduced pb-24 to pb-10 since there is no bottom nav -->
 
     <!-- Header Container -->
     <div id="header-container"></div>
 
-    <main class="container mx-auto px-4 pt-20 max-w-3xl relative">
-        <!-- Header & Clear All -->
-        <div class="flex justify-between items-center mb-6">
-            <h1 class="text-2xl font-black tracking-wider uppercase drop-shadow-md">Notifications</h1>
-            <button onclick="window.app.clearAllNotifications()" class="text-xs font-bold text-red-500 hover:text-red-400 bg-red-500/10 px-3 py-1.5 rounded transition-colors uppercase tracking-wider">
-                <i class="fas fa-trash-alt mr-1"></i> Clear All
+    <main class="container mx-auto px-4 pt-24 max-w-3xl relative">
+        <!-- Back Button -->
+        <div class="flex items-center mb-6">
+            <button onclick="window.history.back()" class="group text-gray-400 hover:text-[#F47521] transition-colors flex items-center gap-2 font-bold uppercase tracking-wider text-sm">
+                <div class="w-8 h-8 rounded-full bg-white/5 border border-white/10 group-hover:border-[#F47521]/50 flex items-center justify-center transition-all">
+                    <i class="fas fa-arrow-left"></i>
+                </div>
+                Back
             </button>
         </div>
 
@@ -47,25 +49,21 @@
         </div>
     </main>
 
-    <!-- Bottom Nav Container -->
-    <div id="bottomnav-container"></div>
-
-    <!-- External Components -->
+    <!-- External Components (Bottom nav removed) -->
     <script src="header.js"></script>
-    <script src="bottomnav.js"></script>
 
     <!-- Firebase & Logic -->
     <script type="module">
         import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js';
         import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js';
-        import { getFirestore, collection, onSnapshot, query, orderBy, deleteDoc, doc, writeBatch } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js';
+        import { getFirestore, collection, onSnapshot, query, orderBy, deleteDoc, doc } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js';
 
         window.app = window.app || {};
         window.app.state = window.app.state || {};
         window.app.state.allNotifications = [];
         window.app.state.currentFilter = 'all';
 
-        // Firebase Config (Replace with your actual config if different)
+        // Firebase Config
         const firebaseConfig = {
             apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
             authDomain: "blaze-x-db2f5.firebaseapp.com",
@@ -99,10 +97,8 @@
 
             let html = '';
             filteredData.forEach(notif => {
-                // Ensure there's a fallback image
                 const imgUrl = notif.image || 'https://via.placeholder.com/150x225/111/fff?text=No+Image';
                 
-                // Determine icon based on type
                 let iconHtml = '';
                 if(notif.type === 'like') iconHtml = '<i class="fas fa-heart text-red-500 text-xs"></i>';
                 else if(notif.type === 'comment') iconHtml = '<i class="fas fa-comment text-blue-500 text-xs"></i>';
@@ -142,7 +138,6 @@
         window.app.setFilter = (type) => {
             window.app.state.currentFilter = type;
             
-            // Update UI for pills
             document.querySelectorAll('.category-pill').forEach(pill => {
                 if (pill.dataset.filter === type) {
                     pill.className = "category-pill whitespace-nowrap px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-[#F47521] text-white transition-all shadow-lg";
@@ -160,38 +155,9 @@
             if (!user) return;
             try {
                 await deleteDoc(doc(db, "users", user.uid, "notifications", docId));
-                // Real-time listener will auto-update the UI
             } catch (err) {
                 console.error("Error deleting notification:", err);
                 alert("Failed to delete notification.");
-            }
-        };
-
-        // --- DELETE ALL NOTIFICATIONS ---
-        window.app.clearAllNotifications = async () => {
-            const user = auth.currentUser;
-            if (!user) return;
-            if (!confirm("Are you sure you want to delete all notifications?")) return;
-
-            try {
-                // Determine which ones to delete (based on current filter, or actually ALL of them?)
-                // Standard UX: "Clear All" deletes all visible in the current list.
-                const toDelete = window.app.state.currentFilter === 'all' 
-                    ? window.app.state.allNotifications 
-                    : window.app.state.allNotifications.filter(n => n.type === window.app.state.currentFilter);
-
-                if (toDelete.length === 0) return;
-
-                const batch = writeBatch(db);
-                toDelete.forEach(notif => {
-                    const docRef = doc(db, "users", user.uid, "notifications", notif.id);
-                    batch.delete(docRef);
-                });
-
-                await batch.commit();
-            } catch (err) {
-                console.error("Error clearing notifications:", err);
-                alert("Failed to clear notifications.");
             }
         };
 
@@ -199,7 +165,6 @@
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 const notifRef = collection(db, "users", user.uid, "notifications");
-                // Fetch ordered by timestamp descending
                 const q = query(notifRef, orderBy("timestamp", "desc"));
 
                 onSnapshot(q, (snapshot) => {
