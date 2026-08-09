@@ -1197,7 +1197,7 @@
 
         window.navigateToChat = () => {
             if(!currentAuthenticatedUser) { alert("Please log in to send a message."); return; }
-            window.location.href = `/chat.html?userA=${currentAuthenticatedUser.uid}&userB=${window.activeProfileUid}`;
+            window.location.href = `/chats.html?userA=${currentAuthenticatedUser.uid}&userB=${window.activeProfileUid}`;
         };
 
         window.handleLogout = async () => {
