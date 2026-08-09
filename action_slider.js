@@ -2,6 +2,17 @@
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
+window.app.state = window.app.state || {};
+
+// In-memory set and listener for live UI updates
+window.app.state.actionSliderLibrarySet = new Set();
+window.app.state.actionSliderLibUnsubscribe = null;
+
+// --- SVG ICONS ---
+// Filled bookmark for saved
+const actionSavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>`;
+// Outline bookmark for unsaved
+const actionUnsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
 
 // --- GLOBAL PAGE TRANSITION EFFECT ---
 window.addEventListener('pageshow', (event) => {
@@ -49,13 +60,13 @@ window.app.sliderNavigate = (id, title, image, type, sub, dub) => {
     }, 300);
 };
 
-// --- INSTANT SAVE / LIBRARY SYNC LOGIC ---
+// --- INSTANT SAVE / LIBRARY SYNC & NOTIFICATIONS ---
 window.app.toggleSliderLibrary = async (event, btn, id, title, img) => {
     event.stopPropagation(); 
     
     try {
         const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
-        const { doc, setDoc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        const { doc, setDoc, deleteDoc, collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         
         const auth = window.app.auth || getAuth();
         const db = window.app.db;
@@ -69,23 +80,45 @@ window.app.toggleSliderLibrary = async (event, btn, id, title, img) => {
         const docIdStr = String(id);
         const isAdded = btn.dataset.added === "true";
         const libDocRef = doc(db, "users", auth.currentUser.uid, "library", docIdStr);
-
-        const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
-        const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
+        const notifRef = collection(db, "users", auth.currentUser.uid, "notifications");
 
         if (isAdded) {
+            // Optimistic UI Removal
             btn.dataset.added = "false";
-            btn.innerHTML = unsavedSvg;
+            btn.innerHTML = actionUnsavedSvg;
             btn.classList.replace('bg-black/80', 'bg-black/50');
-            if (window.app.state.carouselLibrarySet) window.app.state.carouselLibrarySet.delete(docIdStr);
+            if (window.app.state.actionSliderLibrarySet) window.app.state.actionSliderLibrarySet.delete(docIdStr);
+            
             await deleteDoc(libDocRef);
+            
+            // Push Notification
+            await addDoc(notifRef, {
+                type: 'library',
+                title: 'Library Updated',
+                message: `You removed ${title} from your library.`,
+                image: img,
+                timestamp: Date.now()
+            });
+
             if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
         } else {
+            // Optimistic UI Addition
             btn.dataset.added = "true";
-            btn.innerHTML = savedSvg;
+            btn.innerHTML = actionSavedSvg;
             btn.classList.replace('bg-black/50', 'bg-black/80');
-            if (window.app.state.carouselLibrarySet) window.app.state.carouselLibrarySet.add(docIdStr);
+            if (window.app.state.actionSliderLibrarySet) window.app.state.actionSliderLibrarySet.add(docIdStr);
+            
             await setDoc(libDocRef, { id: docIdStr, title, img, timestamp: Date.now() });
+
+            // Push Notification
+            await addDoc(notifRef, {
+                type: 'library',
+                title: 'Library Updated',
+                message: `You added ${title} to your library!`,
+                image: img,
+                timestamp: Date.now()
+            });
+
             if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
         }
     } catch (error) { 
@@ -109,6 +142,61 @@ window.app.components.actionSlider = async () => {
         </div>
     `;
 
+    // --- SETUP LIVE UI LISTENER FOR SLIDER ---
+    try {
+        const { getAuth, onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+        const { collection, onSnapshot, getFirestore } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        
+        const auth = window.app.auth || getAuth();
+        const db = window.app.db || getFirestore();
+
+        onAuthStateChanged(auth, (user) => {
+            if (window.app.state.actionSliderLibUnsubscribe) {
+                window.app.state.actionSliderLibUnsubscribe(); // Cleanup old listener
+            }
+
+            if (user && !user.isAnonymous) {
+                const libRef = collection(db, "users", user.uid, "library");
+                
+                window.app.state.actionSliderLibUnsubscribe = onSnapshot(libRef, (snapshot) => {
+                    window.app.state.actionSliderLibrarySet.clear();
+                    snapshot.forEach(doc => {
+                        window.app.state.actionSliderLibrarySet.add(String(doc.id));
+                    });
+
+                    // Live update all rendered slider buttons
+                    const buttons = document.querySelectorAll('.action-slider-lib-btn');
+                    buttons.forEach(btn => {
+                        const id = btn.dataset.id;
+                        if (window.app.state.actionSliderLibrarySet.has(id)) {
+                            btn.dataset.added = "true";
+                            btn.innerHTML = actionSavedSvg;
+                            btn.classList.add('bg-black/80');
+                            btn.classList.remove('bg-black/50');
+                        } else {
+                            btn.dataset.added = "false";
+                            btn.innerHTML = actionUnsavedSvg;
+                            btn.classList.add('bg-black/50');
+                            btn.classList.remove('bg-black/80');
+                        }
+                    });
+                });
+            } else {
+                window.app.state.actionSliderLibrarySet.clear();
+                const buttons = document.querySelectorAll('.action-slider-lib-btn');
+                buttons.forEach(btn => {
+                    btn.dataset.added = "false";
+                    btn.innerHTML = actionUnsavedSvg;
+                    btn.classList.add('bg-black/50');
+                    btn.classList.remove('bg-black/80');
+                });
+            }
+        });
+    } catch (fbErr) {
+        console.error("Failed to setup live listener for action slider.", fbErr);
+    }
+
+    // --- FETCH DATA ---
     try {
         const aniQuery = `
             query { 
@@ -162,11 +250,8 @@ window.app.components.actionSlider = async () => {
         let cardsHtml = finalSliderItems.map(anime => {
             const safeTitle = anime.title.replace(/'/g, "\\'");
             const docIdStr = String(anime.id);
-            const isAdded = window.app.state.carouselLibrarySet && window.app.state.carouselLibrarySet.has(docIdStr);
+            const isAdded = window.app.state.actionSliderLibrarySet && window.app.state.actionSliderLibrarySet.has(docIdStr);
             
-            const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
-            const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
-
             // SCALED DOWN CARD SIZES (140px & 190px)
             return `
             <div class="snap-start shrink-0 w-[140px] md:w-[190px] relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-10"
@@ -177,8 +262,9 @@ window.app.components.actionSlider = async () => {
                     
                     <button onclick="window.app.toggleSliderLibrary(event, this, '${anime.id}', '${safeTitle}', '${anime.image}')" 
                             data-added="${isAdded}"
-                            class="absolute top-2 right-2 z-30 p-2 rounded bg-black/70 backdrop-blur-md border border-white/10 shadow-lg hover:bg-black transition-all flex items-center justify-center">
-                        ${isAdded ? savedSvg : unsavedSvg}
+                            data-id="${anime.id}"
+                            class="action-slider-lib-btn absolute top-2 right-2 z-30 p-2 rounded ${isAdded ? 'bg-black/80' : 'bg-black/50'} backdrop-blur-md border border-white/10 shadow-lg hover:bg-black transition-all flex items-center justify-center">
+                        ${isAdded ? actionSavedSvg : actionUnsavedSvg}
                     </button>
                     
                     <div class="absolute top-0 left-0 p-2 flex flex-col gap-1.5 items-start z-10 pointer-events-none">
