@@ -103,6 +103,7 @@ window.app.components.carousel = async () => {
         const topSlides = [];
         const baseUrl = 'https://anikoto-api-xi.vercel.app';
 
+        // Get trending/top of the month from AniList (fetch 20 to account for skips)
         const aniQuery = `
             query { 
                 Page(page: 1, perPage: 20) { 
@@ -125,8 +126,9 @@ window.app.components.carousel = async () => {
         const aniData = await aniRes.json();
         const aniListMedia = aniData?.data?.Page?.media || [];
 
+        // Try matching AniList trending with your Custom API
         for (const media of aniListMedia) {
-            if (topSlides.length >= 5) break; 
+            if (topSlides.length >= 5) break; // Stop when we have 5 matched series
 
             const romaji = media.title.romaji || '';
             const english = media.title.english || '';
@@ -141,15 +143,18 @@ window.app.components.carousel = async () => {
                 const searchData = await searchRes.json();
                 const apiResults = searchData.data || searchData.results || searchData || [];
 
+                // STRICT EXACT MATCH LOGIC (case-insensitive)
                 const exactMatch = apiResults.find(r => {
                     const apiTitle = (r.title || '').toLowerCase();
                     return apiTitle === romaji.toLowerCase() || apiTitle === english.toLowerCase();
                 });
 
                 if (!exactMatch) {
+                    console.log(`Skipped (No Exact API Match): ${searchKeyword}`);
                     continue;
                 }
 
+                // Push enriched exact match
                 topSlides.push({
                     exactId: exactMatch.id,
                     title: searchKeyword,
@@ -194,6 +199,7 @@ window.app.components.carousel = async () => {
             `;
         });
 
+        // 3. RENDER FINAL UI
         container.innerHTML = `
             <div class="relative w-full aspect-[4/5] md:aspect-[21/9] max-h-[75vh] overflow-hidden bg-black border-b border-white/5">
                 <div id="hero-slides" class="absolute inset-0 z-0">
@@ -219,6 +225,7 @@ window.app.components.carousel = async () => {
     }
 };
 
+// --- DYNAMIC UI UPDATER ---
 window.app.updateCarouselUI = (index) => {
     const uiLayer = document.getElementById('carousel-ui-layer');
     if (!uiLayer) return;
@@ -226,6 +233,7 @@ window.app.updateCarouselUI = (index) => {
     const data = window.app.state.carouselItems[index];
     if (!data) return;
 
+    // Check Memory Set to see if ID exists
     const docIdStr = String(data.exactId);
     const isAdded = window.app.state.carouselLibrarySet.has(docIdStr);
     const safeTitle = (data.title || 'Unknown').replace(/'/g, "\\'");
@@ -260,7 +268,7 @@ window.app.updateCarouselUI = (index) => {
                 
                 ${libraryBtnHtml}
                 
-                <button id="carousel-share-btn" onclick="event.stopPropagation(); window.app.shareAnime('${data.exactId}', '${safeTitle}')" class="bg-white/10 backdrop-blur-md text-white px-4 py-2 md:px-5 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase transition-all duration-300 border border-white/10 flex items-center gap-2 shadow-lg">
+                <button onclick="event.stopPropagation(); window.app.shareAnime('${data.exactId}', '${safeTitle}')" class="bg-white/10 backdrop-blur-md text-white px-4 py-2 md:px-5 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-blue-500 transition-colors border border-white/10 flex items-center gap-2 shadow-lg">
                     <i class="fas fa-share-nodes"></i>
                 </button>
             </div>
@@ -325,9 +333,10 @@ function startAutoRotate() {
     }, 6000); 
 }
 
-// --- DYNAMIC LIBRARY LOGIC (ADD & REMOVE WITH NOTIFICATIONS) ---
+// --- DYNAMIC LIBRARY LOGIC (ADD, REMOVE & NOTIFY) ---
 window.app.handleCarouselLibraryClick = async (event, index) => {
     event.stopPropagation(); 
+    
     const btn = event.currentTarget;
     
     try {
@@ -352,32 +361,47 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
 
         const isAdded = btn.dataset.added === "true"; 
 
-        const { doc, setDoc, deleteDoc, collection } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        // Import addDoc and collection to push notifications to Firestore
+        const { doc, setDoc, deleteDoc, collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const libDocRef = doc(db, "users", auth.currentUser.uid, "library", docIdStr);
+        const notifRef = collection(db, "users", auth.currentUser.uid, "notifications");
 
         if (isAdded) {
+            // Optimistic Remove UI (Listener will also catch this)
             window.app.state.carouselLibrarySet.delete(docIdStr);
             btn.dataset.added = "false";
             btn.className = "bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2 shadow-lg";
             btn.innerHTML = `<i class="fas fa-plus"></i> Library`;
 
+            // Delete from library
             await deleteDoc(libDocRef);
+            
+            // Push "Removed" notification
+            await addDoc(notifRef, {
+                type: 'library',
+                title: 'Library Updated',
+                message: `You removed ${rawData.title} from your library.`,
+                image: rawData.finalImage,
+                timestamp: Date.now()
+            });
+
             if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
+
         } else {
+            // Optimistic Add UI (Listener will also catch this)
             window.app.state.carouselLibrarySet.add(docIdStr);
             btn.dataset.added = "true";
             btn.className = "bg-white text-black px-5 py-2 md:px-6 md:py-3 rounded font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors border border-white flex items-center gap-2 shadow-lg";
             btn.innerHTML = `<i class="fas fa-check"></i> Added`;
 
+            // Add to library
             await setDoc(libDocRef, formattedAnime);
             
-            // --- NEW: Generate Notification ---
-            const notifRef = doc(collection(db, "users", auth.currentUser.uid, "notifications"));
-            await setDoc(notifRef, {
-                id: notifRef.id,
+            // Push "Added" notification
+            await addDoc(notifRef, {
                 type: 'library',
-                title: 'Added to Library',
-                message: `You added ${rawData.title} to your library.`,
+                title: 'Library Updated',
+                message: `You added ${rawData.title} to your library!`,
                 image: rawData.finalImage,
                 timestamp: Date.now()
             });
@@ -387,160 +411,5 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
     } catch (error) { 
         console.error("Firebase update failed:", error); 
         if (window.app.showCustomAlert) window.app.showCustomAlert("Failed to sync with cloud.", "error");
-    }
-};
-
-
-// --- DYNAMIC SHARE OVERLAY & LOGIC ---
-window.app.shareAnime = async (exactId, title) => {
-    // 1. Turn Share Button Orange
-    const shareBtn = document.getElementById('carousel-share-btn');
-    if (shareBtn) {
-        shareBtn.classList.remove('bg-white/10', 'border-white/10');
-        shareBtn.classList.add('bg-[#F47521]', 'border-[#F47521]', 'shadow-[0_0_15px_rgba(244,117,33,0.3)]');
-    }
-
-    // 2. Inject Overlay HTML if not exists
-    if (!document.getElementById('share-overlay')) {
-        const overlayHtml = `
-            <div id="share-overlay-backdrop" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] opacity-0 transition-opacity hidden" onclick="window.app.closeShareOverlay()"></div>
-            <div id="share-overlay" class="fixed bottom-0 left-0 w-full h-[50vh] bg-[#0a0a0a] rounded-t-3xl z-[101] transform translate-y-full transition-transform duration-300 flex flex-col pt-3 pb-6 px-4 shadow-[0_-10px_40px_rgba(0,0,0,0.8)] border-t border-white/10">
-                
-                <!-- Handle -->
-                <div class="w-12 h-1.5 bg-gray-600 rounded-full mx-auto mb-4 cursor-pointer" onclick="window.app.closeShareOverlay()"></div>
-                
-                <h3 class="text-white font-bold text-lg mb-3 tracking-wide">Share <span class="text-[#F47521]">${title}</span></h3>
-
-                <!-- Search Bar -->
-                <div class="flex gap-2 mb-4">
-                    <input type="text" id="share-chat-search" oninput="window.app.searchShareChats(this.value)" placeholder="Search chats..." class="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#F47521] transition-colors placeholder-gray-500">
-                    <button onclick="window.app.searchShareChats(document.getElementById('share-chat-search').value)" class="bg-[#F47521] text-white px-5 rounded-xl transition-transform hover:scale-105"><i class="fas fa-search"></i></button>
-                </div>
-
-                <!-- Chats List -->
-                <div id="share-chats-list" class="flex-1 overflow-y-auto flex flex-col gap-1 mb-4 scrollbar-hide border border-white/5 rounded-xl bg-black/50 p-2">
-                    <div class="flex justify-center py-6"><i class="fas fa-spinner fa-spin text-[#F47521] text-xl"></i></div>
-                </div>
-
-                <!-- Socials Row -->
-                <div class="pt-2 flex justify-between items-center px-1">
-                    <button id="share-copy-btn" class="flex flex-col items-center gap-2 group transition-transform hover:scale-105"><div class="w-12 h-12 rounded-full bg-white/10 border border-white/10 flex items-center justify-center group-hover:bg-white/20"><i class="fas fa-link text-white text-lg"></i></div><span class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Copy</span></button>
-                    <button id="share-whatsapp-btn" class="flex flex-col items-center gap-2 group transition-transform hover:scale-105"><div class="w-12 h-12 rounded-full bg-[#25D366] flex items-center justify-center"><i class="fab fa-whatsapp text-white text-xl"></i></div><span class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">WhatsApp</span></button>
-                    <button id="share-x-btn" class="flex flex-col items-center gap-2 group transition-transform hover:scale-105"><div class="w-12 h-12 rounded-full bg-black border border-gray-700 flex items-center justify-center"><i class="fab fa-x-twitter text-white text-lg"></i></div><span class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">X</span></button>
-                    <button id="share-telegram-btn" class="flex flex-col items-center gap-2 group transition-transform hover:scale-105"><div class="w-12 h-12 rounded-full bg-[#0088cc] flex items-center justify-center"><i class="fab fa-telegram-plane text-white text-xl"></i></div><span class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Telegram</span></button>
-                    <button id="share-ig-btn" class="flex flex-col items-center gap-2 group transition-transform hover:scale-105"><div class="w-12 h-12 rounded-full bg-gradient-to-tr from-[#f09433] to-[#bc1888] flex items-center justify-center"><i class="fab fa-instagram text-white text-xl"></i></div><span class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Instagram</span></button>
-                </div>
-            </div>
-        `;
-        document.body.insertAdjacentHTML('beforeend', overlayHtml);
-    }
-
-    // 3. Setup Social Buttons logic
-    const shareUrl = `${window.location.origin}/info.html?id=${exactId}`;
-    const shareText = `Check out ${title} on Blaze-X!`;
-    
-    document.getElementById('share-copy-btn').onclick = () => {
-        navigator.clipboard.writeText(shareUrl);
-        if (window.app.showCustomAlert) window.app.showCustomAlert('Link copied to clipboard!', 'success');
-    };
-    document.getElementById('share-whatsapp-btn').onclick = () => window.open(`https://wa.me/?text=${encodeURIComponent(shareText + ' ' + shareUrl)}`);
-    document.getElementById('share-x-btn').onclick = () => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`);
-    document.getElementById('share-telegram-btn').onclick = () => window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`);
-    document.getElementById('share-ig-btn').onclick = () => {
-        navigator.clipboard.writeText(shareUrl);
-        if (window.app.showCustomAlert) window.app.showCustomAlert('Link copied! Open Instagram to paste.', 'success');
-        setTimeout(() => window.open('https://instagram.com'), 1200);
-    };
-
-    // 4. Reveal Overlay
-    const backdrop = document.getElementById('share-overlay-backdrop');
-    const overlay = document.getElementById('share-overlay');
-    backdrop.classList.remove('hidden');
-    setTimeout(() => {
-        backdrop.classList.remove('opacity-0');
-        overlay.classList.remove('translate-y-full');
-    }, 10);
-
-    // 5. Fetch Chats
-    window.app.currentShareData = { exactId, title }; // Save for searching
-    await window.app.searchShareChats(""); // Fetch initial top 5
-};
-
-window.app.searchShareChats = async (queryStr = "") => {
-    const chatsListContainer = document.getElementById('share-chats-list');
-    
-    if (!auth || !auth.currentUser || auth.currentUser.isAnonymous) {
-        chatsListContainer.innerHTML = '<div class="text-center text-xs font-bold text-gray-500 py-8 uppercase tracking-widest">Login to view chats</div>';
-        return;
-    }
-
-    try {
-        await initFirebase();
-        const { collection, getDocs, query, limit } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-        
-        // If there's no query, just fetch a limit of 5. If searching, fetch all and filter client side.
-        const chatRef = collection(db, "users", auth.currentUser.uid, "chat_lists");
-        const q = queryStr.trim() === "" ? query(chatRef, limit(5)) : query(chatRef);
-        const snap = await getDocs(q);
-
-        if (snap.empty) {
-            chatsListContainer.innerHTML = '<div class="text-center text-xs text-gray-500 font-bold py-8 uppercase tracking-widest">No recent chats found</div>';
-            return;
-        }
-
-        let chatHtml = '';
-        snap.forEach(doc => {
-            const data = doc.data();
-            const name = data.name || data.participantName || data.username || 'Unknown User';
-            
-            // Client side filter
-            if (name.toLowerCase().includes(queryStr.toLowerCase())) {
-                const avatar = data.avatar || data.participantAvatar || data.profilePic || 'https://via.placeholder.com/150/111/fff?text=User';
-                const safeTitle = (window.app.currentShareData.title || '').replace(/'/g, "\\'");
-                
-                chatHtml += `
-                    <div class="flex items-center gap-3 p-2.5 hover:bg-white/10 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-white/5" onclick="window.app.sendShareToChat('${doc.id}', '${window.app.currentShareData.exactId}', '${safeTitle}')">
-                        <img src="${avatar}" class="w-10 h-10 rounded-full object-cover shadow-md border border-white/10">
-                        <span class="text-sm font-bold flex-1 text-white truncate tracking-wide">${name}</span>
-                        <button class="text-[10px] bg-white/10 text-white border border-white/20 px-4 py-1.5 rounded font-black tracking-widest uppercase hover:bg-[#F47521] hover:border-[#F47521] transition-colors shadow-lg">Send</button>
-                    </div>
-                `;
-            }
-        });
-
-        if (chatHtml === '') {
-            chatsListContainer.innerHTML = '<div class="text-center text-xs text-gray-500 font-bold py-8 uppercase tracking-widest">No matches found</div>';
-        } else {
-            chatsListContainer.innerHTML = chatHtml;
-        }
-    } catch (err) {
-        console.error("Error loading share chats", err);
-        chatsListContainer.innerHTML = '<div class="text-center text-xs text-red-500 font-bold py-8 uppercase tracking-widest">Error loading chats</div>';
-    }
-};
-
-window.app.sendShareToChat = (chatId, exactId, title) => {
-    // Note: Add your actual database messaging logic here
-    if (window.app.showCustomAlert) {
-        window.app.showCustomAlert(`Sent ${title} to chat!`, 'success');
-    }
-    window.app.closeShareOverlay();
-};
-
-window.app.closeShareOverlay = () => {
-    const backdrop = document.getElementById('share-overlay-backdrop');
-    const overlay = document.getElementById('share-overlay');
-    
-    if (overlay) overlay.classList.add('translate-y-full');
-    if (backdrop) {
-        backdrop.classList.add('opacity-0');
-        setTimeout(() => backdrop.classList.add('hidden'), 300);
-    }
-    
-    // Reset Share Button UI
-    const shareBtn = document.getElementById('carousel-share-btn');
-    if (shareBtn) {
-        shareBtn.classList.remove('bg-[#F47521]', 'border-[#F47521]', 'shadow-[0_0_15px_rgba(244,117,33,0.3)]');
-        shareBtn.classList.add('bg-white/10', 'border-white/10');
     }
 };
