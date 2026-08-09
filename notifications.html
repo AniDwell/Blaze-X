@@ -11,25 +11,69 @@
 
     <style>
         body { background-color: #000; color: #fff; font-family: sans-serif; }
+        
         /* Hide scrollbar for category pills */
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Custom Modal CSS */
+        .modal-overlay {
+            visibility: hidden; 
+            opacity: 0; 
+            transition: all 0.3s ease;
+        }
+        .modal-overlay.active {
+            visibility: visible; 
+            opacity: 1;
+        }
+
+        /* Custom Toast Alert CSS */
+        .toast {
+            transform: translateY(150%); 
+            opacity: 0; 
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+        .toast.active {
+            transform: translateY(0); 
+            opacity: 1;
+        }
+
+        /* Custom Select Arrow styling */
+        select {
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 0.5rem center;
+            background-size: 1em;
+            padding-right: 2.5rem;
+        }
     </style>
 </head>
-<body class="bg-black text-white min-h-screen pb-10"> <!-- Reduced pb-24 to pb-10 since there is no bottom nav -->
+<body class="bg-black text-white min-h-screen pb-10">
 
-    <!-- Header Container -->
-    <div id="header-container"></div>
-
-    <main class="container mx-auto px-4 pt-24 max-w-3xl relative">
-        <!-- Back Button -->
-        <div class="flex items-center mb-6">
-            <button onclick="window.history.back()" class="group text-gray-400 hover:text-[#F47521] transition-colors flex items-center gap-2 font-bold uppercase tracking-wider text-sm">
-                <div class="w-8 h-8 rounded-full bg-white/5 border border-white/10 group-hover:border-[#F47521]/50 flex items-center justify-center transition-all">
-                    <i class="fas fa-arrow-left"></i>
-                </div>
-                Back
+    <main class="container mx-auto px-4 pt-6 max-w-3xl relative">
+        
+        <!-- Controls Row: Back Button, Sort, & Clear All -->
+        <div class="flex justify-between items-center mb-6">
+            
+            <!-- Back Button -->
+            <button onclick="history.back()" class="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors">
+                <i class="fas fa-arrow-left"></i>
             </button>
+
+            <div class="flex items-center gap-3">
+                <!-- Sorting Filter -->
+                <select id="sort-select" onchange="window.app.setSort(this.value)" class="bg-[#111] border border-white/10 text-xs font-bold text-gray-300 rounded-lg pl-3 pr-8 py-2.5 outline-none hover:border-white/20 transition-colors appearance-none cursor-pointer uppercase tracking-wider">
+                    <option value="date-desc">Newest First</option>
+                    <option value="date-asc">Oldest First</option>
+                    <option value="alpha-asc">A-Z</option>
+                    <option value="alpha-desc">Z-A</option>
+                </select>
+
+                <!-- Grey Clear All Button -->
+                <button onclick="window.app.openClearAllModal()" class="text-xs font-bold text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 px-4 py-2.5 rounded-lg transition-colors uppercase tracking-wider flex items-center gap-2">
+                    <i class="fas fa-trash-alt"></i> Clear
+                </button>
+            </div>
         </div>
 
         <!-- Category Pills -->
@@ -49,21 +93,39 @@
         </div>
     </main>
 
-    <!-- External Components (Bottom nav removed) -->
-    <script src="header.js"></script>
+    <!-- Custom Toast Alert -->
+    <div id="toast-message" class="toast fixed bottom-8 left-1/2 -translate-x-1/2 bg-gray-900 border border-white/10 text-white px-5 py-3 rounded-xl shadow-2xl z-50 flex items-center gap-3 w-max max-w-[90vw]">
+        <i class="fas fa-info-circle text-[#F47521] text-lg"></i>
+        <span id="toast-text" class="text-sm font-medium tracking-wide"></span>
+    </div>
+
+    <!-- Custom Confirmation Modal -->
+    <div id="confirm-modal" class="modal-overlay fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex justify-center items-center px-4">
+        <div class="bg-[#0a0a0a] border border-white/10 rounded-2xl p-6 w-full max-w-sm text-center shadow-2xl transform transition-transform duration-300 scale-95" id="modal-content">
+            <div class="w-14 h-14 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/5">
+                <i class="fas fa-exclamation-triangle text-xl text-gray-400"></i>
+            </div>
+            <h3 class="text-lg font-bold mb-2 tracking-wide">Clear Notifications?</h3>
+            <p class="text-gray-400 text-sm mb-6 leading-relaxed">Are you sure you want to delete all visible notifications? This action cannot be undone.</p>
+            <div class="flex gap-3">
+                <button onclick="window.app.closeModal()" class="flex-1 px-4 py-2.5 rounded-xl bg-white/5 text-white text-sm font-bold tracking-wider hover:bg-white/10 transition">CANCEL</button>
+                <button onclick="window.app.confirmClearAll()" class="flex-1 px-4 py-2.5 rounded-xl bg-gray-800 text-white text-sm font-bold tracking-wider hover:bg-gray-700 transition">CLEAR ALL</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Firebase & Logic -->
     <script type="module">
         import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js';
         import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js';
-        import { getFirestore, collection, onSnapshot, query, orderBy, deleteDoc, doc } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js';
+        import { getFirestore, collection, onSnapshot, query, deleteDoc, doc, writeBatch } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js';
 
         window.app = window.app || {};
         window.app.state = window.app.state || {};
         window.app.state.allNotifications = [];
         window.app.state.currentFilter = 'all';
+        window.app.state.currentSort = 'date-desc'; // Default Sort
 
-        // Firebase Config
         const firebaseConfig = {
             apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
             authDomain: "blaze-x-db2f5.firebaseapp.com",
@@ -77,16 +139,62 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
+        // --- CUSTOM UI TOOLS ---
+        let toastTimeout;
+        window.app.showToast = (msg) => {
+            const toast = document.getElementById('toast-message');
+            document.getElementById('toast-text').innerText = msg;
+            toast.classList.add('active');
+            
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('active');
+            }, 3000);
+        };
+
+        window.app.openClearAllModal = () => {
+            const modal = document.getElementById('confirm-modal');
+            const content = document.getElementById('modal-content');
+            modal.classList.add('active');
+            content.classList.remove('scale-95');
+            content.classList.add('scale-100');
+        };
+
+        window.app.closeModal = () => {
+            const modal = document.getElementById('confirm-modal');
+            const content = document.getElementById('modal-content');
+            modal.classList.remove('active');
+            content.classList.remove('scale-100');
+            content.classList.add('scale-95');
+        };
+
         // --- RENDER NOTIFICATIONS ---
         window.app.renderNotifications = () => {
             const feed = document.getElementById('notifications-feed');
             
-            // Filter Data
-            const filteredData = window.app.state.currentFilter === 'all' 
-                ? window.app.state.allNotifications 
+            // 1. Filter Data
+            let processedData = window.app.state.currentFilter === 'all' 
+                ? [...window.app.state.allNotifications] 
                 : window.app.state.allNotifications.filter(n => n.type === window.app.state.currentFilter);
 
-            if (filteredData.length === 0) {
+            // 2. Sort Data
+            processedData.sort((a, b) => {
+                const timeA = a.timestamp || 0;
+                const timeB = b.timestamp || 0;
+                const titleA = (a.title || '').toLowerCase();
+                const titleB = (b.title || '').toLowerCase();
+
+                switch (window.app.state.currentSort) {
+                    case 'date-desc': return timeB - timeA;
+                    case 'date-asc': return timeA - timeB;
+                    case 'alpha-asc': return titleA.localeCompare(titleB);
+                    case 'alpha-desc': return titleB.localeCompare(titleA);
+                    default: return 0;
+                }
+            });
+
+            // 3. Render
+            if (processedData.length === 0) {
                 feed.innerHTML = `
                     <div class="text-center py-16 text-gray-500 flex flex-col items-center">
                         <i class="fas fa-bell-slash text-4xl mb-3 opacity-50"></i>
@@ -96,7 +204,7 @@
             }
 
             let html = '';
-            filteredData.forEach(notif => {
+            processedData.forEach(notif => {
                 const imgUrl = notif.image || 'https://via.placeholder.com/150x225/111/fff?text=No+Image';
                 
                 let iconHtml = '';
@@ -106,12 +214,10 @@
 
                 html += `
                     <div class="group flex gap-4 p-3 bg-white/5 border border-white/10 hover:border-white/20 hover:bg-white/10 rounded-xl relative transition-all overflow-hidden items-center">
-                        <!-- Cover Image (Left) -->
                         <div class="shrink-0 relative">
                             <img src="${imgUrl}" alt="Cover" class="w-16 h-20 md:w-20 md:h-28 object-cover rounded shadow-lg">
                         </div>
                         
-                        <!-- Content (Right) -->
                         <div class="flex-1 min-w-0 pr-8 py-1">
                             <div class="flex items-center gap-2 mb-1">
                                 ${iconHtml}
@@ -123,7 +229,6 @@
                             <p class="text-gray-400 text-xs md:text-sm line-clamp-2 leading-relaxed">${notif.message || ''}</p>
                         </div>
 
-                        <!-- Delete Button -->
                         <button onclick="window.app.deleteNotification('${notif.id}')" class="absolute top-1/2 -translate-y-1/2 right-4 text-gray-500 hover:text-red-500 w-8 h-8 rounded-full hover:bg-red-500/10 flex items-center justify-center transition-colors">
                             <i class="fas fa-times text-lg"></i>
                         </button>
@@ -134,10 +239,9 @@
             feed.innerHTML = html;
         };
 
-        // --- FILTER LOGIC ---
+        // --- FILTER & SORT LOGIC ---
         window.app.setFilter = (type) => {
             window.app.state.currentFilter = type;
-            
             document.querySelectorAll('.category-pill').forEach(pill => {
                 if (pill.dataset.filter === type) {
                     pill.className = "category-pill whitespace-nowrap px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-[#F47521] text-white transition-all shadow-lg";
@@ -145,19 +249,53 @@
                     pill.className = "category-pill whitespace-nowrap px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-white/10 text-gray-400 hover:bg-white/20 transition-all";
                 }
             });
-
             window.app.renderNotifications();
         };
 
-        // --- DELETE SINGLE NOTIFICATION ---
+        window.app.setSort = (sortValue) => {
+            window.app.state.currentSort = sortValue;
+            window.app.renderNotifications();
+        };
+
+        // --- DELETE LOGIC ---
         window.app.deleteNotification = async (docId) => {
             const user = auth.currentUser;
             if (!user) return;
             try {
                 await deleteDoc(doc(db, "users", user.uid, "notifications", docId));
+                window.app.showToast("Notification deleted");
             } catch (err) {
-                console.error("Error deleting notification:", err);
-                alert("Failed to delete notification.");
+                console.error("Error deleting:", err);
+                window.app.showToast("Failed to delete notification");
+            }
+        };
+
+        window.app.confirmClearAll = async () => {
+            window.app.closeModal(); // Close modal immediately
+            const user = auth.currentUser;
+            if (!user) return;
+
+            try {
+                const toDelete = window.app.state.currentFilter === 'all' 
+                    ? window.app.state.allNotifications 
+                    : window.app.state.allNotifications.filter(n => n.type === window.app.state.currentFilter);
+
+                if (toDelete.length === 0) {
+                    window.app.showToast("No notifications to clear");
+                    return;
+                }
+
+                const batch = writeBatch(db);
+                toDelete.forEach(notif => {
+                    const docRef = doc(db, "users", user.uid, "notifications", notif.id);
+                    batch.delete(docRef);
+                });
+
+                await batch.commit();
+                window.app.showToast("Notifications cleared successfully");
+            } catch (err) {
+                console.error("Error clearing:", err);
+                window.app.showToast("Failed to clear notifications");
             }
         };
 
@@ -165,7 +303,8 @@
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 const notifRef = collection(db, "users", user.uid, "notifications");
-                const q = query(notifRef, orderBy("timestamp", "desc"));
+                // Fetch all and sort locally in JS to allow flexible sorting (alpha/date)
+                const q = query(notifRef);
 
                 onSnapshot(q, (snapshot) => {
                     const data = [];
@@ -176,11 +315,9 @@
                     window.app.state.allNotifications = data;
                     window.app.renderNotifications();
                 }, (error) => {
-                    console.error("Error fetching notifications:", error);
+                    console.error("Error fetching:", error);
                     document.getElementById('notifications-feed').innerHTML = `
-                        <div class="text-center py-12 text-red-500">
-                            Failed to load notifications.
-                        </div>`;
+                        <div class="text-center py-12 text-red-500 text-sm">Failed to load notifications.</div>`;
                 });
             } else {
                 document.getElementById('notifications-feed').innerHTML = `
