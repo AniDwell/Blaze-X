@@ -36,7 +36,7 @@ window.app.components.info = async () => {
         `;
 
         try {
-            const baseUrl = 'https://anikoto-api-xi.vercel.app';
+            const baseUrl = 'https://anikoto-api-lyart.vercel.app/';
             
             // 1. Fetch metadata
             const infoResponse = await fetch(`${baseUrl}/api/info?id=${animeId}`);
