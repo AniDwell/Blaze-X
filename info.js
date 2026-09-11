@@ -36,7 +36,7 @@ window.app.components.info = async () => {
         `;
 
         try {
-            const baseUrl = 'https://anikoto-api-lyart.vercel.app/';
+            const baseUrl = 'https://anikoto-api-lyart.vercel.app';
             
             // 1. Fetch metadata
             const infoResponse = await fetch(`${baseUrl}/api/info?id=${animeId}`);
@@ -153,7 +153,6 @@ window.app.components.info = async () => {
                             targetEpisodeSlug = trackObj.lastSlug || String(targetEpNum);
 
                             if (trackObj.finishedEp === true) {
-                                // If they finished the episode, recommend the next one
                                 const totalAvailableEps = episodesList.length;
                                 if (targetEpNum < totalAvailableEps) {
                                     targetEpNum += 1;
@@ -164,7 +163,6 @@ window.app.components.info = async () => {
                                     playBtnText = `Replay Last Ep`;
                                 }
                             } else {
-                                // If they are in the middle of it
                                 playBtnText = `Resume E${targetEpNum < 10 ? '0' + targetEpNum : targetEpNum}`;
                             }
                         }
@@ -202,9 +200,8 @@ function renderAnimeInfoShell() {
     if (ani && ani.genres) genresStr = ani.genres.join(' • ');
     else if (raw && raw.genres) genresStr = Array.isArray(raw.genres) ? raw.genres.join(' • ') : raw.genres;
 
-    // CHANGED: Let variable and override check for episodes
     let isUpcoming = (raw?.status && raw.status.toString().toLowerCase().includes('upcoming')) || 
-                       (ani?.status && ani.status.toString().toLowerCase().includes('not_yet_released'));
+                     (ani?.status && ani.status.toString().toLowerCase().includes('not_yet_released'));
 
     if (data.episodes && data.episodes.length > 0) {
         isUpcoming = false;
@@ -279,7 +276,7 @@ function renderAnimeInfoShell() {
                             
                             ${libraryBtnHtml}
 
-                            <button onclick="window.app.shareAnime('${data.id}', '${data.title.replace(/'/g, "\\'")}')" class="bg-white/10 backdrop-blur-md text-white px-5 py-3.5 rounded-lg shadow-md font-bold text-xs md:text-sm uppercase tracking-wider hover:bg-blue-500 transition-colors border border-white/10 flex items-center gap-2">
+                            <button onclick="window.app.shareAnime('${data.id}', '${data.title.replace(/'/g, "\\'")}')" class="bg-white/10 backdrop-blur-md text-white px-5 py-3.5 rounded-lg shadow-md font-bold text-xs md:text-sm uppercase tracking-wider hover:bg-[#F47521] hover:text-black transition-colors border border-white/10 flex items-center gap-2">
                                 <i class="fas fa-share-nodes"></i>
                             </button>
                         </div>
@@ -323,28 +320,166 @@ function renderAnimeInfoShell() {
     setupDropdownListener();
 }
 
+// --- HALF-SCREEN SLIDE-UP SHARE MODAL WITH QR & SOCIAL CHANNELS ---
 window.app.shareAnime = (id, title) => {
-    if(window.openShareModal) {
-        window.openShareModal(id, title);
-    } else {
+    let modal = document.getElementById('blazex-share-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'blazex-share-modal';
+        document.body.appendChild(modal);
+    }
+
+    const shareUrl = `${window.location.origin}/info.html?id=${encodeURIComponent(id)}`;
+    const encodedUrl = encodeURIComponent(shareUrl);
+    const encodedText = encodeURIComponent(`Watch ${title} on AniKoto!`);
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodedUrl}&bgcolor=111111&color=ffffff&margin=1`;
+
+    modal.className = "fixed inset-0 z-50 flex items-end justify-center pointer-events-auto";
+    modal.innerHTML = `
+        <div id="share-backdrop" class="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-300 opacity-0"></div>
+        
+        <div id="share-sheet" class="relative z-10 w-full max-w-xl bg-[#111] border-t md:border border-white/10 rounded-t-3xl md:rounded-3xl p-6 shadow-2xl flex flex-col gap-5 max-h-[85vh] overflow-y-auto hide-scrollbar transform translate-y-full transition-transform duration-300 ease-out">
+            
+            <div class="w-12 h-1 bg-white/20 rounded-full mx-auto -mt-2 mb-1"></div>
+
+            <div class="flex items-center justify-between pb-2 border-b border-white/10">
+                <div>
+                    <h3 class="text-white text-base font-black tracking-wide">Share Anime</h3>
+                    <p class="text-gray-400 text-xs truncate max-w-xs md:max-w-md">${title}</p>
+                </div>
+                <button id="close-share-sheet-btn" class="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
+            </div>
+
+            <!-- QR Section -->
+            <div class="flex items-center gap-4 bg-white/5 p-3.5 rounded-2xl border border-white/5">
+                <div class="w-24 h-24 bg-[#0a0a0a] rounded-xl p-1.5 border border-white/10 flex items-center justify-center shrink-0 shadow-inner">
+                    <img src="${qrCodeUrl}" alt="QR Code" class="w-full h-full rounded-lg object-contain">
+                </div>
+                <div class="flex flex-col justify-center">
+                    <span class="text-[#F47521] text-[10px] font-black uppercase tracking-widest mb-1"><i class="fas fa-qrcode mr-1"></i> Scan to Watch</span>
+                    <p class="text-gray-300 text-xs leading-relaxed">Point your mobile camera at this code to quickly jump directly to this anime.</p>
+                </div>
+            </div>
+
+            <!-- Direct Link Copy Input -->
+            <div class="flex items-center gap-2 bg-[#050505] border border-white/10 rounded-xl p-1.5 pl-3">
+                <input type="text" id="share-link-input" readonly value="${shareUrl}" class="bg-transparent text-xs text-gray-300 flex-1 outline-none font-mono select-all">
+                <button id="copy-share-btn" class="bg-[#F47521] text-black font-black text-xs px-4 py-2 rounded-lg hover:bg-white transition-colors flex items-center gap-1.5 shrink-0">
+                    <i class="fas fa-copy"></i> Copy
+                </button>
+            </div>
+
+            <!-- Social Apps Matrix -->
+            <div class="flex flex-col gap-2">
+                <span class="text-gray-400 text-[10px] font-black uppercase tracking-wider">Direct Social Share</span>
+                <div class="grid grid-cols-4 sm:grid-cols-5 gap-2 text-center">
+                    
+                    <a href="https://api.whatsapp.com/send?text=${encodedText}%20${encodedUrl}" target="_blank" rel="noopener noreferrer" class="flex flex-col items-center gap-1 p-2.5 rounded-xl bg-white/5 hover:bg-[#25D366]/20 border border-white/5 transition-colors group">
+                        <div class="w-10 h-10 rounded-full bg-[#25D366] text-white flex items-center justify-center text-lg shadow-md group-hover:scale-110 transition-transform">
+                            <i class="fab fa-whatsapp"></i>
+                        </div>
+                        <span class="text-[10px] font-bold text-gray-300">WhatsApp</span>
+                    </a>
+
+                    <a href="https://t.me/share/url?url=${encodedUrl}&text=${encodedText}" target="_blank" rel="noopener noreferrer" class="flex flex-col items-center gap-1 p-2.5 rounded-xl bg-white/5 hover:bg-[#0088cc]/20 border border-white/5 transition-colors group">
+                        <div class="w-10 h-10 rounded-full bg-[#0088cc] text-white flex items-center justify-center text-lg shadow-md group-hover:scale-110 transition-transform">
+                            <i class="fab fa-telegram-plane"></i>
+                        </div>
+                        <span class="text-[10px] font-bold text-gray-300">Telegram</span>
+                    </a>
+
+                    <a href="https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}" target="_blank" rel="noopener noreferrer" class="flex flex-col items-center gap-1 p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 transition-colors group">
+                        <div class="w-10 h-10 rounded-full bg-black border border-white/20 text-white flex items-center justify-center text-lg shadow-md group-hover:scale-110 transition-transform">
+                            <i class="fab fa-x-twitter"></i>
+                        </div>
+                        <span class="text-[10px] font-bold text-gray-300">X (Twitter)</span>
+                    </a>
+
+                    <a href="https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}" target="_blank" rel="noopener noreferrer" class="flex flex-col items-center gap-1 p-2.5 rounded-xl bg-white/5 hover:bg-[#1877f2]/20 border border-white/5 transition-colors group">
+                        <div class="w-10 h-10 rounded-full bg-[#1877f2] text-white flex items-center justify-center text-lg shadow-md group-hover:scale-110 transition-transform">
+                            <i class="fab fa-facebook-f"></i>
+                        </div>
+                        <span class="text-[10px] font-bold text-gray-300">Facebook</span>
+                    </a>
+
+                    <a href="https://reddit.com/submit?url=${encodedUrl}&title=${encodedText}" target="_blank" rel="noopener noreferrer" class="flex flex-col items-center gap-1 p-2.5 rounded-xl bg-white/5 hover:bg-[#ff4500]/20 border border-white/5 transition-colors group col-span-4 sm:col-span-1">
+                        <div class="w-10 h-10 rounded-full bg-[#ff4500] text-white flex items-center justify-center text-lg shadow-md group-hover:scale-110 transition-transform">
+                            <i class="fab fa-reddit-alien"></i>
+                        </div>
+                        <span class="text-[10px] font-bold text-gray-300">Reddit</span>
+                    </a>
+
+                </div>
+            </div>
+
+            <!-- Native OS Share Tray Button -->
+            <button id="native-share-trigger" class="w-full bg-white/10 border border-white/10 hover:bg-[#F47521] hover:text-black text-white font-black text-xs py-3 rounded-xl uppercase tracking-wider transition-colors flex items-center justify-center gap-2">
+                <i class="fas fa-share-alt"></i> Share Via System Menu
+            </button>
+
+        </div>
+    `;
+
+    const sheet = document.getElementById('share-sheet');
+    const backdrop = document.getElementById('share-backdrop');
+
+    requestAnimationFrame(() => {
+        backdrop.classList.remove('opacity-0');
+        backdrop.classList.add('opacity-100');
+        sheet.classList.remove('translate-y-full');
+        sheet.classList.add('translate-y-0');
+    });
+
+    const closeSheet = () => {
+        backdrop.classList.remove('opacity-100');
+        backdrop.classList.add('opacity-0');
+        sheet.classList.remove('translate-y-0');
+        sheet.classList.add('translate-y-full');
+        setTimeout(() => {
+            modal.className = "hidden";
+            modal.innerHTML = "";
+        }, 300);
+    };
+
+    document.getElementById('close-share-sheet-btn').onclick = closeSheet;
+    backdrop.onclick = closeSheet;
+
+    document.getElementById('copy-share-btn').onclick = () => {
+        navigator.clipboard.writeText(shareUrl).then(() => {
+            const copyBtn = document.getElementById('copy-share-btn');
+            copyBtn.innerHTML = `<i class="fas fa-check"></i> Copied!`;
+            copyBtn.className = "bg-green-500 text-black font-black text-xs px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5 shrink-0";
+            setTimeout(() => {
+                copyBtn.innerHTML = `<i class="fas fa-copy"></i> Copy`;
+                copyBtn.className = "bg-[#F47521] text-black font-black text-xs px-4 py-2 rounded-lg hover:bg-white transition-colors flex items-center gap-1.5 shrink-0";
+            }, 2000);
+            if (window.app.showCustomAlert) window.app.showCustomAlert("Link copied to clipboard!", "success");
+        }).catch(() => {
+            const input = document.getElementById('share-link-input');
+            input.select();
+            document.execCommand('copy');
+        });
+    };
+
+    document.getElementById('native-share-trigger').onclick = () => {
         if (navigator.share) {
             navigator.share({
                 title: `Watch ${title}`,
                 text: `Check out ${title} on AniKoto!`,
-                url: `${window.location.origin}/info.html?id=${id}`
+                url: shareUrl
             }).catch(console.error);
         } else {
-            navigator.clipboard.writeText(`${window.location.origin}/info.html?id=${id}`);
-            if(window.app.showCustomAlert) window.app.showCustomAlert("Link copied to clipboard!", "success");
+            document.getElementById('copy-share-btn').click();
         }
-    }
+    };
 };
 
 // --- DYNAMIC LIBRARY TOGGLE LOGIC ---
 window.app.toggleLibrary = async (event, id, title, img) => {
     const profile = window.app.state?.activeProfile || null;
     
-    // Auth Check
     if (!profile || !profile.uid || profile.uid.startsWith('anon_')) {
         if (window.app.components && window.app.components.auth) window.app.components.auth();
         else if (window.app.showCustomAlert) window.app.showCustomAlert("Please log in to save to your Library!", "error");
@@ -365,7 +500,6 @@ window.app.toggleLibrary = async (event, id, title, img) => {
         const libDocRef = firestore.doc(window.app.db, "users", profile.uid, "library", docIdStr);
 
         if (isCurrentlyAdded) {
-            // Remove from local memory
             profile.library.splice(existingItemIndex, 1);
             localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
 
@@ -374,11 +508,9 @@ window.app.toggleLibrary = async (event, id, title, img) => {
                 btn.innerHTML = `<i class="fas fa-plus"></i> Library`;
             }
 
-            // Sync with Firestore Subcollection
             await firestore.deleteDoc(libDocRef);
             if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
         } else {
-            // Add to local memory
             profile.library.unshift(formattedAnime);
             localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
 
@@ -387,7 +519,6 @@ window.app.toggleLibrary = async (event, id, title, img) => {
                 btn.innerHTML = `<i class="fas fa-check text-green-500"></i> Added`;
             }
 
-            // Sync with Firestore Subcollection
             await firestore.setDoc(libDocRef, formattedAnime);
             if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
         }
@@ -417,7 +548,7 @@ async function injectVerifiedAlternativePills() {
     const containerBox = document.getElementById('verified-relations-pill-box');
     if (!slider || !data.relations || data.relations.length === 0) return;
 
-    const baseUrl = 'https://anikoto-api-xi.vercel.app';
+    const baseUrl = 'https://anikoto-api-lyart.vercel.app';
     let validPillsCount = 0;
 
     for (const rel of data.relations) {
@@ -619,7 +750,6 @@ window.app.switchMetaContentTab = (metaTarget) => {
     window.app.components.informationtab();
 };
 
-
 // ============================================================================
 // --- EMBEDDED COMPONENT SUB-MODULE 2: EPISODES MATRIX VIEW LAYOUT ENGINE ----
 // ============================================================================
@@ -631,9 +761,8 @@ window.app.components.episodestab = () => {
     const ani = data.aniList;
     const raw = data.rawPayload;
 
-    // CHANGED: Let variable and override check for episodes
     let isUpcoming = (raw?.status && raw.status.toString().toLowerCase().includes('upcoming')) || 
-                       (ani?.status && ani.status.toString().toLowerCase().includes('not_yet_released'));
+                     (ani?.status && ani.status.toString().toLowerCase().includes('not_yet_released'));
 
     if (data.episodes && data.episodes.length > 0) {
         isUpcoming = false;
@@ -833,7 +962,7 @@ window.app.renderNumericEpisodeGrid = () => {
 
 window.app.resolveEpisodeStreamAndRoute = async (episodeSlug, episodeNumber, animeId) => {
     try {
-        const baseUrl = 'https://anikoto-api-xi.vercel.app';
+        const baseUrl = 'https://anikoto-api-lyart.vercel.app';
         const targetServer = 'hd-1';
         const targetType = window.app.state.activeLanguageType || 'sub';
 
@@ -842,13 +971,15 @@ window.app.resolveEpisodeStreamAndRoute = async (episodeSlug, episodeNumber, ani
         const json = await response.json();
 
         let verifiedStreamData = null;
-        if (json && json.success && json.results?.streamingLink) {
-            verifiedStreamData = json.results;
+        if (json && json.success && (json.data?.m3u8 || json.results?.streamingLink)) {
+            verifiedStreamData = json.data || json.results;
         } else {
             const fallbackUrl = `${baseUrl}/api/stream/fallback?id=${encodeURIComponent(episodeSlug)}&server=${targetServer}&type=${targetType}`;
             const fbResponse = await fetch(fallbackUrl);
             const fbJson = await fbResponse.json();
-            if (fbJson && fbJson.success && fbJson.results?.streamingLink) verifiedStreamData = fbJson.results;
+            if (fbJson && fbJson.success && (fbJson.data?.m3u8 || fbJson.results?.streamingLink)) {
+                verifiedStreamData = fbJson.data || fbJson.results;
+            }
         }
 
         if (!verifiedStreamData) {
@@ -879,7 +1010,7 @@ window.app.resolveEpisodeStreamAndRoute = async (episodeSlug, episodeNumber, ani
             localStorage.setItem(`blazex_progress_${profile.uid}_${animeId}`, JSON.stringify(mockProgressHistory));
         }
 
-        window.location.href = `play.html?id=${encodeURIComponent(episodeSlug)}&anime=${animeId}&ep=${episodeNumber}&type=${targetType}`;
+        window.location.href = `play.html?id=${encodeURIComponent(episodeSlug)}&anime=${animeId}&ep=${episodeNumber}&type=${targetType}&server=${targetServer}`;
     } catch (error) {
         window.location.href = `play.html?id=${encodeURIComponent(episodeSlug)}&anime=${animeId}&ep=${episodeNumber}&type=${window.app.state.activeLanguageType || 'sub'}`;
     }
