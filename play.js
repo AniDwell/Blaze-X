@@ -25,29 +25,31 @@ window.app.components.play = async () => {
         return;
     }
 
+    const baseUrl = 'https://anikoto-api-lyart.vercel.app';
     const profile = window.app.state?.activeProfile || null;
 
-    // 2. Cloud-Synced Preferences Check
+    // 2. Preferences & Auto-Skip Initialization
     let autoSkipIntro = localStorage.getItem('blazex_autoskip_intro') === 'true';
     let autoSkipOutro = localStorage.getItem('blazex_autoskip_outro') === 'true';
 
-    // Override with DB preferences if logged in
     if (profile && profile.preferences) {
         if (profile.preferences.skipIntro !== undefined) autoSkipIntro = profile.preferences.skipIntro;
         if (profile.preferences.skipOutro !== undefined) autoSkipOutro = profile.preferences.skipOutro;
         if (!currentAudioType && profile.preferences.audioType) currentAudioType = profile.preferences.audioType;
     }
     
-    // Default fallback
     if (!currentAudioType) currentAudioType = 'sub';
 
-    // 3. Initialize Core State
+    localStorage.setItem('blazex_autoskip_intro', autoSkipIntro ? 'true' : 'false');
+    localStorage.setItem('blazex_autoskip_outro', autoSkipOutro ? 'true' : 'false');
+
+    // 3. Core State
     window.app.state.epSearchValue = '';
     window.app.state.epRangeFilter = null;
     window.app.state.activeLanguageType = currentAudioType;
     window.app.state.currentPlayingEpNum = parseInt(currentEpNum);
 
-    // Watch History DB & Local Sync
+    // Watch Progress Storage Sync
     if (profile && profile.uid) {
         let mockProgressHistory = { 
             lastWatchedEp: currentEpNum, 
@@ -61,17 +63,17 @@ window.app.components.play = async () => {
                 let parsed = JSON.parse(stored);
                 parsed.lastWatchedEp = currentEpNum;
                 parsed.lastSlug = episodeId;
-                if(!parsed.watchedHistoryList) parsed.watchedHistoryList = [];
-                if(!parsed.watchedHistoryList.includes(parseInt(currentEpNum))) {
+                if (!parsed.watchedHistoryList) parsed.watchedHistoryList = [];
+                if (!parsed.watchedHistoryList.includes(parseInt(currentEpNum))) {
                     parsed.watchedHistoryList.push(parseInt(currentEpNum));
                 }
                 mockProgressHistory = parsed;
-            } catch(e){}
+            } catch (e) {}
         }
         localStorage.setItem(`blazex_progress_${profile.uid}_${animeId}`, JSON.stringify(mockProgressHistory));
     }
 
-    // 4. DYNAMIC UI SKELETON GENERATION
+    // 4. Render Shell Structure
     workspace.innerHTML = `
         <div class="w-full max-w-5xl mx-auto flex flex-col gap-6 animate-fade-in opacity-0 transition-opacity duration-300" id="play-content-wrapper">
             
@@ -84,21 +86,18 @@ window.app.components.play = async () => {
             </div>
 
             <div class="w-full flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-[#0a0a0a] p-3 rounded-lg border border-white/5 shadow-md">
-                
                 <div class="flex flex-wrap items-center gap-3">
                     <div class="flex items-center gap-2">
                         <span class="text-gray-500 text-[9px] font-black uppercase tracking-widest bg-black px-2 py-1 rounded border border-white/5">Audio</span>
-                        <div class="flex bg-[#111] p-1 border border-white/10 rounded-md text-[10px] font-black select-none tracking-wider uppercase">
-                            <button onclick="window.app.changePlayerConfig('type', 'sub')" class="px-3 py-1 rounded transition-all ${currentAudioType === 'sub' ? 'bg-[#F47521] text-black shadow-sm' : 'text-gray-400 hover:text-white'}">Sub</button>
-                            <button onclick="window.app.changePlayerConfig('type', 'dub')" class="px-3 py-1 rounded transition-all ${currentAudioType === 'dub' ? 'bg-[#F47521] text-black shadow-sm' : 'text-gray-400 hover:text-white'}">Dub</button>
+                        <div id="audio-type-pills" class="flex bg-[#111] p-1 border border-white/10 rounded-md text-[10px] font-black select-none tracking-wider uppercase gap-1">
+                            <span class="text-gray-500 text-[9px] px-2 py-1">Loading...</span>
                         </div>
                     </div>
                     
                     <div class="flex items-center gap-2">
                         <span class="text-gray-500 text-[9px] font-black uppercase tracking-widest bg-black px-2 py-1 rounded border border-white/5">Server</span>
-                        <div class="flex bg-[#111] p-1 border border-white/10 rounded-md text-[10px] font-black select-none tracking-wider uppercase">
-                            <button onclick="window.app.changePlayerConfig('server', 'hd-1')" class="px-3 py-1 rounded transition-all ${currentServer === 'hd-1' ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-white'}">HD-1</button>
-                            <button onclick="window.app.changePlayerConfig('server', 'hd-2')" class="px-3 py-1 rounded transition-all ${currentServer === 'hd-2' ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-white'}">HD-2</button>
+                        <div id="server-type-pills" class="flex flex-wrap bg-[#111] p-1 border border-white/10 rounded-md text-[10px] font-black select-none tracking-wider uppercase gap-1">
+                            <span class="text-gray-500 text-[9px] px-2 py-1">Loading...</span>
                         </div>
                     </div>
                 </div>
@@ -122,7 +121,6 @@ window.app.components.play = async () => {
             </div>
 
             <div class="flex flex-col md:flex-row items-start md:items-start justify-between gap-6 py-2 pb-6 relative">
-                
                 <div class="flex-1 flex gap-4 w-full">
                     <div class="w-20 md:w-28 flex-shrink-0 rounded-lg overflow-hidden shadow-md border border-white/10 hidden sm:block bg-[#111]">
                         <img id="play-anime-poster" src="https://via.placeholder.com/200x300/111/fff?text=..." class="w-full h-full object-cover aspect-[2/3] animate-pulse">
@@ -153,7 +151,7 @@ window.app.components.play = async () => {
                         <i class="fas fa-comment-alt group-hover:scale-110 transition-transform"></i> 
                         <span id="comment-count-display">Discuss</span>
                     </button>
-                    <button onclick="window.app.shareAnime('${animeId}', document.getElementById('current-anime-title').innerText)" class="flex items-center justify-center gap-2 bg-white/10 text-white hover:bg-blue-500 border border-white/10 px-4 py-2 rounded-lg transition-colors text-xs font-black uppercase tracking-wider shadow-sm group">
+                    <button onclick="window.app.shareAnime('${animeId}', document.getElementById('current-anime-title').innerText)" class="flex items-center justify-center gap-2 bg-white/10 text-white hover:bg-[#F47521] hover:text-black border border-white/10 px-4 py-2 rounded-lg transition-colors text-xs font-black uppercase tracking-wider shadow-sm group">
                         <i class="fas fa-share-nodes group-hover:scale-110 transition-transform"></i>
                     </button>
                 </div>
@@ -189,41 +187,48 @@ window.app.components.play = async () => {
         </div>
     `;
 
-    // Apply custom styling dynamically for toggles & smooth spin
-    const style = document.createElement('style');
-    style.innerHTML = `
-        input:checked + .toggle-bg { background-color: #F47521; border-color: #F47521; }
-        input:checked + .toggle-bg .toggle-dot { transform: translateX(14px); background-color: black; }
-        .animate-spin-slow { animation: spin 4s linear infinite; }
-    `;
-    document.head.appendChild(style);
+    if (!document.getElementById('blazex-play-inline-css')) {
+        const style = document.createElement('style');
+        style.id = 'blazex-play-inline-css';
+        style.innerHTML = `
+            input:checked + .toggle-bg { background-color: #F47521; border-color: #F47521; }
+            input:checked + .toggle-bg .toggle-dot { transform: translateX(14px); background-color: black; }
+            .animate-spin-slow { animation: spin 4s linear infinite; }
+        `;
+        document.head.appendChild(style);
+    }
 
     setTimeout(() => {
         const wrapper = document.getElementById('play-content-wrapper');
         if (wrapper) wrapper.classList.remove('opacity-0');
     }, 10);
 
-    // 5. FETCH ANIME DATA, SCHEDULE & EPISODES (Optimized Parallel Fetching)
+    // 5. Parallel Server Discovery & Catalog Mapping
     try {
-        const baseUrl = 'https://anikoto-api-xi.vercel.app';
         let episodesList = [];
         let baseAnime = {};
         let aniData = {};
+        let rawServersData = [];
 
-        // Parallel execution for faster load times
-        const [infoRes, epsRes] = await Promise.all([
+        const [infoRes, epsRes, srvRes] = await Promise.all([
             fetch(`${baseUrl}/api/info?id=${animeId}`).then(r => r.json()).catch(() => null),
-            fetch(`${baseUrl}/api/episodes/${animeId}`).then(r => r.json()).catch(() => null)
+            fetch(`${baseUrl}/api/episodes/${animeId}`).then(r => r.json()).catch(() => null),
+            fetch(`${baseUrl}/api/servers?id=${animeId}&ep=${currentEpNum}`).then(r => r.json()).catch(() => null)
         ]);
 
         if (infoRes && infoRes.success && infoRes.data) baseAnime = infoRes.data;
-        
         if (epsRes && epsRes.success) {
             if (Array.isArray(epsRes.data)) episodesList = epsRes.data;
             else if (epsRes.results && Array.isArray(epsRes.results.episodes)) episodesList = epsRes.results.episodes;
         }
+        if (srvRes && srvRes.success && Array.isArray(srvRes.data)) {
+            rawServersData = srvRes.data;
+        }
 
-        // Run AniList query asynchronously to not block the main rendering completely
+        // Render Dynamic Audio Types & Server Selectors
+        renderWorkspacePills(rawServersData, currentAudioType, currentServer);
+
+        // Fetch AniList GraphQL metadata asynchronously
         const hasValidAniId = baseAnime.anilistId && !isNaN(baseAnime.anilistId);
         const query = `query ($id: Int, $search: String) { 
             Media (id: $id, search: $search, type: ANIME) { 
@@ -240,20 +245,22 @@ window.app.components.play = async () => {
         }).then(r => r.json()).then(json => {
             aniData = json?.data?.Media || {};
             
-            // Post-load UI updates for Anilist data
             const finalTitle = baseAnime.title || aniData.title?.english || aniData.title?.romaji || animeId.replace(/-/g, ' ').toUpperCase();
             const finalDesc = (baseAnime.description || aniData.description || 'No description available.').replace(/<[^>]*>?/gm, '');
             const finalPoster = aniData.coverImage?.extraLarge || baseAnime.poster || 'https://via.placeholder.com/800x1200/111/fff?text=Poster';
 
-            document.getElementById('current-anime-title').innerText = finalTitle;
-            document.getElementById('current-anime-desc').innerText = finalDesc;
+            const titleEl = document.getElementById('current-anime-title');
+            const descEl = document.getElementById('current-anime-desc');
+            if (titleEl) titleEl.innerText = finalTitle;
+            if (descEl) descEl.innerText = finalDesc;
             
             if (finalDesc.length > 150) {
-                document.getElementById('desc-load-more-btn').classList.remove('hidden');
+                const btn = document.getElementById('desc-load-more-btn');
+                if (btn) btn.classList.remove('hidden');
             }
             
             const posterImg = document.getElementById('play-anime-poster');
-            if(posterImg) {
+            if (posterImg) {
                 posterImg.src = finalPoster;
                 posterImg.classList.remove('animate-pulse');
             }
@@ -269,9 +276,7 @@ window.app.components.play = async () => {
                 if (window.app.state.scheduleInterval) clearInterval(window.app.state.scheduleInterval);
 
                 window.app.state.scheduleInterval = setInterval(() => {
-                    const now = new Date().getTime();
-                    const distance = targetTime - now;
-
+                    const distance = targetTime - new Date().getTime();
                     if (distance < 0) {
                         clearInterval(window.app.state.scheduleInterval);
                         document.getElementById('countdown-timer-display').innerText = "AIRING NOW";
@@ -287,12 +292,10 @@ window.app.components.play = async () => {
                         `${d.toString().padStart(2, '0')}d : ${h.toString().padStart(2, '0')}h : ${m.toString().padStart(2, '0')}m : ${s.toString().padStart(2, '0')}s`;
                 }, 1000);
             }
-        }).catch(e => console.log("AniList sync bypassed."));
+        }).catch(() => {});
 
-        // Fallback title update while Anilist fetches
         document.getElementById('current-anime-title').innerText = baseAnime.title || animeId.replace(/-/g, ' ').toUpperCase();
         
-        // Set Episode Specific Title
         if (episodesList && episodesList.length > 0) {
             const currentEpObj = episodesList.find(e => (e.num || e.episode_no) == currentEpNum);
             const epTitleEl = document.getElementById('current-ep-title');
@@ -302,24 +305,20 @@ window.app.components.play = async () => {
             }
         }
 
-        // Initialize User's Reaction UI state locally
         if (profile && profile.likedAnime && profile.likedAnime.includes(animeId)) {
             window.app.handleReactionUI('like');
         } else if (profile && profile.dislikedAnime && profile.dislikedAnime.includes(animeId)) {
             window.app.handleReactionUI('dislike');
         }
 
-        // Fetch Global Community Numbers from Firestore
         window.app.fetchCommunityStats(animeId);
 
-        // Setup global episodes data state
         window.app.state.currentEpisodesListProcessed = episodesList;
         window.app.state.currentAnimePage = { id: animeId };
 
-        // Render the Episodes Grid Engine
         window.app.renderPlayEpisodesUI();
 
-        // 6. INITIALIZE EXTERNAL COMPONENTS
+        // 6. Launch Video Engine Component
         if (window.app.components.player) window.app.components.player(); 
         if (window.app.components.commentsss) window.app.components.commentsss();
 
@@ -328,25 +327,193 @@ window.app.components.play = async () => {
     }
 };
 
+function renderWorkspacePills(availableServers, currentAudioType, currentServer) {
+    const audioPills = document.getElementById('audio-type-pills');
+    const serverPills = document.getElementById('server-type-pills');
+    if (!audioPills || !serverPills) return;
+
+    const detectedTypes = availableServers.length > 0 ? [...new Set(availableServers.map(s => s.type))] : ['sub', 'dub'];
+    audioPills.innerHTML = '';
+    detectedTypes.forEach(type => {
+        const isSelected = type === currentAudioType;
+        audioPills.innerHTML += `
+            <button onclick="window.app.changePlayerConfig('type', '${type}')" class="px-3 py-1 rounded transition-all ${isSelected ? 'bg-[#F47521] text-black shadow-sm font-black' : 'text-gray-400 hover:text-white'}">
+                ${type.toUpperCase()}
+            </button>
+        `;
+    });
+
+    const activeServers = availableServers.filter(s => s.type === currentAudioType);
+    const serverList = activeServers.length > 0 ? activeServers : [
+        { serverName: 'hd-1', originalName: 'HD-1' },
+        { serverName: 'hd-2', originalName: 'HD-2' }
+    ];
+
+    serverPills.innerHTML = '';
+    serverList.forEach(srv => {
+        const isSelected = srv.serverName === currentServer;
+        serverPills.innerHTML += `
+            <button onclick="window.app.changePlayerConfig('server', '${srv.serverName}')" class="px-2.5 py-1 rounded transition-all ${isSelected ? 'bg-white text-black shadow-sm font-black' : 'text-gray-400 hover:text-white'}">
+                ${(srv.originalName || srv.serverName).toUpperCase()}
+            </button>
+        `;
+    });
+}
+
+// ==========================================
+// --- SHARE BOTTOM SHEET ENGINE ---
+// ==========================================
+
 window.app.shareAnime = (id, title) => {
-    if(window.openShareModal) {
-        window.openShareModal(id, title);
-    } else {
+    let modal = document.getElementById('blazex-share-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'blazex-share-modal';
+        document.body.appendChild(modal);
+    }
+
+    const shareUrl = `${window.location.origin}/info.html?id=${encodeURIComponent(id)}`;
+    const encodedUrl = encodeURIComponent(shareUrl);
+    const cleanTitle = (title || 'Anime').trim();
+    const encodedText = encodeURIComponent(`Watch ${cleanTitle} on AniKoto!`);
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodedUrl}&bgcolor=111111&color=ffffff&margin=1`;
+
+    modal.className = "fixed inset-0 z-50 flex items-end justify-center pointer-events-auto";
+    modal.innerHTML = `
+        <div id="share-backdrop" class="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-300 opacity-0"></div>
+        
+        <div id="share-sheet" class="relative z-10 w-full max-w-xl bg-[#111] border-t md:border border-white/10 rounded-t-3xl md:rounded-3xl p-6 shadow-2xl flex flex-col gap-5 max-h-[85vh] overflow-y-auto hide-scrollbar transform translate-y-full transition-transform duration-300 ease-out">
+            <div class="w-12 h-1 bg-white/20 rounded-full mx-auto -mt-2 mb-1"></div>
+
+            <div class="flex items-center justify-between pb-2 border-b border-white/10">
+                <div>
+                    <h3 class="text-white text-base font-black tracking-wide">Share Anime</h3>
+                    <p class="text-gray-400 text-xs truncate max-w-xs md:max-w-md">${cleanTitle}</p>
+                </div>
+                <button id="close-share-sheet-btn" class="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
+            </div>
+
+            <div class="flex items-center gap-4 bg-white/5 p-3.5 rounded-2xl border border-white/5">
+                <div class="w-24 h-24 bg-[#0a0a0a] rounded-xl p-1.5 border border-white/10 flex items-center justify-center shrink-0 shadow-inner">
+                    <img src="${qrCodeUrl}" alt="QR Code" class="w-full h-full rounded-lg object-contain">
+                </div>
+                <div class="flex flex-col justify-center">
+                    <span class="text-[#F47521] text-[10px] font-black uppercase tracking-widest mb-1"><i class="fas fa-qrcode mr-1"></i> Scan to Watch</span>
+                    <p class="text-gray-300 text-xs leading-relaxed">Point your camera at this code to quickly jump to this series.</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 bg-[#050505] border border-white/10 rounded-xl p-1.5 pl-3">
+                <input type="text" id="share-link-input" readonly value="${shareUrl}" class="bg-transparent text-xs text-gray-300 flex-1 outline-none font-mono select-all">
+                <button id="copy-share-btn" class="bg-[#F47521] text-black font-black text-xs px-4 py-2 rounded-lg hover:bg-white transition-colors flex items-center gap-1.5 shrink-0">
+                    <i class="fas fa-copy"></i> Copy
+                </button>
+            </div>
+
+            <div class="flex flex-col gap-2">
+                <span class="text-gray-400 text-[10px] font-black uppercase tracking-wider">Direct Social Share</span>
+                <div class="grid grid-cols-4 sm:grid-cols-5 gap-2 text-center">
+                    <a href="https://api.whatsapp.com/send?text=${encodedText}%20${encodedUrl}" target="_blank" rel="noopener noreferrer" class="flex flex-col items-center gap-1 p-2.5 rounded-xl bg-white/5 hover:bg-[#25D366]/20 border border-white/5 transition-colors group">
+                        <div class="w-10 h-10 rounded-full bg-[#25D366] text-white flex items-center justify-center text-lg shadow-md group-hover:scale-110 transition-transform">
+                            <i class="fab fa-whatsapp"></i>
+                        </div>
+                        <span class="text-[10px] font-bold text-gray-300">WhatsApp</span>
+                    </a>
+
+                    <a href="https://t.me/share/url?url=${encodedUrl}&text=${encodedText}" target="_blank" rel="noopener noreferrer" class="flex flex-col items-center gap-1 p-2.5 rounded-xl bg-white/5 hover:bg-[#0088cc]/20 border border-white/5 transition-colors group">
+                        <div class="w-10 h-10 rounded-full bg-[#0088cc] text-white flex items-center justify-center text-lg shadow-md group-hover:scale-110 transition-transform">
+                            <i class="fab fa-telegram-plane"></i>
+                        </div>
+                        <span class="text-[10px] font-bold text-gray-300">Telegram</span>
+                    </a>
+
+                    <a href="https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}" target="_blank" rel="noopener noreferrer" class="flex flex-col items-center gap-1 p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 transition-colors group">
+                        <div class="w-10 h-10 rounded-full bg-black border border-white/20 text-white flex items-center justify-center text-lg shadow-md group-hover:scale-110 transition-transform">
+                            <i class="fab fa-x-twitter"></i>
+                        </div>
+                        <span class="text-[10px] font-bold text-gray-300">X (Twitter)</span>
+                    </a>
+
+                    <a href="https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}" target="_blank" rel="noopener noreferrer" class="flex flex-col items-center gap-1 p-2.5 rounded-xl bg-white/5 hover:bg-[#1877f2]/20 border border-white/5 transition-colors group">
+                        <div class="w-10 h-10 rounded-full bg-[#1877f2] text-white flex items-center justify-center text-lg shadow-md group-hover:scale-110 transition-transform">
+                            <i class="fab fa-facebook-f"></i>
+                        </div>
+                        <span class="text-[10px] font-bold text-gray-300">Facebook</span>
+                    </a>
+
+                    <a href="https://reddit.com/submit?url=${encodedUrl}&title=${encodedText}" target="_blank" rel="noopener noreferrer" class="flex flex-col items-center gap-1 p-2.5 rounded-xl bg-white/5 hover:bg-[#ff4500]/20 border border-white/5 transition-colors group col-span-4 sm:col-span-1">
+                        <div class="w-10 h-10 rounded-full bg-[#ff4500] text-white flex items-center justify-center text-lg shadow-md group-hover:scale-110 transition-transform">
+                            <i class="fab fa-reddit-alien"></i>
+                        </div>
+                        <span class="text-[10px] font-bold text-gray-300">Reddit</span>
+                    </a>
+                </div>
+            </div>
+
+            <button id="native-share-trigger" class="w-full bg-white/10 border border-white/10 hover:bg-[#F47521] hover:text-black text-white font-black text-xs py-3 rounded-xl uppercase tracking-wider transition-colors flex items-center justify-center gap-2">
+                <i class="fas fa-share-alt"></i> Share Via System Menu
+            </button>
+        </div>
+    `;
+
+    const sheet = document.getElementById('share-sheet');
+    const backdrop = document.getElementById('share-backdrop');
+
+    requestAnimationFrame(() => {
+        backdrop.classList.remove('opacity-0');
+        backdrop.classList.add('opacity-100');
+        sheet.classList.remove('translate-y-full');
+        sheet.classList.add('translate-y-0');
+    });
+
+    const closeSheet = () => {
+        backdrop.classList.remove('opacity-100');
+        backdrop.classList.add('opacity-0');
+        sheet.classList.remove('translate-y-0');
+        sheet.classList.add('translate-y-full');
+        setTimeout(() => {
+            modal.className = "hidden";
+            modal.innerHTML = "";
+        }, 300);
+    };
+
+    document.getElementById('close-share-sheet-btn').onclick = closeSheet;
+    backdrop.onclick = closeSheet;
+
+    document.getElementById('copy-share-btn').onclick = () => {
+        navigator.clipboard.writeText(shareUrl).then(() => {
+            const copyBtn = document.getElementById('copy-share-btn');
+            copyBtn.innerHTML = `<i class="fas fa-check"></i> Copied!`;
+            copyBtn.className = "bg-green-500 text-black font-black text-xs px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5 shrink-0";
+            setTimeout(() => {
+                copyBtn.innerHTML = `<i class="fas fa-copy"></i> Copy`;
+                copyBtn.className = "bg-[#F47521] text-black font-black text-xs px-4 py-2 rounded-lg hover:bg-white transition-colors flex items-center gap-1.5 shrink-0";
+            }, 2000);
+            if (window.app.showCustomAlert) window.app.showCustomAlert("Link copied to clipboard!", "success");
+        }).catch(() => {
+            const input = document.getElementById('share-link-input');
+            input.select();
+            document.execCommand('copy');
+        });
+    };
+
+    document.getElementById('native-share-trigger').onclick = () => {
         if (navigator.share) {
             navigator.share({
-                title: `Watch ${title}`,
-                text: `Check out ${title} on AniKoto!`,
-                url: `${window.location.origin}/info.html?id=${id}`
+                title: `Watch ${cleanTitle}`,
+                text: `Check out ${cleanTitle} on AniKoto!`,
+                url: shareUrl
             }).catch(console.error);
         } else {
-            navigator.clipboard.writeText(`${window.location.origin}/info.html?id=${id}`);
-            if(window.app.showCustomAlert) window.app.showCustomAlert("Link copied to clipboard!", "success");
+            document.getElementById('copy-share-btn').click();
         }
-    }
+    };
 };
 
 // ==========================================
-// --- CLOUD-SYNCED PLAYER ACTIONS ---
+// --- CLOUD-SYNCED ACTIONS & CONTROLS ---
 // ==========================================
 
 window.app.resolveEpisodeStreamAndRoute = (epId, epNum, animeId) => {
@@ -369,7 +536,6 @@ window.app.togglePlayDesc = () => {
 };
 
 window.app.changePlayerConfig = (param, value) => {
-    // Save to local & cloud if audio type changes
     if (param === 'type') {
         localStorage.setItem('blazex_audio', value);
         window.app.syncPreferencesToDB({ audioType: value });
@@ -388,12 +554,14 @@ window.app.syncPreferencesToDB = async (updatesObject) => {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const userRef = firestore.doc(window.app.db, "users", profile.uid);
         
-        if(!profile.preferences) profile.preferences = {};
+        if (!profile.preferences) profile.preferences = {};
         Object.assign(profile.preferences, updatesObject);
         localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
 
         await firestore.setDoc(userRef, { preferences: updatesObject }, { merge: true });
-    } catch (error) { console.log("Silent cloud pref sync dropped."); }
+    } catch (error) {
+        console.log("Silent cloud preference sync dropped.");
+    }
 };
 
 window.app.toggleAutoSkip = (type) => {
@@ -402,6 +570,12 @@ window.app.toggleAutoSkip = (type) => {
     
     const prefKey = type === 'intro' ? 'skipIntro' : 'skipOutro';
     window.app.syncPreferencesToDB({ [prefKey]: isChecked });
+
+    // Instantly apply without requiring page refresh
+    const vid = document.getElementById('main-video-player');
+    if (vid) {
+        vid.dispatchEvent(new Event('timeupdate'));
+    }
 };
 
 // ==========================================
@@ -421,18 +595,18 @@ window.app.fetchCommunityStats = async (animeId) => {
         try {
             const commentsRef = collection(window.app.db, "comments");
             const commentsSnap = await getCountFromServer(query(commentsRef, where("animeId", "==", animeId)));
-            if(commentsSnap.data().count > 0) commentsCount = `${commentsSnap.data().count} Comments`;
-        } catch(e) {}
+            if (commentsSnap.data().count > 0) commentsCount = `${commentsSnap.data().count} Comments`;
+        } catch (e) {}
 
         const likeEl = document.getElementById('like-count-display');
         const dislikeEl = document.getElementById('dislike-count-display');
         const commentEl = document.getElementById('comment-count-display');
 
-        if(likeEl) likeEl.innerText = likesSnap.data().count || 0;
-        if(dislikeEl) dislikeEl.innerText = dislikesSnap.data().count || 0;
-        if(commentEl) commentEl.innerText = commentsCount;
+        if (likeEl) likeEl.innerText = likesSnap.data().count || 0;
+        if (dislikeEl) dislikeEl.innerText = dislikesSnap.data().count || 0;
+        if (commentEl) commentEl.innerText = commentsCount;
 
-    } catch(e) {
+    } catch (e) {
         console.log("Stats fetch skipped: Uninitialized Rules or Index empty.");
     }
 };
@@ -456,20 +630,19 @@ window.app.handleReactionUI = (type) => {
 window.app.handleReaction = async (type) => {
     const profile = window.app.state?.activeProfile || null;
     if (!profile || !profile.uid || profile.uid.startsWith('anon_')) {
-        if(window.app.components.auth) window.app.components.auth();
+        if (window.app.components.auth) window.app.components.auth();
         return;
     }
 
     const animeId = window.app.state.currentAnimePage.id;
-    if(!profile.likedAnime) profile.likedAnime = [];
-    if(!profile.dislikedAnime) profile.dislikedAnime = [];
+    if (!profile.likedAnime) profile.likedAnime = [];
+    if (!profile.dislikedAnime) profile.dislikedAnime = [];
 
     const likeNumEl = document.getElementById('like-count-display');
     const dislikeNumEl = document.getElementById('dislike-count-display');
     let currLikes = parseInt(likeNumEl.innerText) || 0;
     let currDislikes = parseInt(dislikeNumEl.innerText) || 0;
 
-    // Toggle Logic with instant UI Number Update
     if (type === 'like') {
         if (profile.likedAnime.includes(animeId)) {
             profile.likedAnime = profile.likedAnime.filter(id => id !== animeId);
@@ -502,7 +675,6 @@ window.app.handleReaction = async (type) => {
 
     localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
 
-    // Cloud Sync array mapping
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const userRef = firestore.doc(window.app.db, "users", profile.uid);
@@ -510,7 +682,9 @@ window.app.handleReaction = async (type) => {
             likedAnime: profile.likedAnime,
             dislikedAnime: profile.dislikedAnime 
         });
-    } catch (e) { console.log("Reaction sync dropped."); }
+    } catch (e) {
+        console.log("Reaction sync dropped.");
+    }
 };
 
 // ==========================================
@@ -547,7 +721,6 @@ window.app.renderPlayEpisodesUI = () => {
     mountPoint.innerHTML = `
         <div class="flex flex-col gap-4">
             <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between bg-[#111] p-2.5 rounded-xl border border-white/5">
-                
                 <div class="flex bg-black p-1 border border-white/10 rounded-lg max-w-xs md:w-44 text-[11px] font-black select-none tracking-wider uppercase h-10 shrink-0">
                     <button onclick="window.app.togglePlayGridAudio('sub')" id="play-lang-btn-sub" class="flex-1 rounded-md transition-all flex items-center justify-center gap-1 ${currentLang === 'sub' ? 'bg-[#F47521] text-black shadow-md font-black' : 'text-gray-400 hover:text-white'}">Sub</button>
                     <button onclick="window.app.togglePlayGridAudio('dub')" id="play-lang-btn-dub" class="flex-1 rounded-md transition-all flex items-center justify-center gap-1 ${currentLang === 'dub' ? 'bg-[#F47521] text-black shadow-md font-black' : 'text-gray-400 hover:text-white'}">Dub</button>
@@ -580,7 +753,7 @@ window.app.togglePlayDropdown = () => {
     const menu = document.getElementById('play-dropdown-menu');
     const icon = document.getElementById('play-dropdown-icon');
     if (!menu) return;
-    if(menu.classList.contains('hidden')) {
+    if (menu.classList.contains('hidden')) {
         menu.classList.remove('hidden');
         icon.style.transform = 'rotate(180deg)';
     } else {
@@ -647,7 +820,7 @@ window.app.renderPlayGridItems = () => {
     let localHistoryMap = null;
     if (profile && profile.uid) {
         const stored = localStorage.getItem(`blazex_progress_${profile.uid}_${animeId}`);
-        if (stored) { try { localHistoryMap = JSON.parse(stored); } catch(e){} }
+        if (stored) { try { localHistoryMap = JSON.parse(stored); } catch (e) {} }
     }
 
     let gridHtml = '';
@@ -718,10 +891,10 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// Immediately invoke play engine initialization
+// Run play engine initialization
 window.app.components.play();
 
-// Dynamically load commentsss.js at the end to ensure inline comments work
+// Dynamically load commentsss.js
 if (!document.querySelector('script[src="commentsss.js"]')) {
     const script = document.createElement('script');
     script.src = 'commentsss.js';
