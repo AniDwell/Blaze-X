@@ -1,4 +1,4 @@
-// auth.js - REBUILT WITH FIRESTORE FIXES & SCHEMA ALIGNMENT
+// auth.js - REBUILT WITH FIRESTORE PERSISTENCE & UI BRANDING
 
 // Dynamically load Cropper.js CSS and JS if not already loaded
 if (!document.getElementById('cropperjs-css')) {
@@ -13,6 +13,54 @@ if (!document.getElementById('cropperjs-css')) {
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js';
     document.head.appendChild(script);
 }
+
+// --- UPDATE GLOBAL NAVBAR PROFILE ICON ---
+window.app.updateNavProfileIcon = (photoURL) => {
+    const defaultPfp = `https://ui-avatars.com/api/?name=User&background=111&color=F47521`;
+    const targetUrl = photoURL || defaultPfp;
+
+    const navBtn = document.getElementById('nav-profile-btn') || document.querySelector('[data-auth-trigger]');
+    if (navBtn) {
+        navBtn.innerHTML = `
+            <img src="${targetUrl}" alt="Profile" class="w-8 h-8 rounded-full object-cover border border-[#F47521] shadow-sm hover:scale-105 transition-transform duration-200">
+        `;
+    }
+
+    const genericIcons = document.querySelectorAll('.nav-user-avatar');
+    genericIcons.forEach(el => {
+        el.src = targetUrl;
+    });
+};
+
+// --- AUTOMATIC PERSISTENT SESSION RESTORATION ---
+(async () => {
+    try {
+        const { getAuth, onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+        const auth = getAuth();
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                await window.app.syncProfileAfterAuth(user);
+                if (window.app.state?.activeProfile?.photoURL) {
+                    window.app.updateNavProfileIcon(window.app.state.activeProfile.photoURL);
+                }
+            } else {
+                const storedGuest = localStorage.getItem('blazex_user_profile');
+                if (storedGuest) {
+                    try {
+                        const parsed = JSON.parse(storedGuest);
+                        if (parsed.uid && parsed.uid.startsWith('anon_')) {
+                            window.app.state.activeProfile = parsed;
+                            window.app.updateNavProfileIcon(parsed.photoURL);
+                        }
+                    } catch (e) {}
+                }
+            }
+        });
+    } catch (e) {
+        console.warn("Auth state observer setup postponed until Firebase is available.");
+    }
+})();
 
 // --- CUSTOM CSS ALERT SYSTEM ---
 window.app.showCustomAlert = (message, type = 'error', actionText = null, actionCallback = null) => {
@@ -46,7 +94,7 @@ window.app.showCustomAlert = (message, type = 'error', actionText = null, action
     
     setTimeout(() => {
         const toast = document.getElementById('custom-toast-alert');
-        if(toast) {
+        if (toast) {
             toast.classList.remove('translate-y-[-20px]', 'opacity-0');
             toast.classList.add('translate-y-0', 'opacity-100');
         }
@@ -55,7 +103,7 @@ window.app.showCustomAlert = (message, type = 'error', actionText = null, action
     if (!actionText) {
         setTimeout(() => {
             const toast = document.getElementById('custom-toast-alert');
-            if(toast) {
+            if (toast) {
                 toast.classList.remove('translate-y-0', 'opacity-100');
                 toast.classList.add('translate-y-[-20px]', 'opacity-0');
                 setTimeout(() => toast.remove(), 300);
@@ -116,8 +164,9 @@ window.app.components.auth = () => {
             </button>
 
             <div class="text-center pt-10 pb-6 flex flex-col items-center justify-center">
-                <div class="flex items-center justify-center gap-3 text-2xl font-black text-white tracking-tight">
-                    Welcome to <span class="text-[#F47521]">AniKoto</span>
+                <div class="flex items-center justify-center gap-2 text-xl md:text-2xl font-black text-white tracking-tight">
+                    <span>Welcome to</span>
+                    <img src="logo.png" alt="Logo" class="h-8 md:h-9 object-contain inline-block ml-1">
                 </div>
             </div>
 
@@ -260,7 +309,7 @@ window.app.executeCropAndUpload = () => {
             });
             const data = await res.json();
             
-            if(data.success && data.data?.url) {
+            if (data.success && data.data?.url) {
                 window.app.state.authSelectedPfp = data.data.url;
                 document.getElementById('register-pfp-preview').src = data.data.url;
                 window.app.showCustomAlert('Profile picture cropped & uploaded!', 'success');
@@ -268,7 +317,7 @@ window.app.executeCropAndUpload = () => {
             } else {
                 throw new Error("ImgBB API rejected upload.");
             }
-        } catch(e) {
+        } catch (e) {
             window.app.showCustomAlert("Upload failed. Try again.", 'error');
         } finally {
             btn.innerHTML = originalBtnText;
@@ -276,7 +325,6 @@ window.app.executeCropAndUpload = () => {
         }
     }, 'image/jpeg', 0.9);
 };
-
 
 // --- UI CONTROLS ---
 window.app.closeAuthModal = () => {
@@ -316,7 +364,6 @@ window.app.switchAuthView = (view) => {
 // --- ENHANCED FIREBASE DB STRUCTURE ---
 // ==========================================
 
-// Helper to initialize Firestore safely
 const getDb = async () => {
     const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
     return window.app.db || firestore.getFirestore(); 
@@ -333,12 +380,17 @@ window.app.handleLogin = async (e) => {
         const email = document.getElementById('login-email').value;
         const password = document.getElementById('login-password').value;
 
-        const { getAuth, signInWithEmailAndPassword } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+        const { getAuth, setPersistence, browserLocalPersistence, signInWithEmailAndPassword } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
         const auth = getAuth();
         
+        await setPersistence(auth, browserLocalPersistence);
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         await window.app.syncProfileAfterAuth(userCredential.user);
         
+        if (window.app.state?.activeProfile?.photoURL) {
+            window.app.updateNavProfileIcon(window.app.state.activeProfile.photoURL);
+        }
+
         window.app.closeAuthModal();
         window.location.href = 'profile.html';
         
@@ -366,29 +418,29 @@ window.app.handleRegister = async (e) => {
         const password = document.getElementById('register-password').value;
         const pfp = window.app.state.authSelectedPfp; 
 
-        // 1. Create Auth Account
-        const { getAuth, createUserWithEmailAndPassword, updateProfile } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+        // 1. Create Auth Account with local persistence
+        const { getAuth, setPersistence, browserLocalPersistence, createUserWithEmailAndPassword, updateProfile } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
         const auth = getAuth();
+        
+        await setPersistence(auth, browserLocalPersistence);
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
-        // Update Auth Profile for Google/Auth sync
         await updateProfile(user, { displayName: name, photoURL: pfp });
 
-        // 2. Prepare Structured Profile Data aligned with Profile.html schema expectations
+        // 2. Structured Profile Payload
         const newProfile = {
             uid: user.uid,
-            username: name,       // Profile.html reads 'username' or 'displayName'
+            username: name,
             email: email,
-            photoURL: pfp,        // Profile.html reads 'photoURL'
-            hideLibrary: false,   // Profile.html toggle uses this
-            likesCount: 0,        // Tracking profile likes
-            likedByArray: [],     // Prevents multi-like bugs
+            photoURL: pfp,
+            hideLibrary: false,
+            likesCount: 0,
+            likedByArray: [],
             createdAt: new Date().toISOString()
-            // Removed library/history arrays from root. Profile.html correctly expects them as Subcollections.
         };
 
-        // 3. Create Dedicated Document inside 'users' collection
+        // 3. Persist into Firestore users collection
         try {
             const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
             const db = await getDb();
@@ -399,8 +451,8 @@ window.app.handleRegister = async (e) => {
             throw new Error("Database blocked account creation. Check Firestore Security Rules.");
         }
 
-        // 4. Update Memory State (NO LOCAL STORAGE FOR REGISTERED USERS)
         window.app.state.activeProfile = newProfile;
+        window.app.updateNavProfileIcon(pfp);
         
         window.app.closeAuthModal();
         window.location.href = 'profile.html';
@@ -418,15 +470,20 @@ window.app.handleRegister = async (e) => {
 
 window.app.handleGoogleLogin = async () => {
     try {
-        const { getAuth, signInWithPopup, GoogleAuthProvider } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+        const { getAuth, setPersistence, browserLocalPersistence, signInWithPopup, GoogleAuthProvider } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
         const auth = getAuth();
         const provider = new GoogleAuthProvider();
         
+        await setPersistence(auth, browserLocalPersistence);
         const result = await signInWithPopup(auth, provider);
         const user = result.user;
 
         await window.app.syncProfileAfterAuth(user);
         
+        if (window.app.state?.activeProfile?.photoURL) {
+            window.app.updateNavProfileIcon(window.app.state.activeProfile.photoURL);
+        }
+
         window.app.closeAuthModal();
         window.location.href = 'profile.html';
 
@@ -456,9 +513,9 @@ window.app.handleGuestCreation = (e) => {
     };
 
     window.app.state.activeProfile = guestProfile;
-    
-    // EXCEPTION: ONLY Guest mode uses localStorage
     localStorage.setItem('blazex_user_profile', JSON.stringify(guestProfile));
+
+    window.app.updateNavProfileIcon(guestProfile.photoURL);
 
     window.app.closeAuthModal();
     window.location.href = 'profile.html';
@@ -488,7 +545,7 @@ window.app.handlePasswordReset = async (e) => {
     }
 };
 
-// --- SELF-HEALING FIRESTORE SYNC ---
+// --- FIRESTORE PROFILE SYNC ---
 window.app.syncProfileAfterAuth = async (firebaseUser) => {
     try {
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
@@ -497,11 +554,8 @@ window.app.syncProfileAfterAuth = async (firebaseUser) => {
         const docSnap = await firestore.getDoc(userDocRef);
         
         if (docSnap.exists()) {
-            // User exists in DB, load into memory
             window.app.state.activeProfile = docSnap.data();
-            // NO LOCAL STORAGE HERE
         } else {
-            // FORCE RE-CREATION: Auth exists, but DB is empty
             const newProfile = {
                 uid: firebaseUser.uid,
                 username: firebaseUser.displayName || "User",
@@ -515,9 +569,8 @@ window.app.syncProfileAfterAuth = async (firebaseUser) => {
             
             await firestore.setDoc(userDocRef, newProfile);
             window.app.state.activeProfile = newProfile;
-            // NO LOCAL STORAGE HERE
         }
-    } catch(syncErr) {
+    } catch (syncErr) {
         console.error("Firestore Sync Error:", syncErr);
         throw new Error("Database sync failed. Please check Firestore Security Rules.");
     }
