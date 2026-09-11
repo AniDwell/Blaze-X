@@ -38,7 +38,7 @@ window.app.components.player = async () => {
     const urlParams = new URLSearchParams(window.location.search);
     const animeId = urlParams.get('anime'); 
     const currentEpNum = parseInt(urlParams.get('ep') || '1'); 
-    const audioType = urlParams.get('type') || 'sub';
+    let audioType = urlParams.get('type') || 'sub';
     let targetServer = urlParams.get('server') || 'hd-1';
 
     if (!animeId || !currentEpNum) {
@@ -46,10 +46,10 @@ window.app.components.player = async () => {
         return;
     }
 
-    const baseUrl = 'https://anikoto-api-xi.vercel.app';
+    const baseUrl = 'https://anikoto-api-lyart.vercel.app';
     const customProxyUrl = 'https://icy-wave-30d8.prashant-yash69.workers.dev/proxy?url='; 
 
-    // Inject Player & Expanded Subtitle CSS (Including Height Elevation Trick)
+    // Inject Player & Expanded Subtitle CSS
     if (!document.getElementById('blazex-player-css')) {
         const style = document.createElement('style');
         style.id = 'blazex-player-css';
@@ -107,29 +107,66 @@ window.app.components.player = async () => {
     }
 
     try {
-        setBootStatus(`Connecting to ${targetServer.toUpperCase()}...`);
-        
-        let streamData = null;
-        const fetchStream = async (srv) => {
+        setBootStatus("Discovering Source Streams...");
+
+        // Fetch Server List
+        let availableServers = [];
+        try {
+            const srvRes = await fetch(`${baseUrl}/api/servers?id=${animeId}&ep=${currentEpNum}`);
+            const srvJson = await srvRes.json();
+            if (srvJson.success && Array.isArray(srvJson.data)) {
+                availableServers = srvJson.data;
+            }
+        } catch (e) {
+            console.warn("Could not fetch server catalog:", e);
+        }
+
+        // Verify requested category and fallback if unavailable
+        const availableCategories = [...new Set(availableServers.map(s => s.type))];
+        if (availableCategories.length > 0 && !availableCategories.includes(audioType)) {
+            audioType = availableCategories.includes('sub') ? 'sub' : availableCategories[0];
+        }
+
+        // Validate targetServer in current category
+        const validServerNames = availableServers
+            .filter(s => s.type === audioType)
+            .map(s => s.serverName);
+
+        if (validServerNames.length > 0 && !validServerNames.includes(targetServer)) {
+            targetServer = validServerNames[0];
+        }
+
+        setBootStatus(`Connecting to ${targetServer.toUpperCase()} (${audioType.toUpperCase()})...`);
+
+        const fetchStream = async (srv, type) => {
             try {
-                const res = await fetch(`${baseUrl}/api/stream?id=${animeId}&ep=${currentEpNum}&server=${srv}&type=${audioType}`);
+                const res = await fetch(`${baseUrl}/api/stream?id=${animeId}&ep=${currentEpNum}&server=${srv}&type=${type}`);
                 const json = await res.json();
                 if (json.success && json.data?.m3u8) return json.data;
             } catch (err) {}
             return null;
         };
 
-        streamData = await fetchStream(targetServer);
-        if (!streamData && targetServer === 'hd-1') {
-            targetServer = 'hd-2';
-            streamData = await fetchStream(targetServer);
-            const newUrl = new URL(window.location);
-            newUrl.searchParams.set('server', 'hd-2');
-            window.history.replaceState({}, '', newUrl);
+        let streamData = await fetchStream(targetServer, audioType);
+
+        // Fallback to alternate servers if the selected one fails
+        if (!streamData) {
+            for (const srv of validServerNames) {
+                if (srv !== targetServer) {
+                    streamData = await fetchStream(srv, audioType);
+                    if (streamData) {
+                        targetServer = srv;
+                        const newUrl = new URL(window.location);
+                        newUrl.searchParams.set('server', targetServer);
+                        window.history.replaceState({}, '', newUrl);
+                        break;
+                    }
+                }
+            }
         }
 
         if (!streamData) throw new Error("All stream servers are unresponsive for this episode.");
-        setBootStatus("Constructing Cinematic Pipeline...");
+        setBootStatus("Constructing Pipeline...");
 
         const streamUrl = streamData.m3u8; 
         const targetReferer = streamData.referer || "https://vidwish.live/";
@@ -183,7 +220,10 @@ window.app.components.player = async () => {
                             <h2 class="text-white text-xs md:text-sm font-bold tracking-wide truncate">Episode ${currentEpNum}</h2>
                             <p id="ep-desc" class="text-gray-400 text-[11px] line-clamp-3 max-w-2xl mt-2 leading-relaxed">Loading metadata...</p>
                         </div>
-                        ${targetServer === 'hd-2' ? '<span class="bg-[#F47521] text-black px-2 py-0.5 rounded text-[8px] font-black uppercase border border-black mt-1">HD-2</span>' : ''}
+                        <div class="flex items-center gap-2 mt-1">
+                            <span id="badge-category" class="bg-white/10 text-white border border-white/20 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider">${audioType}</span>
+                            <span id="badge-server" class="bg-[#F47521] text-black px-2 py-0.5 rounded text-[8px] font-black uppercase border border-black">${targetServer}</span>
+                        </div>
                     </div>
                     
                     <div class="flex items-center justify-center pointer-events-auto">
@@ -207,14 +247,32 @@ window.app.components.player = async () => {
                             
                             <div class="flex items-center gap-4 relative">
                                 
+                                <!-- Audio Type / Category Switcher (Sub/Dub/Raw) -->
+                                <div class="relative group type-container">
+                                    <button id="type-btn" class="text-white hover:text-[#F47521] transition-colors font-black text-[11px] uppercase tracking-wider">${audioType}</button>
+                                    <div id="type-menu" class="hidden absolute bottom-full right-0 mb-4 w-32 bg-[#111]/95 backdrop-blur-md border border-white/10 rounded-xl p-2 flex flex-col gap-1 z-50">
+                                        <div class="text-[9px] font-black uppercase text-gray-500 px-2 pt-1 pb-1">Audio Track</div>
+                                        <div id="type-list" class="flex flex-col gap-1"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Manual Server Switcher -->
+                                <div class="relative group server-container">
+                                    <button id="server-btn" class="text-white hover:text-[#F47521] transition-colors"><i class="fas fa-server text-sm"></i></button>
+                                    <div id="server-menu" class="hidden absolute bottom-full right-0 mb-4 w-44 bg-[#111]/95 backdrop-blur-md border border-white/10 rounded-xl p-2 flex flex-col gap-1 z-50">
+                                        <div class="text-[9px] font-black uppercase text-gray-500 px-2 pt-1 pb-1">Server Select</div>
+                                        <div id="server-list" class="flex flex-col gap-1 max-h-48 overflow-y-auto hide-scrollbar"></div>
+                                    </div>
+                                </div>
+
                                 <!-- Speed Button -->
                                 <button id="speed-btn" class="text-white hover:text-[#F47521] transition-colors font-black text-[12px] w-8 text-center">1x</button>
                                 
-                                <!-- Audio Menu -->
+                                <!-- HLS Audio Menu (Internal multi-audio) -->
                                 <div class="relative hidden group audio-container">
                                     <button id="audio-btn" class="text-white hover:text-[#F47521] transition-colors"><i class="fas fa-headphones text-lg"></i></button>
                                     <div id="audio-menu" class="hidden absolute bottom-full right-0 mb-4 w-40 bg-[#111]/95 backdrop-blur-md border border-white/10 rounded-xl p-2 flex flex-col gap-1 z-50">
-                                        <div class="text-[9px] font-black uppercase text-gray-500 px-2 pt-1 pb-1">Audio Track</div>
+                                        <div class="text-[9px] font-black uppercase text-gray-500 px-2 pt-1 pb-1">Audio Stream</div>
                                         <div id="audio-list" class="flex flex-col gap-1 max-h-32 overflow-y-auto hide-scrollbar"></div>
                                     </div>
                                 </div>
@@ -223,16 +281,13 @@ window.app.components.player = async () => {
                                 <div class="relative group subs-container">
                                     <button id="subs-btn" class="text-white hover:text-[#F47521] transition-colors"><i class="fas fa-closed-captioning text-lg"></i></button>
                                     <div id="subs-menu" class="hidden absolute bottom-full right-[-50px] md:right-0 mb-4 w-56 bg-[#111]/95 backdrop-blur-md border border-white/10 rounded-xl p-3 flex flex-col gap-2 z-50 max-h-[60vh] overflow-y-auto hide-scrollbar shadow-2xl">
-                                        
                                         <div>
                                             <div class="text-[9px] font-black uppercase text-gray-500 px-1 pb-1">Track</div>
                                             <div id="subs-list" class="flex flex-col gap-1"></div>
                                         </div>
-
                                         <div class="border-t border-white/10 pt-2">
                                             <div class="text-[9px] font-black uppercase text-gray-500 px-1 pb-1">Color</div>
                                             <div class="flex flex-wrap gap-2 px-1">
-                                                <!-- Added outline class setup for highlighting -->
                                                 <button class="sub-color-btn w-5 h-5 rounded-full border border-black ring-offset-black transition-transform" data-color="#FFFFFF" style="background:#FFFFFF;"></button>
                                                 <button class="sub-color-btn w-5 h-5 rounded-full border border-black ring-offset-black transition-transform" data-color="#F47521" style="background:#F47521;"></button>
                                                 <button class="sub-color-btn w-5 h-5 rounded-full border border-black ring-offset-black transition-transform" data-color="#FACC15" style="background:#FACC15;"></button>
@@ -243,7 +298,6 @@ window.app.components.player = async () => {
                                                 <button class="sub-color-btn w-5 h-5 rounded-full border border-black ring-offset-black transition-transform" data-color="#A78BFA" style="background:#A78BFA;"></button>
                                             </div>
                                         </div>
-
                                         <div class="border-t border-white/10 pt-2">
                                             <div class="text-[9px] font-black uppercase text-gray-500 px-1 pb-1">Font Family</div>
                                             <div class="grid grid-cols-2 gap-1 px-1">
@@ -253,7 +307,6 @@ window.app.components.player = async () => {
                                                 <button class="sub-font-btn text-[10px] py-1 bg-white/5 rounded hover:bg-[#F47521] hover:text-black" style="font-family: 'Comic Sans MS', cursive;" data-font="'Comic Sans MS', cursive, sans-serif">Comic</button>
                                             </div>
                                         </div>
-
                                         <div class="border-t border-white/10 pt-2">
                                             <div class="text-[9px] font-black uppercase text-gray-500 px-1 pb-1">Size</div>
                                             <div class="flex gap-1 px-1">
@@ -263,7 +316,6 @@ window.app.components.player = async () => {
                                                 <button class="sub-size-btn flex-1 text-[10px] py-1 bg-white/5 rounded hover:bg-[#F47521] hover:text-black" data-size="200%">XL</button>
                                             </div>
                                         </div>
-
                                         <div class="border-t border-white/10 pt-2">
                                             <div class="text-[9px] font-black uppercase text-gray-500 px-1 pb-1">Height Position</div>
                                             <div class="flex gap-1 px-1">
@@ -272,14 +324,12 @@ window.app.components.player = async () => {
                                                 <button class="sub-elev-btn flex-1 text-[10px] py-1 bg-white/5 rounded hover:bg-[#F47521] hover:text-black" data-elev="-60px">High</button>
                                             </div>
                                         </div>
-
                                         <div class="border-t border-white/10 pt-2 pb-1 mt-1">
                                             <div class="flex items-center justify-between px-1">
                                                 <span class="text-[9px] font-black uppercase text-gray-500">Text Border</span>
                                                 <button id="sub-border-toggle" class="text-[10px] px-3 py-1 bg-white/10 rounded hover:bg-white/20 transition-colors" data-active="true">ON</button>
                                             </div>
                                         </div>
-
                                     </div>
                                 </div>
 
@@ -317,7 +367,9 @@ window.app.components.player = async () => {
         const timeDur = document.getElementById('time-duration');
         const bufferOverlay = document.getElementById('buffer-overlay');
         
-        // Settings Elements
+        // Control Dropdown Selectors
+        const typeBtn = document.getElementById('type-btn'), typeMenu = document.getElementById('type-menu'), typeList = document.getElementById('type-list');
+        const serverBtn = document.getElementById('server-btn'), serverMenu = document.getElementById('server-menu'), serverList = document.getElementById('server-list');
         const audioBtn = document.getElementById('audio-btn'), audioMenu = document.getElementById('audio-menu');
         const subsBtn = document.getElementById('subs-btn'), subsMenu = document.getElementById('subs-menu');
         const qualityBtn = document.getElementById('quality-btn'), qualityMenu = document.getElementById('quality-menu');
@@ -328,7 +380,7 @@ window.app.components.player = async () => {
         video.addEventListener('playing', () => bufferOverlay.classList.add('hidden'));
         video.addEventListener('canplay', () => bufferOverlay.classList.add('hidden'));
 
-        // Fetch AniList / Metadata
+        // Metadata fetching
         const fetchEpisodeMetadata = async () => {
             try {
                 const epDescEl = document.getElementById('ep-desc');
@@ -343,8 +395,103 @@ window.app.components.player = async () => {
         };
         fetchEpisodeMetadata();
 
-        const isAnyMenuOpen = () => !audioMenu.classList.contains('hidden') || !subsMenu.classList.contains('hidden') || !qualityMenu.classList.contains('hidden');
-        const closeAllMenus = () => { audioMenu.classList.add('hidden'); subsMenu.classList.add('hidden'); qualityMenu.classList.add('hidden'); };
+        const isAnyMenuOpen = () => 
+            !audioMenu.classList.contains('hidden') || 
+            !subsMenu.classList.contains('hidden') || 
+            !qualityMenu.classList.contains('hidden') ||
+            !typeMenu.classList.contains('hidden') ||
+            !serverMenu.classList.contains('hidden');
+
+        const closeAllMenus = () => { 
+            audioMenu.classList.add('hidden'); 
+            subsMenu.classList.add('hidden'); 
+            qualityMenu.classList.add('hidden'); 
+            typeMenu.classList.add('hidden'); 
+            serverMenu.classList.add('hidden'); 
+        };
+
+        // Populate and Wire Sub/Dub Category Picker
+        const populateTypeMenu = () => {
+            const types = availableCategories.length > 0 ? availableCategories : ['sub', 'dub'];
+            typeList.innerHTML = '';
+            types.forEach(t => {
+                const isSelected = t === audioType;
+                typeList.innerHTML += `
+                    <button class="text-left text-[10px] px-3 py-2 rounded uppercase font-bold transition-colors ${isSelected ? 'bg-[#F47521] text-black' : 'text-gray-300 hover:bg-white/10'}" data-type="${t}">
+                        ${t}
+                    </button>
+                `;
+            });
+
+            typeList.onclick = (e) => {
+                e.stopPropagation();
+                const btn = e.target.closest('button[data-type]');
+                if (!btn) return;
+                const newType = btn.getAttribute('data-type');
+                if (newType === audioType) { closeAllMenus(); return; }
+
+                const nextServers = availableServers.filter(s => s.type === newType);
+                const nextServer = nextServers.length > 0 ? nextServers[0].serverName : targetServer;
+                
+                const url = new URL(window.location);
+                url.searchParams.set('type', newType);
+                url.searchParams.set('server', nextServer);
+                window.location.search = url.search;
+            };
+        };
+
+        // Populate and Wire Manual Server Picker
+        const populateServerMenu = () => {
+            const activeServers = availableServers.filter(s => s.type === audioType);
+            serverList.innerHTML = '';
+            
+            if (activeServers.length === 0) {
+                serverList.innerHTML = `<span class="text-[10px] text-gray-500 px-2 py-1">No alternative servers</span>`;
+                return;
+            }
+
+            activeServers.forEach(s => {
+                const isSelected = s.serverName === targetServer;
+                serverList.innerHTML += `
+                    <button class="text-left text-[10px] px-3 py-2 rounded uppercase font-bold transition-colors flex items-center justify-between ${isSelected ? 'bg-[#F47521] text-black' : 'text-gray-300 hover:bg-white/10'}" data-server="${s.serverName}">
+                        <span>${s.originalName || s.serverName}</span>
+                        <span class="text-[8px] opacity-70 font-mono">${s.serverId || ''}</span>
+                    </button>
+                `;
+            });
+
+            serverList.onclick = (e) => {
+                e.stopPropagation();
+                const btn = e.target.closest('button[data-server]');
+                if (!btn) return;
+                const newServer = btn.getAttribute('data-server');
+                if (newServer === targetServer) { closeAllMenus(); return; }
+
+                const url = new URL(window.location);
+                url.searchParams.set('server', newServer);
+                url.searchParams.set('type', audioType);
+                window.location.search = url.search;
+            };
+        };
+
+        populateTypeMenu();
+        populateServerMenu();
+
+        typeBtn.addEventListener('click', (e) => { 
+            e.stopPropagation(); 
+            const isH = typeMenu.classList.contains('hidden'); 
+            closeAllMenus(); 
+            if (isH) typeMenu.classList.remove('hidden'); 
+            resetHideTimer(); 
+        });
+
+        serverBtn.addEventListener('click', (e) => { 
+            e.stopPropagation(); 
+            const isH = serverMenu.classList.contains('hidden'); 
+            closeAllMenus(); 
+            if (isH) serverMenu.classList.remove('hidden'); 
+            resetHideTimer(); 
+        });
 
         // Aspect Ratio
         const arModes = [ { fit: 'contain', icon: 'fas fa-tv' }, { fit: 'cover', icon: 'fas fa-crop' }, { fit: 'fill', icon: 'fas fa-arrows-alt' } ];
@@ -356,7 +503,7 @@ window.app.components.player = async () => {
         let speedIdx = 1;
         speedBtn.addEventListener('click', (e) => { e.stopPropagation(); speedIdx = (speedIdx + 1) % speeds.length; video.playbackRate = speeds[speedIdx]; speedBtn.innerText = speeds[speedIdx] + 'x'; });
 
-        // --- SUBTITLE CONTROLS & FIREBASE SYNC ---
+        // Firestore & Subtitle Customizations
         const db = window.db || (typeof firebase !== 'undefined' ? firebase.firestore() : null);
         const userUid = window.app.state?.activeProfile?.uid;
 
@@ -376,14 +523,12 @@ window.app.components.player = async () => {
             document.documentElement.style.setProperty('--sub-shadow', currentSubSettings.shadow ? '1px 1px 3px rgba(0,0,0,0.8), 0px 0px 5px rgba(0,0,0,0.8)' : 'none');
             document.documentElement.style.setProperty('--sub-bg', currentSubSettings.shadow ? 'transparent' : 'rgba(0,0,0,0.5)'); 
             
-            // Highlight selected color button
             document.querySelectorAll('.sub-color-btn').forEach(b => {
                 if(b.getAttribute('data-color') === currentSubSettings.color) { b.classList.add('ring-2', 'ring-white', 'scale-110'); } 
                 else { b.classList.remove('ring-2', 'ring-white', 'scale-110'); }
             });
         };
 
-        // UI Handlers for Sub settings
         document.querySelectorAll('.sub-color-btn').forEach(btn => {
             btn.addEventListener('click', (e) => { e.stopPropagation(); currentSubSettings.color = btn.getAttribute('data-color'); updateSubCSSVars(); saveSettingsToFirebase(currentSubSettings); });
         });
@@ -420,17 +565,24 @@ window.app.components.player = async () => {
             updateSubCSSVars(); saveSettingsToFirebase(currentSubSettings);
         });
 
-        updateSubCSSVars(); // Initial color highlight
+        updateSubCSSVars();
 
         tracks.forEach((track, index) => {
             if (track.kind === 'captions' || track.kind === 'subtitles') {
-                const trackEl = document.createElement('track'); trackEl.kind = track.kind; trackEl.label = track.label || `Track ${index+1}`; trackEl.srclang = track.label ? track.label.substring(0, 2).toLowerCase() : 'en'; trackEl.src = customProxyUrl + encodeURIComponent(track.file) + '&referer=' + encodeURIComponent(targetReferer); 
-                if (track.default) trackEl.default = true; video.appendChild(trackEl);
+                const trackEl = document.createElement('track'); 
+                trackEl.kind = track.kind; 
+                trackEl.label = track.label || `Track ${index+1}`; 
+                trackEl.srclang = track.label ? track.label.substring(0, 2).toLowerCase() : 'en'; 
+                trackEl.src = customProxyUrl + encodeURIComponent(track.file) + '&referer=' + encodeURIComponent(targetReferer); 
+                if (track.default) trackEl.default = true; 
+                video.appendChild(trackEl);
             }
         });
 
         if (Hls.isSupported()) {
-            hlsInstance = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 60 }); hlsInstance.loadSource(proxiedStreamUrl); hlsInstance.attachMedia(video);
+            hlsInstance = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 60 }); 
+            hlsInstance.loadSource(proxiedStreamUrl); 
+            hlsInstance.attachMedia(video);
             
             hlsInstance.on(Hls.Events.MANIFEST_PARSED, async function() {
                 buildSettingsMenus(hlsInstance, video);
@@ -457,10 +609,14 @@ window.app.components.player = async () => {
             });
 
             hlsInstance.on(Hls.Events.ERROR, function (event, data) {
-                if (data.fatal) { if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hlsInstance.recoverMediaError(); else { setBootStatus(`Stream Data Corrupted. Details: ${data.details}`, true); hlsInstance.destroy(); } }
+                if (data.fatal) { 
+                    if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hlsInstance.recoverMediaError(); 
+                    else { setBootStatus(`Stream Data Corrupted: ${data.details}`, true); hlsInstance.destroy(); } 
+                }
             });
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            video.src = proxiedStreamUrl; video.addEventListener('loadedmetadata', () => { video.play().catch(e=>e); buildSettingsMenus(null, video); });
+            video.src = proxiedStreamUrl; 
+            video.addEventListener('loadedmetadata', () => { video.play().catch(e=>e); buildSettingsMenus(null, video); });
         }
 
         const resetHideTimer = () => {
@@ -468,7 +624,8 @@ window.app.components.player = async () => {
             if (!video.paused) { hideTimer = setTimeout(() => { uiLayer.classList.add('idle'); playerRoot.style.cursor = 'none'; closeAllMenus(); }, 4000); }
         };
 
-        playerRoot.addEventListener('mousemove', resetHideTimer); playerRoot.addEventListener('touchstart', resetHideTimer, {passive: true});
+        playerRoot.addEventListener('mousemove', resetHideTimer); 
+        playerRoot.addEventListener('touchstart', resetHideTimer, {passive: true});
         playerRoot.addEventListener('mouseleave', () => { if(!video.paused) { uiLayer.classList.add('idle'); closeAllMenus(); } });
         
         const togglePlay = () => { if (video.paused) video.play(); else video.pause(); };
@@ -501,9 +658,13 @@ window.app.components.player = async () => {
             if (Math.floor(video.currentTime) % 5 === 0) saveProgress(video.currentTime, video.duration);
         });
 
-        progressBar.addEventListener('input', (e) => { video.currentTime = e.target.value; const pct = (e.target.value / video.duration) * 100; e.target.style.background = `linear-gradient(to right, #F47521 ${pct}%, rgba(255,255,255,0.2) ${pct}%)`; });
+        progressBar.addEventListener('input', (e) => { 
+            video.currentTime = e.target.value; 
+            const pct = (e.target.value / video.duration) * 100; 
+            e.target.style.background = `linear-gradient(to right, #F47521 ${pct}%, rgba(255,255,255,0.2) ${pct}%)`; 
+        });
 
-        // --- GESTURES & POPUP DISMISSAL PRIORITY ---
+        // Gestures & Popup dismissal priority
         let lastTapTime = 0;
         let isLongPressing = false;
         let menusWereOpenOnDown = false;
@@ -517,7 +678,6 @@ window.app.components.player = async () => {
             }
         };
 
-        // When pointer goes down on empty space, close menus first.
         overlay.addEventListener('pointerdown', (e) => {
             menusWereOpenOnDown = isAnyMenuOpen();
             if (menusWereOpenOnDown) { closeAllMenus(); return; }
@@ -527,9 +687,8 @@ window.app.components.player = async () => {
             }, 600);
         });
 
-        // When pointer goes up (click completed)
         overlay.addEventListener('pointerup', (e) => {
-            if (menusWereOpenOnDown) return; // Ignore click action if we just closed a menu
+            if (menusWereOpenOnDown) return;
             clearTimeout(pressTimer);
             if (isLongPressing) { video.playbackRate = speeds[speedIdx]; document.getElementById('speed-indicator').classList.add('opacity-0'); isLongPressing = false; return; }
 
@@ -537,7 +696,7 @@ window.app.components.player = async () => {
             if (tapLength < 300 && tapLength > 0) {
                 clearTimeout(tapTimeout); handleDoubleTap(e);
             } else {
-                tapTimeout = setTimeout(() => { togglePlay(); resetHideTimer(); }, 300); // Wait slightly to see if it's a double tap, otherwise it's a single tap (Play/Pause)
+                tapTimeout = setTimeout(() => { togglePlay(); resetHideTimer(); }, 300);
             }
             lastTapTime = currentTime;
         });
