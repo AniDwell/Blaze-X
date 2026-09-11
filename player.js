@@ -46,10 +46,11 @@ window.app.components.player = async () => {
         return;
     }
 
+    // UPDATED BASE URL
     const baseUrl = 'https://anikoto-api-lyart.vercel.app';
     const customProxyUrl = 'https://icy-wave-30d8.prashant-yash69.workers.dev/proxy?url='; 
 
-    // Inject Player & Expanded Subtitle CSS
+    // Inject Player CSS
     if (!document.getElementById('blazex-player-css')) {
         const style = document.createElement('style');
         style.id = 'blazex-player-css';
@@ -107,36 +108,28 @@ window.app.components.player = async () => {
     }
 
     try {
-        setBootStatus("Discovering Source Streams...");
-
-        // Fetch Server List
-        let availableServers = [];
+        setBootStatus("Fetching Available Servers...");
+        
+        let availableServersList = [];
         try {
+            // Attempt to fetch server list dynamically for dynamic fallbacks
             const srvRes = await fetch(`${baseUrl}/api/servers?id=${animeId}&ep=${currentEpNum}`);
             const srvJson = await srvRes.json();
-            if (srvJson.success && Array.isArray(srvJson.data)) {
-                availableServers = srvJson.data;
+            if (srvJson.success && srvJson.data) {
+                availableServersList = srvJson.data;
             }
-        } catch (e) {
-            console.warn("Could not fetch server catalog:", e);
+        } catch(e) { console.warn("Could not fetch server list dynamically, relying on defaults."); }
+
+        // Filter servers by selected audio type, fallback to known defaults if empty
+        let typeServers = availableServersList.filter(s => s.type === audioType).map(s => s.serverName);
+        if (typeServers.length === 0) {
+            typeServers = ['hd-1', 'hd-2', 'vidstream-2'];
         }
 
-        // Verify requested category and fallback if unavailable
-        const availableCategories = [...new Set(availableServers.map(s => s.type))];
-        if (availableCategories.length > 0 && !availableCategories.includes(audioType)) {
-            audioType = availableCategories.includes('sub') ? 'sub' : availableCategories[0];
+        // Reorder array to prioritize the user's targeted server
+        if (typeServers.includes(targetServer)) {
+            typeServers = [targetServer, ...typeServers.filter(s => s !== targetServer)];
         }
-
-        // Validate targetServer in current category
-        const validServerNames = availableServers
-            .filter(s => s.type === audioType)
-            .map(s => s.serverName);
-
-        if (validServerNames.length > 0 && !validServerNames.includes(targetServer)) {
-            targetServer = validServerNames[0];
-        }
-
-        setBootStatus(`Connecting to ${targetServer.toUpperCase()} (${audioType.toUpperCase()})...`);
 
         const fetchStream = async (srv, type) => {
             try {
@@ -147,26 +140,26 @@ window.app.components.player = async () => {
             return null;
         };
 
-        let streamData = await fetchStream(targetServer, audioType);
+        let streamData = null;
+        let activeServer = targetServer;
 
-        // Fallback to alternate servers if the selected one fails
-        if (!streamData) {
-            for (const srv of validServerNames) {
-                if (srv !== targetServer) {
-                    streamData = await fetchStream(srv, audioType);
-                    if (streamData) {
-                        targetServer = srv;
-                        const newUrl = new URL(window.location);
-                        newUrl.searchParams.set('server', targetServer);
-                        window.history.replaceState({}, '', newUrl);
-                        break;
-                    }
-                }
+        // SEQUENTIAL FALLBACK LOGIC
+        for (const srv of typeServers) {
+            setBootStatus(`Connecting to ${srv.toUpperCase()} (${audioType.toUpperCase()})...`);
+            streamData = await fetchStream(srv, audioType);
+            if (streamData) {
+                activeServer = srv;
+                // Silently update URL to reflect active working server
+                const newUrl = new URL(window.location);
+                newUrl.searchParams.set('server', activeServer);
+                newUrl.searchParams.set('type', audioType);
+                window.history.replaceState({}, '', newUrl);
+                break;
             }
         }
 
-        if (!streamData) throw new Error("All stream servers are unresponsive for this episode.");
-        setBootStatus("Constructing Pipeline...");
+        if (!streamData) throw new Error(`All servers are currently unresponsive for Episode ${currentEpNum} (${audioType.toUpperCase()}).`);
+        setBootStatus("Constructing Cinematic Pipeline...");
 
         const streamUrl = streamData.m3u8; 
         const targetReferer = streamData.referer || "https://vidwish.live/";
@@ -220,9 +213,9 @@ window.app.components.player = async () => {
                             <h2 class="text-white text-xs md:text-sm font-bold tracking-wide truncate">Episode ${currentEpNum}</h2>
                             <p id="ep-desc" class="text-gray-400 text-[11px] line-clamp-3 max-w-2xl mt-2 leading-relaxed">Loading metadata...</p>
                         </div>
-                        <div class="flex items-center gap-2 mt-1">
-                            <span id="badge-category" class="bg-white/10 text-white border border-white/20 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider">${audioType}</span>
-                            <span id="badge-server" class="bg-[#F47521] text-black px-2 py-0.5 rounded text-[8px] font-black uppercase border border-black">${targetServer}</span>
+                        <div class="flex gap-1 flex-col items-end">
+                            <span class="bg-[#F47521] text-black px-2 py-0.5 rounded text-[8px] font-black uppercase border border-black">${activeServer}</span>
+                            <span class="bg-white text-black px-2 py-0.5 rounded text-[8px] font-black uppercase">${audioType}</span>
                         </div>
                     </div>
                     
@@ -247,32 +240,31 @@ window.app.components.player = async () => {
                             
                             <div class="flex items-center gap-4 relative">
                                 
-                                <!-- Audio Type / Category Switcher (Sub/Dub/Raw) -->
-                                <div class="relative group type-container">
-                                    <button id="type-btn" class="text-white hover:text-[#F47521] transition-colors font-black text-[11px] uppercase tracking-wider">${audioType}</button>
-                                    <div id="type-menu" class="hidden absolute bottom-full right-0 mb-4 w-32 bg-[#111]/95 backdrop-blur-md border border-white/10 rounded-xl p-2 flex flex-col gap-1 z-50">
-                                        <div class="text-[9px] font-black uppercase text-gray-500 px-2 pt-1 pb-1">Audio Track</div>
-                                        <div id="type-list" class="flex flex-col gap-1"></div>
-                                    </div>
-                                </div>
-
-                                <!-- Manual Server Switcher -->
-                                <div class="relative group server-container">
-                                    <button id="server-btn" class="text-white hover:text-[#F47521] transition-colors"><i class="fas fa-server text-sm"></i></button>
-                                    <div id="server-menu" class="hidden absolute bottom-full right-0 mb-4 w-44 bg-[#111]/95 backdrop-blur-md border border-white/10 rounded-xl p-2 flex flex-col gap-1 z-50">
-                                        <div class="text-[9px] font-black uppercase text-gray-500 px-2 pt-1 pb-1">Server Select</div>
-                                        <div id="server-list" class="flex flex-col gap-1 max-h-48 overflow-y-auto hide-scrollbar"></div>
-                                    </div>
-                                </div>
-
-                                <!-- Speed Button -->
                                 <button id="speed-btn" class="text-white hover:text-[#F47521] transition-colors font-black text-[12px] w-8 text-center">1x</button>
                                 
-                                <!-- HLS Audio Menu (Internal multi-audio) -->
+                                <!-- Audio Type Menu (Sub/Dub/Hsub) -->
+                                <div class="relative group ep-type-container">
+                                    <button id="ep-type-btn" class="text-white hover:text-[#F47521] transition-colors"><i class="fas fa-language text-lg"></i></button>
+                                    <div id="ep-type-menu" class="hidden absolute bottom-full right-[-20px] md:right-0 mb-4 w-32 bg-[#111]/95 backdrop-blur-md border border-white/10 rounded-xl p-2 flex flex-col gap-1 z-50">
+                                        <div class="text-[9px] font-black uppercase text-gray-500 px-2 pt-1 pb-1">Format</div>
+                                        <div id="ep-type-list" class="flex flex-col gap-1"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Server Switch Menu -->
+                                <div class="relative group server-switch-container">
+                                    <button id="server-switch-btn" class="text-white hover:text-[#F47521] transition-colors"><i class="fas fa-server text-lg"></i></button>
+                                    <div id="server-switch-menu" class="hidden absolute bottom-full right-[-20px] md:right-0 mb-4 w-36 bg-[#111]/95 backdrop-blur-md border border-white/10 rounded-xl p-2 flex flex-col gap-1 z-50">
+                                        <div class="text-[9px] font-black uppercase text-gray-500 px-2 pt-1 pb-1">Server</div>
+                                        <div id="server-switch-list" class="flex flex-col gap-1"></div>
+                                    </div>
+                                </div>
+
+                                <!-- In-stream Audio Menu -->
                                 <div class="relative hidden group audio-container">
                                     <button id="audio-btn" class="text-white hover:text-[#F47521] transition-colors"><i class="fas fa-headphones text-lg"></i></button>
                                     <div id="audio-menu" class="hidden absolute bottom-full right-0 mb-4 w-40 bg-[#111]/95 backdrop-blur-md border border-white/10 rounded-xl p-2 flex flex-col gap-1 z-50">
-                                        <div class="text-[9px] font-black uppercase text-gray-500 px-2 pt-1 pb-1">Audio Stream</div>
+                                        <div class="text-[9px] font-black uppercase text-gray-500 px-2 pt-1 pb-1">Audio Track</div>
                                         <div id="audio-list" class="flex flex-col gap-1 max-h-32 overflow-y-auto hide-scrollbar"></div>
                                     </div>
                                 </div>
@@ -281,10 +273,12 @@ window.app.components.player = async () => {
                                 <div class="relative group subs-container">
                                     <button id="subs-btn" class="text-white hover:text-[#F47521] transition-colors"><i class="fas fa-closed-captioning text-lg"></i></button>
                                     <div id="subs-menu" class="hidden absolute bottom-full right-[-50px] md:right-0 mb-4 w-56 bg-[#111]/95 backdrop-blur-md border border-white/10 rounded-xl p-3 flex flex-col gap-2 z-50 max-h-[60vh] overflow-y-auto hide-scrollbar shadow-2xl">
+                                        
                                         <div>
                                             <div class="text-[9px] font-black uppercase text-gray-500 px-1 pb-1">Track</div>
                                             <div id="subs-list" class="flex flex-col gap-1"></div>
                                         </div>
+
                                         <div class="border-t border-white/10 pt-2">
                                             <div class="text-[9px] font-black uppercase text-gray-500 px-1 pb-1">Color</div>
                                             <div class="flex flex-wrap gap-2 px-1">
@@ -298,6 +292,7 @@ window.app.components.player = async () => {
                                                 <button class="sub-color-btn w-5 h-5 rounded-full border border-black ring-offset-black transition-transform" data-color="#A78BFA" style="background:#A78BFA;"></button>
                                             </div>
                                         </div>
+
                                         <div class="border-t border-white/10 pt-2">
                                             <div class="text-[9px] font-black uppercase text-gray-500 px-1 pb-1">Font Family</div>
                                             <div class="grid grid-cols-2 gap-1 px-1">
@@ -307,6 +302,7 @@ window.app.components.player = async () => {
                                                 <button class="sub-font-btn text-[10px] py-1 bg-white/5 rounded hover:bg-[#F47521] hover:text-black" style="font-family: 'Comic Sans MS', cursive;" data-font="'Comic Sans MS', cursive, sans-serif">Comic</button>
                                             </div>
                                         </div>
+
                                         <div class="border-t border-white/10 pt-2">
                                             <div class="text-[9px] font-black uppercase text-gray-500 px-1 pb-1">Size</div>
                                             <div class="flex gap-1 px-1">
@@ -316,6 +312,7 @@ window.app.components.player = async () => {
                                                 <button class="sub-size-btn flex-1 text-[10px] py-1 bg-white/5 rounded hover:bg-[#F47521] hover:text-black" data-size="200%">XL</button>
                                             </div>
                                         </div>
+
                                         <div class="border-t border-white/10 pt-2">
                                             <div class="text-[9px] font-black uppercase text-gray-500 px-1 pb-1">Height Position</div>
                                             <div class="flex gap-1 px-1">
@@ -324,12 +321,14 @@ window.app.components.player = async () => {
                                                 <button class="sub-elev-btn flex-1 text-[10px] py-1 bg-white/5 rounded hover:bg-[#F47521] hover:text-black" data-elev="-60px">High</button>
                                             </div>
                                         </div>
+
                                         <div class="border-t border-white/10 pt-2 pb-1 mt-1">
                                             <div class="flex items-center justify-between px-1">
                                                 <span class="text-[9px] font-black uppercase text-gray-500">Text Border</span>
                                                 <button id="sub-border-toggle" class="text-[10px] px-3 py-1 bg-white/10 rounded hover:bg-white/20 transition-colors" data-active="true">ON</button>
                                             </div>
                                         </div>
+
                                     </div>
                                 </div>
 
@@ -367,12 +366,14 @@ window.app.components.player = async () => {
         const timeDur = document.getElementById('time-duration');
         const bufferOverlay = document.getElementById('buffer-overlay');
         
-        // Control Dropdown Selectors
-        const typeBtn = document.getElementById('type-btn'), typeMenu = document.getElementById('type-menu'), typeList = document.getElementById('type-list');
-        const serverBtn = document.getElementById('server-btn'), serverMenu = document.getElementById('server-menu'), serverList = document.getElementById('server-list');
+        // Settings Elements
         const audioBtn = document.getElementById('audio-btn'), audioMenu = document.getElementById('audio-menu');
         const subsBtn = document.getElementById('subs-btn'), subsMenu = document.getElementById('subs-menu');
         const qualityBtn = document.getElementById('quality-btn'), qualityMenu = document.getElementById('quality-menu');
+        
+        const epTypeBtn = document.getElementById('ep-type-btn'), epTypeMenu = document.getElementById('ep-type-menu');
+        const srvSwitchBtn = document.getElementById('server-switch-btn'), srvSwitchMenu = document.getElementById('server-switch-menu');
+
         const speedBtn = document.getElementById('speed-btn');
         const arBtn = document.getElementById('ar-btn'), arIcon = document.getElementById('ar-icon');
 
@@ -380,7 +381,7 @@ window.app.components.player = async () => {
         video.addEventListener('playing', () => bufferOverlay.classList.add('hidden'));
         video.addEventListener('canplay', () => bufferOverlay.classList.add('hidden'));
 
-        // Metadata fetching
+        // Fetch AniList / Metadata
         const fetchEpisodeMetadata = async () => {
             try {
                 const epDescEl = document.getElementById('ep-desc');
@@ -395,103 +396,45 @@ window.app.components.player = async () => {
         };
         fetchEpisodeMetadata();
 
-        const isAnyMenuOpen = () => 
-            !audioMenu.classList.contains('hidden') || 
-            !subsMenu.classList.contains('hidden') || 
-            !qualityMenu.classList.contains('hidden') ||
-            !typeMenu.classList.contains('hidden') ||
-            !serverMenu.classList.contains('hidden');
+        const isAnyMenuOpen = () => !audioMenu.classList.contains('hidden') || !subsMenu.classList.contains('hidden') || !qualityMenu.classList.contains('hidden') || !epTypeMenu.classList.contains('hidden') || !srvSwitchMenu.classList.contains('hidden');
+        const closeAllMenus = () => { audioMenu.classList.add('hidden'); subsMenu.classList.add('hidden'); qualityMenu.classList.add('hidden'); epTypeMenu.classList.add('hidden'); srvSwitchMenu.classList.add('hidden'); };
 
-        const closeAllMenus = () => { 
-            audioMenu.classList.add('hidden'); 
-            subsMenu.classList.add('hidden'); 
-            qualityMenu.classList.add('hidden'); 
-            typeMenu.classList.add('hidden'); 
-            serverMenu.classList.add('hidden'); 
-        };
+        // POPULATE TYPE/SERVER MENUS
+        const uniqueTypes = availableServersList.length > 0 ? [...new Set(availableServersList.map(s => s.type))] : ['sub', 'dub', 'hsub'];
+        const typeListEl = document.getElementById('ep-type-list');
+        uniqueTypes.forEach(t => {
+            typeListEl.innerHTML += `<button class="text-left text-[10px] px-3 py-2 rounded ${audioType === t ? 'bg-[#F47521] text-black font-bold' : 'text-gray-300 hover:bg-white/10'} mb-1 switch-type-btn" data-type="${t}">${t.toUpperCase()}</button>`;
+        });
 
-        // Populate and Wire Sub/Dub Category Picker
-        const populateTypeMenu = () => {
-            const types = availableCategories.length > 0 ? availableCategories : ['sub', 'dub'];
-            typeList.innerHTML = '';
-            types.forEach(t => {
-                const isSelected = t === audioType;
-                typeList.innerHTML += `
-                    <button class="text-left text-[10px] px-3 py-2 rounded uppercase font-bold transition-colors ${isSelected ? 'bg-[#F47521] text-black' : 'text-gray-300 hover:bg-white/10'}" data-type="${t}">
-                        ${t}
-                    </button>
-                `;
-            });
+        const srvListEl = document.getElementById('server-switch-list');
+        typeServers.forEach(s => {
+            srvListEl.innerHTML += `<button class="text-left text-[10px] px-3 py-2 rounded ${activeServer === s ? 'bg-[#F47521] text-black font-bold' : 'text-gray-300 hover:bg-white/10'} mb-1 switch-srv-btn" data-server="${s}">${s.toUpperCase()}</button>`;
+        });
 
-            typeList.onclick = (e) => {
-                e.stopPropagation();
-                const btn = e.target.closest('button[data-type]');
-                if (!btn) return;
-                const newType = btn.getAttribute('data-type');
-                if (newType === audioType) { closeAllMenus(); return; }
-
-                const nextServers = availableServers.filter(s => s.type === newType);
-                const nextServer = nextServers.length > 0 ? nextServers[0].serverName : targetServer;
-                
+        typeListEl.onclick = (e) => {
+            const btn = e.target.closest('.switch-type-btn');
+            if(!btn) return;
+            const newType = btn.getAttribute('data-type');
+            if (newType !== audioType) {
                 const url = new URL(window.location);
                 url.searchParams.set('type', newType);
-                url.searchParams.set('server', nextServer);
                 window.location.search = url.search;
-            };
-        };
-
-        // Populate and Wire Manual Server Picker
-        const populateServerMenu = () => {
-            const activeServers = availableServers.filter(s => s.type === audioType);
-            serverList.innerHTML = '';
-            
-            if (activeServers.length === 0) {
-                serverList.innerHTML = `<span class="text-[10px] text-gray-500 px-2 py-1">No alternative servers</span>`;
-                return;
             }
-
-            activeServers.forEach(s => {
-                const isSelected = s.serverName === targetServer;
-                serverList.innerHTML += `
-                    <button class="text-left text-[10px] px-3 py-2 rounded uppercase font-bold transition-colors flex items-center justify-between ${isSelected ? 'bg-[#F47521] text-black' : 'text-gray-300 hover:bg-white/10'}" data-server="${s.serverName}">
-                        <span>${s.originalName || s.serverName}</span>
-                        <span class="text-[8px] opacity-70 font-mono">${s.serverId || ''}</span>
-                    </button>
-                `;
-            });
-
-            serverList.onclick = (e) => {
-                e.stopPropagation();
-                const btn = e.target.closest('button[data-server]');
-                if (!btn) return;
-                const newServer = btn.getAttribute('data-server');
-                if (newServer === targetServer) { closeAllMenus(); return; }
-
-                const url = new URL(window.location);
-                url.searchParams.set('server', newServer);
-                url.searchParams.set('type', audioType);
-                window.location.search = url.search;
-            };
         };
 
-        populateTypeMenu();
-        populateServerMenu();
+        srvListEl.onclick = (e) => {
+            const btn = e.target.closest('.switch-srv-btn');
+            if(!btn) return;
+            const newSrv = btn.getAttribute('data-server');
+            if (newSrv !== activeServer) {
+                const url = new URL(window.location);
+                url.searchParams.set('server', newSrv);
+                window.location.search = url.search;
+            }
+        };
 
-        typeBtn.addEventListener('click', (e) => { 
-            e.stopPropagation(); 
-            const isH = typeMenu.classList.contains('hidden'); 
-            closeAllMenus(); 
-            if (isH) typeMenu.classList.remove('hidden'); 
-            resetHideTimer(); 
-        });
-
-        serverBtn.addEventListener('click', (e) => { 
-            e.stopPropagation(); 
-            const isH = serverMenu.classList.contains('hidden'); 
-            closeAllMenus(); 
-            if (isH) serverMenu.classList.remove('hidden'); 
-            resetHideTimer(); 
-        });
+        epTypeBtn.addEventListener('click', (e) => { e.stopPropagation(); const isH = epTypeMenu.classList.contains('hidden'); closeAllMenus(); if(isH) epTypeMenu.classList.remove('hidden'); resetHideTimer(); });
+        srvSwitchBtn.addEventListener('click', (e) => { e.stopPropagation(); const isH = srvSwitchMenu.classList.contains('hidden'); closeAllMenus(); if(isH) srvSwitchMenu.classList.remove('hidden'); resetHideTimer(); });
 
         // Aspect Ratio
         const arModes = [ { fit: 'contain', icon: 'fas fa-tv' }, { fit: 'cover', icon: 'fas fa-crop' }, { fit: 'fill', icon: 'fas fa-arrows-alt' } ];
@@ -503,7 +446,7 @@ window.app.components.player = async () => {
         let speedIdx = 1;
         speedBtn.addEventListener('click', (e) => { e.stopPropagation(); speedIdx = (speedIdx + 1) % speeds.length; video.playbackRate = speeds[speedIdx]; speedBtn.innerText = speeds[speedIdx] + 'x'; });
 
-        // Firestore & Subtitle Customizations
+        // --- SUBTITLE CONTROLS & FIREBASE SYNC ---
         const db = window.db || (typeof firebase !== 'undefined' ? firebase.firestore() : null);
         const userUid = window.app.state?.activeProfile?.uid;
 
@@ -529,6 +472,7 @@ window.app.components.player = async () => {
             });
         };
 
+        // UI Handlers for Sub settings
         document.querySelectorAll('.sub-color-btn').forEach(btn => {
             btn.addEventListener('click', (e) => { e.stopPropagation(); currentSubSettings.color = btn.getAttribute('data-color'); updateSubCSSVars(); saveSettingsToFirebase(currentSubSettings); });
         });
@@ -569,20 +513,13 @@ window.app.components.player = async () => {
 
         tracks.forEach((track, index) => {
             if (track.kind === 'captions' || track.kind === 'subtitles') {
-                const trackEl = document.createElement('track'); 
-                trackEl.kind = track.kind; 
-                trackEl.label = track.label || `Track ${index+1}`; 
-                trackEl.srclang = track.label ? track.label.substring(0, 2).toLowerCase() : 'en'; 
-                trackEl.src = customProxyUrl + encodeURIComponent(track.file) + '&referer=' + encodeURIComponent(targetReferer); 
-                if (track.default) trackEl.default = true; 
-                video.appendChild(trackEl);
+                const trackEl = document.createElement('track'); trackEl.kind = track.kind; trackEl.label = track.label || `Track ${index+1}`; trackEl.srclang = track.label ? track.label.substring(0, 2).toLowerCase() : 'en'; trackEl.src = customProxyUrl + encodeURIComponent(track.file) + '&referer=' + encodeURIComponent(targetReferer); 
+                if (track.default) trackEl.default = true; video.appendChild(trackEl);
             }
         });
 
         if (Hls.isSupported()) {
-            hlsInstance = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 60 }); 
-            hlsInstance.loadSource(proxiedStreamUrl); 
-            hlsInstance.attachMedia(video);
+            hlsInstance = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 60 }); hlsInstance.loadSource(proxiedStreamUrl); hlsInstance.attachMedia(video);
             
             hlsInstance.on(Hls.Events.MANIFEST_PARSED, async function() {
                 buildSettingsMenus(hlsInstance, video);
@@ -609,14 +546,10 @@ window.app.components.player = async () => {
             });
 
             hlsInstance.on(Hls.Events.ERROR, function (event, data) {
-                if (data.fatal) { 
-                    if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hlsInstance.recoverMediaError(); 
-                    else { setBootStatus(`Stream Data Corrupted: ${data.details}`, true); hlsInstance.destroy(); } 
-                }
+                if (data.fatal) { if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hlsInstance.recoverMediaError(); else { setBootStatus(`Stream Data Corrupted. Details: ${data.details}`, true); hlsInstance.destroy(); } }
             });
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            video.src = proxiedStreamUrl; 
-            video.addEventListener('loadedmetadata', () => { video.play().catch(e=>e); buildSettingsMenus(null, video); });
+            video.src = proxiedStreamUrl; video.addEventListener('loadedmetadata', () => { video.play().catch(e=>e); buildSettingsMenus(null, video); });
         }
 
         const resetHideTimer = () => {
@@ -624,8 +557,7 @@ window.app.components.player = async () => {
             if (!video.paused) { hideTimer = setTimeout(() => { uiLayer.classList.add('idle'); playerRoot.style.cursor = 'none'; closeAllMenus(); }, 4000); }
         };
 
-        playerRoot.addEventListener('mousemove', resetHideTimer); 
-        playerRoot.addEventListener('touchstart', resetHideTimer, {passive: true});
+        playerRoot.addEventListener('mousemove', resetHideTimer); playerRoot.addEventListener('touchstart', resetHideTimer, {passive: true});
         playerRoot.addEventListener('mouseleave', () => { if(!video.paused) { uiLayer.classList.add('idle'); closeAllMenus(); } });
         
         const togglePlay = () => { if (video.paused) video.play(); else video.pause(); };
@@ -658,13 +590,8 @@ window.app.components.player = async () => {
             if (Math.floor(video.currentTime) % 5 === 0) saveProgress(video.currentTime, video.duration);
         });
 
-        progressBar.addEventListener('input', (e) => { 
-            video.currentTime = e.target.value; 
-            const pct = (e.target.value / video.duration) * 100; 
-            e.target.style.background = `linear-gradient(to right, #F47521 ${pct}%, rgba(255,255,255,0.2) ${pct}%)`; 
-        });
+        progressBar.addEventListener('input', (e) => { video.currentTime = e.target.value; const pct = (e.target.value / video.duration) * 100; e.target.style.background = `linear-gradient(to right, #F47521 ${pct}%, rgba(255,255,255,0.2) ${pct}%)`; });
 
-        // Gestures & Popup dismissal priority
         let lastTapTime = 0;
         let isLongPressing = false;
         let menusWereOpenOnDown = false;
@@ -688,7 +615,7 @@ window.app.components.player = async () => {
         });
 
         overlay.addEventListener('pointerup', (e) => {
-            if (menusWereOpenOnDown) return;
+            if (menusWereOpenOnDown) return; 
             clearTimeout(pressTimer);
             if (isLongPressing) { video.playbackRate = speeds[speedIdx]; document.getElementById('speed-indicator').classList.add('opacity-0'); isLongPressing = false; return; }
 
