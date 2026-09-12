@@ -1,4 +1,4 @@
-// carousel.js - HIGH PERFORMANCE OPTIMIZED (Parallel Fetch & Caching)
+// carousel.js - HIGH PERFORMANCE OPTIMIZED (Parallel Fetch & Caching + Release Tracking Integration)
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
@@ -42,7 +42,7 @@ const initFirebase = async () => {
     }
 };
 
-// --- BACKGROUND FIREBASE SYNC ---
+// --- BACKGROUND FIREBASE SYNC & RELEASE CHECK HOOK ---
 const setupFirebaseSync = async () => {
     try {
         await initFirebase();
@@ -58,15 +58,32 @@ const setupFirebaseSync = async () => {
                 const libRef = collection(db, "users", user.uid, "library");
                 window.app.state.libraryUnsubscribe = onSnapshot(libRef, (snapshot) => {
                     window.app.state.carouselLibrarySet.clear();
+                    
+                    // Build a fresh array of the library for the Release Manager if needed
+                    let currentLibraryDocs = [];
+
                     snapshot.forEach(doc => {
                         window.app.state.carouselLibrarySet.add(String(doc.id));
+                        currentLibraryDocs.push({ id: doc.id, ...doc.data() });
                     });
+                    
+                    // Attach to global state so library.js and upcoming.js can reuse this
+                    window.app.state.libraryCache = currentLibraryDocs;
+
                     if (document.getElementById('carousel-ui-layer')) {
                         window.app.updateCarouselUI(window.app.state.carouselCurrentIndex);
                     }
                 });
+
+                // --- INTEGRATION: TRIGGER BACKGROUND NOTIFICATION SCAN ONCE PER SESSION ---
+                if (window.app.releaseManager && typeof window.app.releaseManager.checkLibraryReleases === 'function') {
+                    // It will safely handle its own rate-limiting/isChecking locks
+                    window.app.releaseManager.checkLibraryReleases(user.uid);
+                }
+
             } else {
                 window.app.state.carouselLibrarySet.clear();
+                window.app.state.libraryCache = [];
                 if (document.getElementById('carousel-ui-layer')) {
                     window.app.updateCarouselUI(window.app.state.carouselCurrentIndex);
                 }
@@ -98,7 +115,6 @@ window.app.components.carousel = async () => {
         let topSlides = [];
         
         // --- OPTIMIZATION 1: SESSION CACHING ---
-        // Check if we already loaded the carousel data this session
         const cachedCarousel = sessionStorage.getItem('blazex_carousel_cache');
         if (cachedCarousel) {
             try {
@@ -110,7 +126,8 @@ window.app.components.carousel = async () => {
 
         // --- OPTIMIZATION 2: PARALLEL FETCHING (If no cache) ---
         if (!topSlides || topSlides.length === 0) {
-            const baseUrl = 'https://anikoto-api-xi.vercel.app';
+            // NEW API ENDPOINT
+            const baseUrl = 'https://anikoto-api-lyart.vercel.app';
 
             // Get trending from AniList
             const aniQuery = `
@@ -157,12 +174,19 @@ window.app.components.carousel = async () => {
 
                     if (!exactMatch) return null;
 
+                    // Safely extract episode counts across different AniKoto formats
+                    let epCount = exactMatch.episodes?.sub || exactMatch.episodes?.dub || exactMatch.episodes || exactMatch.episodeCount || 0;
+                    if (typeof epCount === 'object') epCount = 0;
+
                     return {
                         exactId: exactMatch.id,
                         title: searchKeyword,
                         finalImage: media.coverImage?.extraLarge || 'https://via.placeholder.com/1280x720/111/fff?text=No+Image',
                         finalRating: media.averageScore || null,
                         finalDescription: media.description ? media.description.replace(/<[^>]*>?/gm, '').trim() : 'No synopsis available.',
+                        // NEW FIELDS for Release Detection Baseline
+                        episodes: parseInt(epCount, 10) || 0,
+                        status: exactMatch.status || 'UNKNOWN'
                     };
                 } catch (e) {
                     return null;
@@ -344,7 +368,7 @@ function startAutoRotate() {
     }, 6000); 
 }
 
-// --- DYNAMIC LIBRARY LOGIC (ADD, REMOVE & NOTIFY) ---
+// --- DYNAMIC LIBRARY LOGIC (ADD, REMOVE & RELEASE TRACKING BASELINE) ---
 window.app.handleCarouselLibraryClick = async (event, index) => {
     event.stopPropagation(); 
     const btn = event.currentTarget;
@@ -362,11 +386,15 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
         if (!rawData) return;
         
         const docIdStr = String(rawData.exactId);
+        
+        // INTEGRATION: Pass baseline episode/status data to prevent false-positive initial notifications
         const formattedAnime = { 
             id: docIdStr, 
             title: rawData.title, 
             img: rawData.finalImage,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            lastKnownEpisode: rawData.episodes || 0,
+            releaseStatus: rawData.status || 'UNKNOWN'
         };
 
         const isAdded = btn.dataset.added === "true"; 
@@ -398,7 +426,7 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
             btn.className = "bg-white text-black px-5 py-2 md:px-6 md:py-3 rounded font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors border border-white flex items-center gap-2 shadow-lg";
             btn.innerHTML = `<i class="fas fa-check"></i> Added`;
 
-            await setDoc(libDocRef, formattedAnime);
+            await setDoc(libDocRef, formattedAnime, { merge: true }); // Merge true safely prevents overwrite if fields exist
             await addDoc(notifRef, {
                 type: 'library',
                 title: 'Library Updated',
