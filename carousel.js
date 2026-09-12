@@ -1,4 +1,4 @@
-// carousel.js - HIGH PERFORMANCE OPTIMIZED (Parallel Fetch & Caching + Release Tracking Integration)
+// carousel.js - HIGH PERFORMANCE OPTIMIZED (Parallel Fetch, Caching & Live Sync)
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
@@ -42,7 +42,7 @@ const initFirebase = async () => {
     }
 };
 
-// --- BACKGROUND FIREBASE SYNC & RELEASE CHECK HOOK ---
+// --- BACKGROUND FIREBASE LIVE SYNC ---
 const setupFirebaseSync = async () => {
     try {
         await initFirebase();
@@ -56,10 +56,10 @@ const setupFirebaseSync = async () => {
 
             if (user && !user.isAnonymous) {
                 const libRef = collection(db, "users", user.uid, "library");
+                
+                // LIVE LISTENER: Instantly updates Carousel UI when Library changes
                 window.app.state.libraryUnsubscribe = onSnapshot(libRef, (snapshot) => {
                     window.app.state.carouselLibrarySet.clear();
-                    
-                    // Build a fresh array of the library for the Release Manager if needed
                     let currentLibraryDocs = [];
 
                     snapshot.forEach(doc => {
@@ -67,7 +67,6 @@ const setupFirebaseSync = async () => {
                         currentLibraryDocs.push({ id: doc.id, ...doc.data() });
                     });
                     
-                    // Attach to global state so library.js and upcoming.js can reuse this
                     window.app.state.libraryCache = currentLibraryDocs;
 
                     if (document.getElementById('carousel-ui-layer')) {
@@ -75,9 +74,7 @@ const setupFirebaseSync = async () => {
                     }
                 });
 
-                // --- INTEGRATION: TRIGGER BACKGROUND NOTIFICATION SCAN ONCE PER SESSION ---
                 if (window.app.releaseManager && typeof window.app.releaseManager.checkLibraryReleases === 'function') {
-                    // It will safely handle its own rate-limiting/isChecking locks
                     window.app.releaseManager.checkLibraryReleases(user.uid);
                 }
 
@@ -98,7 +95,7 @@ window.app.components.carousel = async () => {
     const container = document.getElementById('carousel-container');
     if (!container) return;
 
-    // 1. SHOW LOADING SCREEN IMMEDIATELY
+    // SHOW LOADING SCREEN IMMEDIATELY
     container.innerHTML = `
         <div class="w-full aspect-[4/5] md:aspect-[21/9] bg-black flex items-center justify-center border-b border-white/5">
             <div class="tk-loader scale-50">
@@ -108,28 +105,20 @@ window.app.components.carousel = async () => {
         </div>
     `;
 
-    // Fire off Firebase sync without blocking the UI rendering
     setupFirebaseSync();
 
     try {
         let topSlides = [];
-        
-        // --- OPTIMIZATION 1: SESSION CACHING ---
         const cachedCarousel = sessionStorage.getItem('blazex_carousel_cache');
+        
         if (cachedCarousel) {
-            try {
-                topSlides = JSON.parse(cachedCarousel);
-            } catch (e) {
-                sessionStorage.removeItem('blazex_carousel_cache');
-            }
+            try { topSlides = JSON.parse(cachedCarousel); } 
+            catch (e) { sessionStorage.removeItem('blazex_carousel_cache'); }
         }
 
-        // --- OPTIMIZATION 2: PARALLEL FETCHING (If no cache) ---
         if (!topSlides || topSlides.length === 0) {
-            // NEW API ENDPOINT
-            const baseUrl = 'https://anikoto-api-lyart.vercel.app';
-
-            // Get trending from AniList
+            const baseUrl = 'https://anikoto-api-lyart.vercel.app'; // UPDATED API
+            
             const aniQuery = `
                 query { 
                     Page(page: 1, perPage: 15) { 
@@ -152,7 +141,6 @@ window.app.components.carousel = async () => {
             const aniData = await aniRes.json();
             const aniListMedia = aniData?.data?.Page?.media || [];
 
-            // Execute API cross-reference in PARALLEL instead of sequentially
             const searchPromises = aniListMedia.map(async (media) => {
                 const romaji = media.title.romaji || '';
                 const english = media.title.english || '';
@@ -174,7 +162,6 @@ window.app.components.carousel = async () => {
 
                     if (!exactMatch) return null;
 
-                    // Safely extract episode counts across different AniKoto formats
                     let epCount = exactMatch.episodes?.sub || exactMatch.episodes?.dub || exactMatch.episodes || exactMatch.episodeCount || 0;
                     if (typeof epCount === 'object') epCount = 0;
 
@@ -184,7 +171,6 @@ window.app.components.carousel = async () => {
                         finalImage: media.coverImage?.extraLarge || 'https://via.placeholder.com/1280x720/111/fff?text=No+Image',
                         finalRating: media.averageScore || null,
                         finalDescription: media.description ? media.description.replace(/<[^>]*>?/gm, '').trim() : 'No synopsis available.',
-                        // NEW FIELDS for Release Detection Baseline
                         episodes: parseInt(epCount, 10) || 0,
                         status: exactMatch.status || 'UNKNOWN'
                     };
@@ -193,27 +179,19 @@ window.app.components.carousel = async () => {
                 }
             });
 
-            // Wait for all fetches to complete simultaneously, filter out failures, keep top 5
             const resolvedResults = await Promise.all(searchPromises);
             topSlides = resolvedResults.filter(item => item !== null).slice(0, 5);
 
-            // Save to cache for instant loading on page re-visits
             if (topSlides.length > 0) {
                 sessionStorage.setItem('blazex_carousel_cache', JSON.stringify(topSlides));
             }
         }
 
-        // --- FALLBACK UI ---
         if (topSlides.length === 0) {
-            container.innerHTML = `
-                <div class="p-6 text-center text-gray-500 text-xs border border-white/5 mx-4 rounded-xl bg-black tracking-widest uppercase">
-                    <i class="fas fa-exclamation-circle mr-1 text-[#F47521]"></i> Stream Offline
-                </div>
-            `;
+            container.innerHTML = `<div class="p-6 text-center text-gray-500 text-xs border border-white/5 mx-4 rounded-xl bg-black tracking-widest uppercase"><i class="fas fa-exclamation-circle mr-1 text-[#F47521]"></i> Stream Offline</div>`;
             return;
         }
 
-        // --- RENDER LOGIC ---
         window.app.state.carouselItems = topSlides; 
         window.app.state.carouselCurrentIndex = 0;
 
@@ -231,9 +209,7 @@ window.app.components.carousel = async () => {
                 ? 'carousel-dot w-2 h-8 bg-[#F47521] transition-all duration-300 cursor-pointer pointer-events-auto shadow-md shrink-0 rounded-sm'
                 : 'carousel-dot w-2 h-2 bg-white/30 hover:bg-white/60 transition-all duration-300 cursor-pointer pointer-events-auto shadow-md shrink-0 rounded-sm';
 
-            dotsHtml += `
-                <div onclick="window.app.goToCarouselSlide(${i})" class="${dotClass}" id="dot-${i}"></div>
-            `;
+            dotsHtml += `<div onclick="window.app.goToCarouselSlide(${i})" class="${dotClass}" id="dot-${i}"></div>`;
         });
 
         container.innerHTML = `
@@ -243,10 +219,7 @@ window.app.components.carousel = async () => {
                     <div class="absolute bottom-0 left-0 right-0 h-[65%] bg-gradient-to-t from-black via-black/90 to-transparent md:hidden z-30 pointer-events-none"></div>
                     <div class="absolute inset-0 bg-gradient-to-r from-black via-black/90 to-transparent hidden md:block w-[80%] z-30 pointer-events-none"></div>
                 </div>
-
-                <div id="carousel-ui-layer" class="absolute bottom-8 left-4 right-8 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:left-12 md:w-[40%] z-40 pr-4 transition-opacity duration-300 opacity-100">
-                </div>
-                
+                <div id="carousel-ui-layer" class="absolute bottom-8 left-4 right-8 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:left-12 md:w-[40%] z-40 pr-4 transition-opacity duration-300 opacity-100"></div>
                 <div class="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 flex flex-col justify-center gap-2.5 z-[70]" id="carousel-indicators">
                     ${dotsHtml}
                 </div>
@@ -261,7 +234,6 @@ window.app.components.carousel = async () => {
     }
 };
 
-// --- DYNAMIC UI UPDATER ---
 window.app.updateCarouselUI = (index) => {
     const uiLayer = document.getElementById('carousel-ui-layer');
     if (!uiLayer) return;
@@ -272,16 +244,11 @@ window.app.updateCarouselUI = (index) => {
     const docIdStr = String(data.exactId);
     const isAdded = window.app.state.carouselLibrarySet.has(docIdStr);
     const safeTitle = (data.title || 'Unknown').replace(/'/g, "\\'");
-
     const ratingHtml = data.finalRating ? `<span class="flex items-center gap-1"><i class="fas fa-star"></i> ${data.finalRating}% SCORE</span>` : '';
 
     const libraryBtnHtml = isAdded 
-        ? `<button id="carousel-lib-btn" onclick="window.app.handleCarouselLibraryClick(event, ${index})" data-added="true" class="bg-white text-black px-5 py-2 md:px-6 md:py-3 rounded font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors border border-white flex items-center gap-2 shadow-lg">
-               <i class="fas fa-check"></i> Added
-           </button>`
-        : `<button id="carousel-lib-btn" onclick="window.app.handleCarouselLibraryClick(event, ${index})" data-added="false" class="bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2 shadow-lg">
-               <i class="fas fa-plus"></i> Library
-           </button>`;
+        ? `<button id="carousel-lib-btn" onclick="window.app.handleCarouselLibraryClick(event, ${index})" data-added="true" class="bg-white text-black px-5 py-2 md:px-6 md:py-3 rounded font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors border border-white flex items-center gap-2 shadow-lg"><i class="fas fa-check"></i> Added</button>`
+        : `<button id="carousel-lib-btn" onclick="window.app.handleCarouselLibraryClick(event, ${index})" data-added="false" class="bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2 shadow-lg"><i class="fas fa-plus"></i> Library</button>`;
 
     uiLayer.style.opacity = '0';
 
@@ -291,21 +258,12 @@ window.app.updateCarouselUI = (index) => {
                 <span class="bg-[#F47521]/10 border border-[#F47521]/30 px-2 py-0.5 rounded backdrop-blur-sm">#${index + 1} Trending</span>
                 ${ratingHtml}
             </div>
-
             <h2 class="text-3xl md:text-5xl lg:text-6xl font-black text-white mb-2 md:mb-3 drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] line-clamp-2 tracking-tight cursor-pointer leading-tight hover:text-[#F47521] transition-colors" onclick="window.app.handleCarouselImageClick()">${data.title || 'Unknown'}</h2>
-            
             <p class="text-[11px] md:text-xs text-gray-300 line-clamp-3 md:line-clamp-4 mb-5 md:mb-6 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-relaxed font-medium pointer-events-none">${data.finalDescription}</p>
-            
             <div class="flex flex-wrap gap-2.5 relative z-40">
-                <button onclick="window.app.handleCarouselImageClick()" class="bg-[#F47521] text-white px-6 py-2 md:px-8 md:py-3 rounded shadow-[0_0_15px_rgba(244,117,33,0.3)] font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-white hover:text-black transition-colors flex items-center gap-2">
-                    <i class="fas fa-play"></i> Watch
-                </button>
-                
+                <button onclick="window.app.handleCarouselImageClick()" class="bg-[#F47521] text-white px-6 py-2 md:px-8 md:py-3 rounded shadow-[0_0_15px_rgba(244,117,33,0.3)] font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-white hover:text-black transition-colors flex items-center gap-2"><i class="fas fa-play"></i> Watch</button>
                 ${libraryBtnHtml}
-                
-                <button onclick="event.stopPropagation(); window.app.shareAnime('${data.exactId}', '${safeTitle}')" class="bg-white/10 backdrop-blur-md text-white px-4 py-2 md:px-5 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-blue-500 transition-colors border border-white/10 flex items-center gap-2 shadow-lg">
-                    <i class="fas fa-share-nodes"></i>
-                </button>
+                <button onclick="event.stopPropagation(); window.app.shareAnime('${data.exactId}', '${safeTitle}')" class="bg-white/10 backdrop-blur-md text-white px-4 py-2 md:px-5 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-blue-500 transition-colors border border-white/10 flex items-center gap-2 shadow-lg"><i class="fas fa-share-nodes"></i></button>
             </div>
         `;
         uiLayer.style.opacity = '1';
@@ -368,7 +326,7 @@ function startAutoRotate() {
     }, 6000); 
 }
 
-// --- DYNAMIC LIBRARY LOGIC (ADD, REMOVE & RELEASE TRACKING BASELINE) ---
+// --- DYNAMIC LIBRARY LOGIC ---
 window.app.handleCarouselLibraryClick = async (event, index) => {
     event.stopPropagation(); 
     const btn = event.currentTarget;
@@ -387,7 +345,6 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
         
         const docIdStr = String(rawData.exactId);
         
-        // INTEGRATION: Pass baseline episode/status data to prevent false-positive initial notifications
         const formattedAnime = { 
             id: docIdStr, 
             title: rawData.title, 
@@ -399,41 +356,55 @@ window.app.handleCarouselLibraryClick = async (event, index) => {
 
         const isAdded = btn.dataset.added === "true"; 
 
-        const { doc, setDoc, deleteDoc, collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        const { doc, setDoc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const libDocRef = doc(db, "users", auth.currentUser.uid, "library", docIdStr);
-        const notifRef = collection(db, "users", auth.currentUser.uid, "notifications");
+        
+        // UNIQUE ID for deterministic logic
+        const notifDocRef = doc(db, "users", auth.currentUser.uid, "notifications", `lib_${docIdStr}`);
 
         if (isAdded) {
+            // REMOVE
             window.app.state.carouselLibrarySet.delete(docIdStr);
             btn.dataset.added = "false";
             btn.className = "bg-white/10 backdrop-blur-md text-white px-5 py-2 md:px-6 md:py-3 rounded font-bold text-[10px] md:text-sm tracking-wider uppercase hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2 shadow-lg";
             btn.innerHTML = `<i class="fas fa-plus"></i> Library`;
 
             await deleteDoc(libDocRef);
-            await addDoc(notifRef, {
+            
+            // Generate notification with animeId included!
+            await setDoc(notifDocRef, {
+                id: `lib_${docIdStr}`,
                 type: 'library',
                 title: 'Library Updated',
                 message: `You removed ${rawData.title} from your library.`,
                 image: rawData.finalImage,
-                timestamp: Date.now()
-            });
+                animeId: docIdStr, // CRITICAL FIX: Routes back to info.html
+                timestamp: Date.now(),
+                read: false
+            }, { merge: true });
 
             if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
 
         } else {
+            // ADD
             window.app.state.carouselLibrarySet.add(docIdStr);
             btn.dataset.added = "true";
             btn.className = "bg-white text-black px-5 py-2 md:px-6 md:py-3 rounded font-black text-[10px] md:text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors border border-white flex items-center gap-2 shadow-lg";
             btn.innerHTML = `<i class="fas fa-check"></i> Added`;
 
-            await setDoc(libDocRef, formattedAnime, { merge: true }); // Merge true safely prevents overwrite if fields exist
-            await addDoc(notifRef, {
+            await setDoc(libDocRef, formattedAnime, { merge: true }); 
+            
+            // Generate notification with animeId included!
+            await setDoc(notifDocRef, {
+                id: `lib_${docIdStr}`,
                 type: 'library',
                 title: 'Library Updated',
                 message: `You added ${rawData.title} to your library!`,
                 image: rawData.finalImage,
-                timestamp: Date.now()
-            });
+                animeId: docIdStr, // CRITICAL FIX: Routes back to info.html
+                timestamp: Date.now(),
+                read: false
+            }, { merge: true });
 
             if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
         }
