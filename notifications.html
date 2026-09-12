@@ -120,7 +120,7 @@
         </div>
 
         <!-- Notifications Feed -->
-        <div id="notifications-feed" class="flex flex-col gap-3 mt-4">
+        <div id="notifications-feed" class="flex flex-col gap-4 mt-4">
             <!-- Loading State -->
             <div class="flex justify-center items-center py-12">
                 <i class="fas fa-spinner fa-spin text-3xl text-[#F47521]"></i>
@@ -128,7 +128,7 @@
         </div>
     </main>
 
-    <!-- NEW: Cinematic Release Notification Popup (Queue System) -->
+    <!-- Cinematic Release Notification Popup (Queue System) -->
     <div id="release-popup-wrapper" class="fixed inset-0 z-[200] hidden flex items-center justify-center p-4 pointer-events-none">
         <div id="release-popup-backdrop" class="absolute inset-0 bg-black/70 backdrop-blur-sm opacity-0 transition-opacity duration-300 pointer-events-auto"></div>
         
@@ -222,9 +222,8 @@
         window.app.state.allNotifications = [];
         window.app.state.currentFilter = 'all';
         window.app.state.currentSort = 'date-desc';
-        window.app.state.sessionStartTime = Date.now(); // Used to separate historic vs genuinely new notifications
+        window.app.state.sessionStartTime = Date.now(); 
 
-        // Queue system for new release popups
         window.app.state.popupQueue = [];
         window.app.state.activePopupIndex = 0;
 
@@ -243,15 +242,13 @@
         window.app.db = db;
         window.app.auth = auth;
 
-        // --- NEW: RELEASE MANAGER (Background Check & Normalization) ---
-        // Exposing this globally so it can be called from Library/Upcoming loads without duplicating intervals.
+        // RELEASE MANAGER 
         window.app.releaseManager = {
             isChecking: false,
             apiBase: 'https://anikoto-api-lyart.vercel.app',
             cache: {},
 
             normalizeAnimeData: function(apiResponse) {
-                // Fuses data fields safely regardless of AniKoto variations
                 return {
                     animeId: apiResponse.id || apiResponse.animeId,
                     title: apiResponse.title || apiResponse.name,
@@ -265,13 +262,12 @@
                 };
             },
 
-            // Deterministic notification creation prevents duplicates unconditionally
             createNotification: async function(uid, eventType, animeData, specificMessage, uniqueSuffix) {
                 const docId = `rel_${animeData.animeId}_${eventType}_${uniqueSuffix}`;
                 const notifRef = doc(db, "users", uid, "notifications", docId);
                 
                 const notifPayload = {
-                    type: eventType, // 'episode_released', 'series_released', 'release_delayed'
+                    type: eventType,
                     animeId: animeData.animeId,
                     title: animeData.title,
                     image: animeData.poster,
@@ -285,16 +281,12 @@
                     uniqueEventId: docId
                 };
 
-                try {
-                    await setDoc(notifRef, notifPayload, { merge: true });
-                } catch(e) {
-                    console.error("Failed to write release notification", e);
-                }
+                try { await setDoc(notifRef, notifPayload, { merge: true }); } catch(e) { console.error("Failed to write release notification", e); }
             }
         };
 
-        // --- CUSTOM DROPDOWN LOGIC ---
-        window.app.toggleSortDropdown = (e) => { /* existing */
+        // CUSTOM DROPDOWN LOGIC 
+        window.app.toggleSortDropdown = (e) => {
             e.stopPropagation();
             const dropdown = document.getElementById('sort-dropdown');
             const arrow = document.getElementById('sort-arrow');
@@ -302,30 +294,25 @@
             arrow.style.transform = dropdown.classList.contains('active') ? 'rotate(180deg)' : 'rotate(0deg)';
         };
 
-        window.app.selectSort = (sortValue, displayText) => { /* existing */
+        window.app.selectSort = (sortValue, displayText) => {
             document.querySelector('#sort-display span').innerText = displayText;
             const dropdown = document.getElementById('sort-dropdown');
-            const arrow = document.getElementById('sort-dropdown');
             dropdown.classList.remove('active');
             document.getElementById('sort-arrow').style.transform = 'rotate(0deg)';
             window.app.state.currentSort = sortValue;
             window.app.renderNotifications();
         };
 
-        // --- POPUP QUEUE UI MANAGER ---
+        // POPUP QUEUE UI MANAGER 
         window.app.enqueueReleasePopup = (notification) => {
-            // Prevent same notification from queueing twice
             if (window.app.state.popupQueue.some(n => n.uniqueEventId === notification.uniqueEventId || n.id === notification.id)) return;
-            
             window.app.state.popupQueue.push(notification);
             
-            // If it's the only one, show immediately
             if (window.app.state.popupQueue.length === 1) {
                 window.app.state.activePopupIndex = 0;
                 window.app.renderActivePopup();
                 window.app.showPopupContainer();
             } else {
-                // Just update the selector UI if already open
                 window.app.updatePopupQueueSelector();
             }
         };
@@ -335,19 +322,16 @@
             if (!queue.length) return;
             const active = queue[window.app.state.activePopupIndex];
 
-            // Render details
             document.getElementById('popup-poster').src = active.image || 'https://via.placeholder.com/400x600/111/fff?text=No+Image';
             document.getElementById('popup-title').innerText = active.title || 'Unknown Anime';
             document.getElementById('popup-subtitle').innerText = active.message || 'New update available';
             
-            // Type badge
             const badge = document.getElementById('popup-type-badge');
             if (active.type === 'episode_released') { badge.innerText = 'New Episode'; badge.className = 'bg-[#F47521] text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider shadow-md'; }
             else if (active.type === 'series_released') { badge.innerText = 'Series Released'; badge.className = 'bg-green-600 text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider shadow-md'; }
             else if (active.type === 'release_delayed') { badge.innerText = 'Delayed'; badge.className = 'bg-yellow-600 text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider shadow-md'; }
             else { badge.innerText = 'Update'; }
 
-            // Sub/Dub
             const subDub = document.getElementById('popup-sub-dub');
             let langArr = [];
             if (active.sub) langArr.push('SUB');
@@ -355,20 +339,14 @@
             if (langArr.length > 0) {
                 subDub.innerText = langArr.join(' | ');
                 subDub.classList.remove('hidden');
-            } else {
-                subDub.classList.add('hidden');
-            }
+            } else { subDub.classList.add('hidden'); }
 
-            // Synopsis & Genres
             document.getElementById('popup-synopsis').innerText = active.synopsis || 'No description available for this release.';
             const genresContainer = document.getElementById('popup-genres');
             if (active.genres && Array.isArray(active.genres)) {
                 genresContainer.innerHTML = active.genres.slice(0, 3).map(g => `<span class="bg-white/10 border border-white/5 px-2 py-0.5 rounded text-[10px] font-bold text-gray-300">${g}</span>`).join('');
-            } else {
-                genresContainer.innerHTML = '';
-            }
+            } else { genresContainer.innerHTML = ''; }
 
-            // Buttons
             document.getElementById('popup-watch-btn').onclick = () => {
                 window.app.closeReleasePopup();
                 window.app.handleNotificationClick(active.type, active.animeId);
@@ -378,7 +356,6 @@
                     window.navigator.share({ title: active.title, text: active.message, url: `${window.location.origin}/info.html?id=${active.animeId}` });
                 }
             };
-
             window.app.updatePopupQueueSelector();
         };
 
@@ -397,9 +374,7 @@
                         <span class="text-[10px] uppercase font-bold shrink-0">${n.type === 'release_delayed' ? 'Delayed' : 'New'}</span>
                     </button>
                 `).join('');
-            } else {
-                selector.classList.add('hidden');
-            }
+            } else { selector.classList.add('hidden'); }
         };
 
         window.app.togglePopupQueue = () => {
@@ -422,7 +397,6 @@
             const content = document.getElementById('release-popup-content');
             
             wrapper.classList.remove('hidden');
-            // Trigger reflow
             void wrapper.offsetWidth; 
             
             backdrop.classList.add('opacity-100');
@@ -441,24 +415,22 @@
             
             setTimeout(() => {
                 document.getElementById('release-popup-wrapper').classList.add('hidden');
-                // Clear the queue when closed manually, preventing duplicate nagging
                 window.app.state.popupQueue = [];
                 window.app.state.activePopupIndex = 0;
             }, 400);
         };
 
-
-        // --- CLICK ROUTING LOGIC ---
+        // CLICK ROUTING LOGIC
         window.app.handleNotificationClick = async (type, animeId, userId) => {
             if (type === 'like' && userId) {
                 window.location.href = `/profile.html?id=${userId}`;
             } else if (['library', 'episode_released', 'series_released', 'release_delayed'].includes(type) && animeId) {
-                // Push to info route (Existing logic)
+                // This routes directly to the anime page exactly like the carousel button 
                 window.location.href = `/info.html?id=${animeId}`;
             }
         };
 
-        // --- RENDER NOTIFICATIONS FEED ---
+        // RENDER NOTIFICATIONS FEED (NEW CINEMATIC DESIGN)
         window.app.renderNotifications = () => {
             const feed = document.getElementById('notifications-feed');
             
@@ -468,7 +440,7 @@
                     ? window.app.state.allNotifications.filter(n => ['episode_released', 'series_released', 'release_delayed'].includes(n.type))
                     : window.app.state.allNotifications.filter(n => n.type === window.app.state.currentFilter);
 
-            processedData.sort((a, b) => { /* existing sort logic */
+            processedData.sort((a, b) => {
                 const timeA = a.timestamp || 0; const timeB = b.timestamp || 0;
                 const titleA = (a.title || '').toLowerCase(); const titleB = (b.title || '').toLowerCase();
                 switch (window.app.state.currentSort) {
@@ -493,37 +465,52 @@
             processedData.forEach(notif => {
                 const imgUrl = notif.image || notif.userPfp || 'https://via.placeholder.com/150x225/111/fff?text=No+Image';
                 
+                // NEW: Larger, sleeker poster dimensions
+                let imgClass = "w-20 h-28 md:w-28 md:h-40 object-cover rounded-xl shadow-lg transition-transform duration-500 group-hover:scale-105";
                 let iconHtml = '';
-                let imgClass = "w-16 h-20 md:w-20 md:h-28 object-cover rounded-lg shadow-lg border border-white/10";
                 
-                if(notif.type === 'like') { iconHtml = '<i class="fas fa-heart text-red-500 text-xs"></i>'; imgClass = "w-16 h-16 md:w-16 md:h-16 object-cover rounded-full shadow-lg border-2 border-[#F47521]/50"; }
-                else if(notif.type === 'comment') iconHtml = '<i class="fas fa-comment text-blue-500 text-xs"></i>';
-                else if(notif.type === 'library') iconHtml = '<i class="fas fa-bookmark text-green-500 text-xs"></i>';
-                else if(notif.type === 'episode_released') iconHtml = '<i class="fas fa-play-circle text-[#F47521] text-xs"></i>';
-                else if(notif.type === 'series_released') iconHtml = '<i class="fas fa-tv text-green-500 text-xs"></i>';
-                else if(notif.type === 'release_delayed') iconHtml = '<i class="fas fa-clock text-yellow-500 text-xs"></i>';
+                if(notif.type === 'like') { 
+                    iconHtml = '<i class="fas fa-heart text-red-500 text-xs md:text-sm"></i>'; 
+                    imgClass = "w-16 h-16 md:w-20 md:h-20 object-cover rounded-full shadow-lg border-2 border-[#F47521]/50 transition-transform duration-500 group-hover:scale-105"; 
+                }
+                else if(notif.type === 'comment') iconHtml = '<i class="fas fa-comment text-blue-500 text-xs md:text-sm"></i>';
+                else if(notif.type === 'library') iconHtml = '<i class="fas fa-bookmark text-green-500 text-xs md:text-sm"></i>';
+                else if(notif.type === 'episode_released') iconHtml = '<i class="fas fa-play-circle text-[#F47521] text-xs md:text-sm"></i>';
+                else if(notif.type === 'series_released') iconHtml = '<i class="fas fa-tv text-green-500 text-xs md:text-sm"></i>';
+                else if(notif.type === 'release_delayed') iconHtml = '<i class="fas fa-clock text-yellow-500 text-xs md:text-sm"></i>';
 
+                const isAnimeCard = ['library', 'episode_released', 'series_released', 'release_delayed'].includes(notif.type);
+
+                // NEW: Borderless card wrapper, scales and reveals play button on hover
                 html += `
-                    <div class="group flex gap-4 p-3 bg-white/5 border border-white/10 hover:border-[#F47521]/50 hover:bg-white/10 rounded-xl relative transition-all overflow-hidden items-center cursor-pointer shadow-md"
+                    <div class="group flex gap-4 md:gap-6 p-3 md:p-4 bg-white/5 hover:bg-white/10 rounded-2xl relative transition-all overflow-hidden items-center cursor-pointer shadow-sm hover:shadow-xl border border-transparent"
                          onclick="window.app.handleNotificationClick('${notif.type}', '${notif.animeId || ''}', '${notif.userId || ''}')">
                         
-                        <div class="shrink-0 relative flex items-center justify-center h-full">
+                        <div class="shrink-0 relative flex items-center justify-center rounded-xl overflow-hidden shadow-md bg-[#111]">
                             <img src="${imgUrl}" alt="Cover" class="${imgClass}">
+                            
+                            <!-- Play Icon Hover Overlay for Series -->
+                            ${isAnimeCard ? `
+                            <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
+                                <i class="fas fa-play text-white text-2xl md:text-3xl drop-shadow-lg scale-75 group-hover:scale-100 transition-transform duration-300"></i>
+                            </div>
+                            ` : ''}
                         </div>
                         
                         <div class="flex-1 min-w-0 pr-8 py-1">
-                            <div class="flex items-center gap-2 mb-1">
+                            <div class="flex items-center gap-2 mb-1.5 md:mb-2">
                                 ${iconHtml}
-                                <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                                <span class="text-[10px] md:text-xs text-[#F47521] font-bold uppercase tracking-widest">
                                     ${notif.timestamp ? new Date(notif.timestamp).toLocaleDateString() : 'New'}
                                 </span>
                             </div>
-                            <h3 class="text-white font-bold text-sm md:text-base leading-tight mb-1 truncate">${notif.title || 'Notification'}</h3>
-                            <p class="text-gray-400 text-xs md:text-sm line-clamp-2 leading-relaxed">${notif.message || ''}</p>
+                            <h3 class="text-white font-black text-base md:text-xl leading-tight mb-1.5 md:mb-2 truncate group-hover:text-[#F47521] transition-colors">${notif.title || 'Notification'}</h3>
+                            <p class="text-gray-400 text-xs md:text-sm line-clamp-2 md:line-clamp-3 leading-relaxed font-medium">${notif.message || ''}</p>
                         </div>
 
-                        <button onclick="event.stopPropagation(); window.app.deleteNotification('${notif.id}')" class="absolute top-1/2 -translate-y-1/2 right-4 text-gray-500 hover:text-red-500 w-8 h-8 rounded-full hover:bg-red-500/10 flex items-center justify-center transition-colors z-50">
-                            <i class="fas fa-times text-lg"></i>
+                        <!-- Subtler Delete Button -->
+                        <button onclick="event.stopPropagation(); window.app.deleteNotification('${notif.id}')" class="absolute top-1/2 -translate-y-1/2 right-3 md:right-5 text-gray-500 hover:text-red-500 w-10 h-10 rounded-full hover:bg-red-500/10 flex items-center justify-center transition-colors z-50">
+                            <i class="fas fa-times text-lg md:text-xl"></i>
                         </button>
                     </div>
                 `;
@@ -532,8 +519,8 @@
             feed.innerHTML = html;
         };
 
-        // --- FILTER, DELETE & MODAL LOGIC (Existing logic intact) ---
-        window.app.setFilter = (type) => { /* existing logic, slightly adjusted for 'releases' pill */
+        // FILTER, DELETE & MODAL LOGIC 
+        window.app.setFilter = (type) => { 
             window.app.state.currentFilter = type;
             document.querySelectorAll('.category-pill').forEach(pill => {
                 if (pill.dataset.filter === type) pill.className = "category-pill whitespace-nowrap px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wider bg-[#F47521] text-white transition-all shadow-lg";
@@ -542,23 +529,23 @@
             window.app.renderNotifications();
         };
 
-        window.app.showToast = (msg) => { /* existing */
+        window.app.showToast = (msg) => { 
             const toast = document.getElementById('toast-message');
             document.getElementById('toast-text').innerText = msg;
             toast.classList.add('active');
             setTimeout(() => { toast.classList.remove('active'); }, 3000);
         };
 
-        window.app.deleteNotification = async (docId) => { /* existing */
+        window.app.deleteNotification = async (docId) => { 
             const user = auth.currentUser;
             if (!user) return;
             try { await deleteDoc(doc(db, "users", user.uid, "notifications", docId)); window.app.showToast("Deleted"); } catch (err) {}
         };
         window.app.openClearAllModal = () => { document.getElementById('confirm-modal').classList.add('active'); };
         window.app.closeModal = () => { document.getElementById('confirm-modal').classList.remove('active'); };
-        window.app.confirmClearAll = async () => { /* existing */ window.app.closeModal(); };
+        window.app.confirmClearAll = async () => { window.app.closeModal(); };
 
-        // --- ENHANCED FIREBASE LISTENER ---
+        // ENHANCED FIREBASE LISTENER 
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 const notifRef = collection(db, "users", user.uid, "notifications");
@@ -567,12 +554,10 @@
                 onSnapshot(q, (snapshot) => {
                     const data = [];
                     
-                    // Track docs strictly to update UI feed
                     snapshot.docs.forEach((doc) => data.push({ id: doc.id, ...doc.data() }));
                     window.app.state.allNotifications = data;
                     window.app.renderNotifications();
 
-                    // Detect purely NEW releases for the Cinematic Popup
                     snapshot.docChanges().forEach((change) => {
                         if (change.type === "added") {
                             const notif = change.doc.data();
