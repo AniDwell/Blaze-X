@@ -40,6 +40,13 @@
             0%, 15% { transform: translateX(0); }
             85%, 100% { transform: translateX(var(--scroll-dist)); }
         }
+
+        /* Enforce Maximum Z-Index for any dynamically injected share menus */
+        #blazex-share-modal, 
+        #share-backdrop,
+        #share-sheet {
+            z-index: 2147483647 !important;
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col pb-24 relative overflow-x-hidden">
@@ -98,7 +105,7 @@
                         <div class="flex items-center gap-2 mt-3">
                             <span id="view-badge" class="bg-white/10 text-gray-300 px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-widest border border-white/5">Authenticating</span>
                             <!-- INTEGRATION: Triggers cinematic Share Modal -->
-                            <button onclick="window.app.shareProfile(window.activeProfileUid, cachedProfileData?.username || 'User')" class="bg-white/5 hover:bg-white/20 text-gray-300 hover:text-white px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-widest border border-white/10 transition-colors flex items-center gap-1">
+                            <button onclick="window.app.shareProfile(window.activeProfileUid, cachedProfileData?.username || 'User')" class="bg-white/5 hover:bg-white/20 text-gray-300 hover:text-white px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-widest border border-white/10 transition-colors flex items-center gap-1 relative z-20">
                                 <i class="fas fa-link"></i> Share
                             </button>
                         </div>
@@ -415,7 +422,8 @@
             const encodedText = encodeURIComponent(`Check out ${username}'s profile on Blaze-X!`);
             const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodedUrl}&bgcolor=111111&color=ffffff&margin=1`;
 
-            modal.className = "fixed inset-0 z-[9999] flex items-end justify-center pointer-events-auto";
+            // Note: Changed from z-[9999] to z-[2147483647]
+            modal.className = "fixed inset-0 z-[2147483647] flex items-end justify-center pointer-events-auto";
             modal.innerHTML = `
                 <div id="share-backdrop" class="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-300 opacity-0"></div>
                 
