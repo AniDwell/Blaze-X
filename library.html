@@ -11,7 +11,7 @@
 
     <style>
         body {
-            background-color: #030305;
+            background-color: #050505; /* Deep, premium black */
             color: white;
             font-family: 'Inter', sans-serif;
             -webkit-font-smoothing: antialiased;
@@ -20,21 +20,21 @@
         
         ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #F47521; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
         
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
         .hidden-el { display: none !important; }
 
+        /* Premium matte glass effect - No glow */
         .glass-header {
-            background: rgba(3, 3, 5, 0.95);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+            background: rgba(5, 5, 5, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
 
-        /* Safe Edge Padding for Sliders */
         .slider-track {
             padding-left: 1rem;
             padding-right: 1rem;
@@ -47,24 +47,22 @@
 </head>
 <body class="min-h-screen flex flex-col pb-24 relative">
 
-    <!-- Sticky Centered Header & Search Bar (No Glow, No Back Button) -->
+    <!-- Premium Sticky Header -->
     <header class="sticky top-0 z-50 glass-header w-full px-4 py-4">
         <div class="max-w-4xl mx-auto flex flex-col gap-4">
             
-            <!-- Centered Header Logo -->
             <div class="flex items-center justify-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-[#F47521]" viewBox="0 0 20 20" fill="currentColor">
                     <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" />
                 </svg>
-                <h1 class="text-2xl font-black text-white uppercase tracking-wider">
+                <h1 class="text-xl md:text-2xl font-black text-white uppercase tracking-widest">
                     Library
                 </h1>
             </div>
             
-            <!-- Search Bar -->
             <div class="relative w-full">
                 <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm"></i>
-                <input type="text" id="library-search" placeholder="Search your saved anime..." class="w-full bg-[#111] border border-white/10 rounded-xl py-3 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-[#F47521]/50 transition-colors shadow-inner" oninput="handleSearch()">
+                <input type="text" id="library-search" placeholder="Search your saved anime..." class="w-full bg-[#111] border border-white/5 rounded-xl py-3 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-[#F47521]/50 transition-colors shadow-inner" oninput="handleSearch()">
                 <button id="clear-search-btn" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white hidden transition-colors" onclick="clearSearch()">
                     <i class="fas fa-times text-sm"></i>
                 </button>
@@ -77,13 +75,13 @@
         <!-- Loading State -->
         <div id="loading-state" class="flex flex-col items-center justify-center py-24">
             <i class="fas fa-circle-notch fa-spin text-4xl text-[#F47521] mb-4"></i>
-            <p class="text-gray-400 font-bold tracking-widest uppercase text-sm">Loading Data...</p>
+            <p class="text-gray-500 font-bold tracking-widest uppercase text-sm">Syncing Library...</p>
         </div>
 
         <!-- Empty State -->
         <div id="empty-state" class="hidden-el flex flex-col items-center justify-center py-20 px-4 text-center">
-            <div class="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center border border-white/10 mb-4 shadow-lg">
-                <i class="fas fa-box-open text-3xl text-gray-500"></i>
+            <div class="w-20 h-20 bg-[#111] rounded-full flex items-center justify-center border border-white/5 mb-4 shadow-lg">
+                <i class="fas fa-bookmark text-3xl text-gray-600"></i>
             </div>
             <h2 class="text-xl font-black text-white mb-2">Your Library is Empty</h2>
             <p class="text-gray-400 text-sm max-w-xs leading-relaxed">You haven't saved any anime yet. Start exploring and bookmark your favorites!</p>
@@ -92,21 +90,20 @@
             </button>
         </div>
 
-        <!-- Default View: The Custom Segmented Sliders -->
+        <!-- Default Categorized View -->
         <div id="library-sliders-view" class="hidden-el pb-4">
-            <!-- Top 2 Sliders -->
-            <div id="top-sliders-mount"></div>
             
             <!-- Big Rectangular Genre Slider -->
             <div id="genre-tiles-mount"></div>
             
-            <!-- Remaining Sliders -->
-            <div id="bottom-sliders-mount"></div>
+            <!-- Dynamic Genre Sliders -->
+            <div id="genre-sliders-mount" class="mt-4"></div>
+            
         </div>
 
-        <!-- Search View: Flat Grid -->
+        <!-- Search Results Grid -->
         <div id="library-search-view" class="hidden-el px-4 md:px-6 pb-4 pt-4">
-            <h3 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 border-b border-white/10 pb-2" id="search-results-count">Results (0)</h3>
+            <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 border-b border-white/5 pb-2" id="search-results-count">Results (0)</h3>
             <div id="search-grid-mount" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-5">
                 <!-- Search results injected here -->
             </div>
@@ -133,14 +130,14 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        let fullLibraryItems = [];
         let enrichedLibraryItems = [];
         let groupedGenres = {};
+        
+        // Define Base URL for Search API
+        const baseUrl = 'https://anikoto-api-xi.vercel.app'; 
 
-        // Custom Navigation Logic
-        window.sliderNavigate = (id) => {
-            window.location.href = `/info.html?id=${id}`;
-        };
+        // Shared Navigation
+        window.sliderNavigate = (id) => window.location.href = `/info.html?id=${id}`;
 
         window.scrollTrack = (trackId, direction) => {
             const track = document.getElementById(trackId);
@@ -150,46 +147,38 @@
             }
         };
 
-        // Scroll to specific slider from Genre Tile click
         window.scrollToGenre = (trackId) => {
             const el = document.getElementById(`container-${trackId}`);
             if (el) {
-                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                el.classList.add('bg-white/5');
-                setTimeout(() => el.classList.remove('bg-white/5'), 1000);
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
         };
 
-        // UI function to remove a card visually and from the Database
+        // Remove from Library
         window.removeFromLibrary = async (event, idStr, cardElementId) => {
             event.stopPropagation();
             if (!auth.currentUser) return;
-            
             try {
                 await deleteDoc(doc(db, "users", auth.currentUser.uid, "library", String(idStr)));
-                
                 const card = document.getElementById(cardElementId);
                 if (card) {
-                    card.style.transform = 'scale(0.8)';
+                    card.style.transform = 'scale(0.9)';
                     card.style.opacity = '0';
                     setTimeout(() => card.remove(), 300);
                 }
                 enrichedLibraryItems = enrichedLibraryItems.filter(i => String(i.id) !== String(idStr));
-            } catch (err) {
-                console.error("Failed to remove:", err);
-            }
+            } catch (err) { console.error("Failed to remove:", err); }
         };
 
-        // Load Library Sequence
+        // Initialize Library
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 await fetchAndRenderLibrary(user.uid);
             } else {
                 document.getElementById('loading-state').classList.add('hidden-el');
-                const emptyState = document.getElementById('empty-state');
-                emptyState.classList.remove('hidden-el');
-                emptyState.innerHTML = `
-                    <div class="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center border border-white/10 mb-4 shadow-lg">
+                document.getElementById('empty-state').classList.remove('hidden-el');
+                document.getElementById('empty-state').innerHTML = `
+                    <div class="w-20 h-20 bg-[#111] rounded-full flex items-center justify-center border border-white/5 mb-4 shadow-lg">
                         <i class="fas fa-user-lock text-3xl text-[#F47521]"></i>
                     </div>
                     <h2 class="text-xl font-black text-white mb-2">Login Required</h2>
@@ -210,8 +199,10 @@
                     return;
                 }
 
-                fullLibraryItems = snapshot.docs.map(doc => doc.data());
-                enrichedLibraryItems = await enrichBatchWithAniList(fullLibraryItems);
+                const rawItems = snapshot.docs.map(doc => doc.data());
+                
+                // Fetch AniList & Live Sub/Dub details simultaneously
+                enrichedLibraryItems = await enrichItems(rawItems);
                 
                 document.getElementById('loading-state').classList.add('hidden-el');
                 document.getElementById('library-sliders-view').classList.remove('hidden-el');
@@ -223,97 +214,80 @@
             }
         }
 
-        // Fix: Query AniList using Search Title, not Database ID
-        async function enrichBatchWithAniList(batch) {
+        // Extremely robust data fetching (AniList for Genre + Anikoto for Sub/Dub)
+        async function enrichItems(batch) {
             if (batch.length === 0) return [];
             
-            const graphqlQuery = `
-                query {
-                    ${batch.map((item, index) => {
-                        const cleanTitle = (item.title || 'Untitled').replace(/"/g, '').replace(/\\/g, '');
-                        return `anime${index}: Media(search: "${cleanTitle}", type: ANIME) { status coverImage { extraLarge } genres format }`;
-                    }).join('\n')}
-                }
-            `;
-            
-            let anilistData = {};
-            try {
-                const res = await fetch('https://graphql.anilist.co', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: graphqlQuery })
-                });
-                const json = await res.json();
-                anilistData = json.data || {};
-            } catch (e) {
-                console.error("AniList enrichment failed", e);
-            }
+            return await Promise.all(batch.map(async (item) => {
+                let aniMatch = null;
+                let searchMatch = null;
+                const cleanTitle = (item.title || '').replace(/[^a-zA-Z0-9 ]/g, '');
 
-            const baseUrl = 'https://anikoto-api-lyart.vercel.app';
-
-            // Parallel fetch to Anikoto Search API to get authentic live sub/dub counts
-            const enriched = await Promise.all(batch.map(async (item, i) => {
-                const aniMatch = anilistData[`anime${i}`];
-                
-                let sub = '?';
-                let dub = 0;
-                let type = aniMatch?.format || item.type || 'TV';
-
+                // 1. Fetch AniList Data via GraphQL Variables (100% safe against weird titles)
                 try {
-                    const cleanTitle = (item.title || '').replace(/"/g, '').replace(/\\/g, '');
+                    const aniQuery = `query($search: String) { Media(search: $search, type: ANIME) { status coverImage { extraLarge } genres format } }`;
+                    const res = await fetch('https://graphql.anilist.co', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ query: aniQuery, variables: { search: cleanTitle } })
+                    });
+                    const json = await res.json();
+                    if (json.data && json.data.Media) {
+                        aniMatch = json.data.Media;
+                    }
+                } catch(e) {}
+
+                // 2. Fetch Live Sub/Dub Counts from Anikoto
+                try {
                     const searchRes = await fetch(`${baseUrl}/api/search?keyword=${encodeURIComponent(cleanTitle)}`);
                     if (searchRes.ok) {
                         const searchJson = await searchRes.json();
                         const results = searchJson.data || searchJson.results || [];
-                        if (results.length > 0) {
-                            const match = results[0];
-                            sub = match.tvInfo?.sub || match.sub || '?';
-                            dub = match.tvInfo?.dub || match.dub || 0;
-                            type = match.type || type;
-                        }
+                        if (results.length > 0) searchMatch = results[0];
                     }
-                } catch(e) {} // Fail gracefully, fallback to defaults
+                } catch(e) {}
 
+                // Merge and prioritize data
+                const genres = aniMatch?.genres || ['Uncategorized'];
+                const primaryGenre = genres.length > 0 ? genres[0] : 'Uncategorized';
+                
                 return {
-                    ...item,
+                    id: item.id,
+                    title: item.title,
+                    poster: aniMatch?.coverImage?.extraLarge || searchMatch?.image || searchMatch?.poster || item.img || 'https://via.placeholder.com/150x225?text=No+Cover',
+                    genres: genres,
+                    primaryGenre: primaryGenre,
+                    format: aniMatch?.format || searchMatch?.type || item.type || 'TV',
                     status: aniMatch?.status || item.releaseStatus || item.status || 'FINISHED',
-                    poster: aniMatch?.coverImage?.extraLarge || item.img || item.image || 'https://via.placeholder.com/150x225?text=No+Cover',
-                    genres: aniMatch?.genres || ['Other'], 
-                    primaryGenre: aniMatch?.genres?.[0] || 'Other',
-                    format: type,
-                    sub: sub,
-                    dub: dub
+                    sub: searchMatch?.tvInfo?.sub || searchMatch?.sub || '?',
+                    dub: searchMatch?.tvInfo?.dub || searchMatch?.dub || 0
                 };
             }));
-
-            return enriched;
         }
 
-        // --- CORE RENDER SYSTEM --- //
+        // --- CORE UI GENERATORS --- //
 
-        // Exact match for Action Slider Card UI
+        // Exact match for action_slider.js UI
         function generateCardHtml(item) {
             const safeTitle = (item.title || 'Untitled').replace(/'/g, "\\'");
-            const isUpcoming = item.status === 'NOT_YET_RELEASED' || item.releaseStatus === 'NOT_YET_RELEASED';
+            const isUpcoming = item.status === 'NOT_YET_RELEASED';
             const cardId = `card-${item.id}-${Math.random().toString(36).substring(7)}`; 
             
-            // Solid Bookmark Icon (No Glow)
             const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521]" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>`;
             
-            const upcomingBadge = isUpcoming ? `<div class="absolute bottom-2 left-2 z-20 pointer-events-none"><span class="bg-[#F47521] text-white text-[9px] md:text-[10px] px-1.5 py-1 rounded shadow-md font-black uppercase tracking-wide">UPCOMING</span></div>` : '';
-            const formatBadge = item.format ? `<span class="bg-black/80 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded border border-white/10 font-bold uppercase shadow-md">${item.format}</span>` : '';
-            const subBadge = `<span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-md font-bold">CC ${item.sub}</span>`;
-            const dubBadge = (item.dub && item.dub !== '0' && item.dub !== 0) ? `<span class="bg-purple-600/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-md font-bold"><i class="fas fa-microphone text-[9px] mr-0.5"></i> ${item.dub}</span>` : '';
+            const upcomingBadge = isUpcoming ? `<div class="absolute bottom-2 left-2 z-20 pointer-events-none"><span class="bg-[#F47521] text-white text-[9px] md:text-[10px] px-1.5 py-1 rounded font-black uppercase tracking-wide">UPCOMING</span></div>` : '';
+            const formatBadge = item.format ? `<span class="bg-black/80 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded border border-white/5 font-bold uppercase shadow-sm">${item.format}</span>` : '';
+            const subBadge = `<span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-sm font-bold">CC ${item.sub}</span>`;
+            const dubBadge = (item.dub && item.dub !== '0' && item.dub !== 0) ? `<span class="bg-purple-600/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-sm font-bold"><i class="fas fa-microphone text-[9px] mr-0.5"></i> ${item.dub}</span>` : '';
 
-            // Layout perfectly matches action_slider.js
             return `
             <div id="${cardId}" class="snap-start shrink-0 w-[140px] md:w-[190px] relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-10" onclick="window.sliderNavigate('${item.id}')">
                 
-                <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden shadow-lg border border-white/10 group-hover:border-[#F47521]/70 transition-colors bg-[#111]">
+                <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden shadow-lg border border-white/5 group-hover:border-[#F47521]/70 transition-colors bg-[#111]">
                     <img src="${item.poster}" loading="lazy" class="w-full h-full object-cover">
                     
                     <button onclick="window.removeFromLibrary(event, '${item.id}', '${cardId}')" 
-                            class="absolute top-2 right-2 z-30 p-2 rounded bg-black/80 backdrop-blur-md border border-white/10 shadow-lg hover:bg-black transition-all flex items-center justify-center">
+                            class="absolute top-2 right-2 z-30 p-2 rounded bg-black/80 backdrop-blur-md border border-white/5 shadow-md hover:bg-black transition-all flex items-center justify-center">
                         ${savedSvg}
                     </button>
                     
@@ -331,19 +305,19 @@
             `;
         }
 
-        // Build a Standard Horizontal Slider Block
+        // Horizontal Slider Block
         function buildSliderHtml(genreName, items) {
             const trackId = `track-${genreName.replace(/[^a-zA-Z0-9]/g, '-')}`;
             return `
-                <div id="container-${trackId}" class="mb-8 relative transition-colors duration-500 rounded-xl py-2">
-                    <div class="flex items-center justify-between mb-4 pl-4 md:pl-6 pr-4">
-                        <h2 class="text-xl md:text-2xl font-black text-white border-l-4 border-[#F47521] pl-3 uppercase tracking-wider">
-                            ${genreName} <span class="text-xs text-gray-500 font-bold ml-1">(${items.length})</span>
+                <div id="container-${trackId}" class="mb-10 relative">
+                    <div class="flex items-center justify-between mb-4 pl-4 md:pl-6 pr-4 border-l-4 border-[#F47521] ml-4 md:ml-6">
+                        <h2 class="text-lg md:text-xl font-black text-white uppercase tracking-wider pl-3">
+                            ${genreName} <span class="text-xs text-gray-500 font-bold ml-2">(${items.length})</span>
                         </h2>
                     </div>
                     
                     <div class="relative group/slider">
-                        <button onclick="scrollTrack('${trackId}', -1)" class="hidden md:flex absolute left-2 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl">
+                        <button onclick="scrollTrack('${trackId}', -1)" class="hidden md:flex absolute left-2 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-xl">
                             <i class="fas fa-chevron-left text-lg"></i>
                         </button>
                         
@@ -351,7 +325,7 @@
                             ${items.map(generateCardHtml).join('')}
                         </div>
                         
-                        <button onclick="scrollTrack('${trackId}', 1)" class="hidden md:flex absolute right-2 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl">
+                        <button onclick="scrollTrack('${trackId}', 1)" class="hidden md:flex absolute right-2 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-xl">
                             <i class="fas fa-chevron-right text-lg"></i>
                         </button>
                     </div>
@@ -359,17 +333,17 @@
             `;
         }
 
-        // Build the Big Rectangle Genre Tile Slider
+        // Big Rectangle Genre Tiles
         function buildGenreTilesHtml(allGenresArray) {
             if(allGenresArray.length === 0) return '';
             
             return `
-                <div class="mb-10 relative mt-6">
-                    <h2 class="text-xl md:text-2xl font-black text-gray-400 mb-4 pl-4 md:pl-6 uppercase tracking-widest text-sm">
+                <div class="mb-12 relative mt-4">
+                    <h2 class="text-xs font-bold text-gray-500 mb-4 pl-4 md:pl-6 uppercase tracking-widest border-b border-white/5 pb-2 mx-4 md:mx-6">
                         Browse by Genre
                     </h2>
                     <div class="relative group/slider">
-                        <button onclick="scrollTrack('genre-tiles-track', -1)" class="hidden md:flex absolute left-2 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl">
+                        <button onclick="scrollTrack('genre-tiles-track', -1)" class="hidden md:flex absolute left-2 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-xl">
                             <i class="fas fa-chevron-left text-lg"></i>
                         </button>
                         
@@ -377,19 +351,19 @@
                             ${allGenresArray.map(g => {
                                 const trackTarget = `track-${g.name.replace(/[^a-zA-Z0-9]/g, '-')}`;
                                 return `
-                                <div class="snap-start shrink-0 w-[180px] md:w-[240px] aspect-[16/9] relative rounded-xl overflow-hidden group cursor-pointer border border-white/10 shadow-lg hover:border-[#F47521]/70 transition-all" onclick="scrollToGenre('${trackTarget}')">
-                                    <img src="${g.bg}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700">
-                                    <div class="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent group-hover:bg-black/40 transition-colors"></div>
+                                <div class="snap-start shrink-0 w-[160px] md:w-[220px] aspect-[16/9] relative rounded-xl overflow-hidden group cursor-pointer border border-white/5 shadow-lg hover:border-[#F47521]/50 transition-colors" onclick="scrollToGenre('${trackTarget}')">
+                                    <img src="${g.bg}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-80 group-hover:opacity-100">
+                                    <div class="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
                                     <div class="absolute bottom-3 left-0 w-full text-center">
-                                        <h3 class="text-white font-black text-lg md:text-xl uppercase tracking-widest">${g.name}</h3>
-                                        <p class="text-[10px] text-[#F47521] font-bold uppercase tracking-wider">${g.count} Series</p>
+                                        <h3 class="text-white font-black text-base md:text-lg uppercase tracking-widest">${g.name}</h3>
+                                        <p class="text-[9px] text-[#F47521] font-bold uppercase tracking-widest mt-0.5">${g.count} Series</p>
                                     </div>
                                 </div>
                                 `;
                             }).join('')}
                         </div>
                         
-                        <button onclick="scrollTrack('genre-tiles-track', 1)" class="hidden md:flex absolute right-2 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl">
+                        <button onclick="scrollTrack('genre-tiles-track', 1)" class="hidden md:flex absolute right-2 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-xl">
                             <i class="fas fa-chevron-right text-lg"></i>
                         </button>
                     </div>
@@ -397,25 +371,19 @@
             `;
         }
 
-        // Core Layout Coordinator
         function processAndRenderLayout() {
             groupedGenres = {};
             
+            // Group by strict Primary Genre
             enrichedLibraryItems.forEach(item => {
                 const g = item.primaryGenre;
                 if (!groupedGenres[g]) groupedGenres[g] = [];
                 groupedGenres[g].push(item);
             });
 
-            const sortedGenreKeys = Object.keys(groupedGenres).sort((a, b) => groupedGenres[b].length - groupedGenres[a].length);
+            // Sort genres alphabetically
+            const sortedGenreKeys = Object.keys(groupedGenres).sort();
 
-            // 1. Top 2 Sliders
-            let topHtml = '';
-            const topKeys = sortedGenreKeys.slice(0, 2);
-            topKeys.forEach(k => topHtml += buildSliderHtml(k, groupedGenres[k]));
-            document.getElementById('top-sliders-mount').innerHTML = topHtml;
-
-            // 2. The Big Rectangle Genre Tiles
             const allGenresData = sortedGenreKeys.map(k => ({
                 name: k,
                 count: groupedGenres[k].length,
@@ -426,11 +394,9 @@
                 document.getElementById('genre-tiles-mount').innerHTML = buildGenreTilesHtml(allGenresData);
             }
 
-            // 3. Remaining Sliders
-            let bottomHtml = '';
-            const bottomKeys = sortedGenreKeys.slice(2);
-            bottomKeys.forEach(k => bottomHtml += buildSliderHtml(k, groupedGenres[k]));
-            document.getElementById('bottom-sliders-mount').innerHTML = bottomHtml;
+            let slidersHtml = '';
+            sortedGenreKeys.forEach(k => slidersHtml += buildSliderHtml(k, groupedGenres[k]));
+            document.getElementById('genre-sliders-mount').innerHTML = slidersHtml;
         }
 
         // --- SEARCH SYSTEM --- //
@@ -457,8 +423,8 @@
                 if (filtered.length === 0) {
                     gridMount.innerHTML = `
                         <div class="col-span-full text-center py-16">
-                            <i class="fas fa-ghost text-4xl text-gray-600 mb-3"></i>
-                            <p class="text-gray-500 font-bold uppercase tracking-widest text-sm">No matches found</p>
+                            <i class="fas fa-ghost text-4xl text-gray-800 mb-3"></i>
+                            <p class="text-gray-600 font-bold uppercase tracking-widest text-sm">No matches found</p>
                         </div>
                     `;
                 } else {
