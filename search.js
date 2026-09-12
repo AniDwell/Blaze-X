@@ -1,4 +1,4 @@
-// search.js - Full Featured Search & History Engine (Firestore Only - Fixed Sync & Load States)
+// search.js - Full Featured Search & History Engine (Firestore Only - Fixed Sync & Responsive Layouts)
 
 window.app = window.app || {};
 
@@ -24,7 +24,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     const filterModal = document.getElementById('filter-modal');
     
-    const API_BASE = 'https://anikoto-api-xi.vercel.app';
+    // UPDATED API BASE
+    const API_BASE = 'https://anikoto-api-lyart.vercel.app';
     const ANILIST_URL = 'https://graphql.anilist.co';
     let typingTimer;
     let activeFilters = {};
@@ -231,7 +232,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        trendingContainer.className = "flex flex-col gap-4 pb-6 md:grid md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 md:overflow-visible"; 
+        // Applied Responsive Grid (Mobile single column, PC multi-column)
+        trendingContainer.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-6"; 
 
         trendingContainer.innerHTML = inMemoryClickedHistory.map(anime => {
             const safeTitle = anime.title.replace(/'/g, "\\'");
@@ -469,8 +471,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         if(topResultCard) topResultCard.innerHTML = `<div class="animate-pulse w-full h-64 md:h-80 bg-[#111] rounded-2xl"></div>`;
         if(resultsListContainer) {
-            resultsListContainer.className = "flex flex-col gap-4 mt-6"; 
-            resultsListContainer.innerHTML = `<div class="p-8 text-center text-sm text-[#F47521] w-full"><i class="fas fa-circle-notch fa-spin text-2xl mb-3 block"></i> Scanning Anime...</div>`;
+            resultsListContainer.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6"; 
+            resultsListContainer.innerHTML = `<div class="col-span-full p-8 text-center text-sm text-[#F47521] w-full"><i class="fas fa-circle-notch fa-spin text-2xl mb-3 block"></i> Scanning Anime...</div>`;
         }
 
         try {
@@ -541,21 +543,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </div>
                     <div class="relative flex flex-col md:flex-row gap-5 md:gap-8 p-5 md:p-8 w-full z-10 items-start md:items-end">
                         <img src="${topImg}" class="w-28 md:w-48 h-40 md:h-64 object-cover rounded-xl shadow-2xl border border-white/10 shrink-0 transform group-hover:-translate-y-2 transition-transform duration-500">
-                        <div class="flex flex-col flex-1 w-full">
+                        <div class="flex flex-col flex-1 w-full min-w-0">
                             <span class="text-[10px] md:text-xs font-black uppercase tracking-widest text-[#F47521] mb-1.5 md:mb-2 flex items-center gap-2">
                                 <i class="fas fa-fire"></i> Top Match
                             </span>
-                            <h3 class="text-xl md:text-4xl font-black leading-tight text-white mb-2 md:mb-3 drop-shadow-lg">${topAnime.title}</h3>
+                            <h3 class="text-xl md:text-4xl font-black leading-tight text-white mb-2 md:mb-3 drop-shadow-lg truncate">${topAnime.title}</h3>
                             <p id="top-result-desc" class="text-xs md:text-sm text-gray-300 line-clamp-3 md:line-clamp-4 mb-4 md:mb-6 leading-relaxed max-w-3xl">${description}</p>
                             
-                            <div class="flex flex-wrap items-center gap-3 mt-auto">
+                            <div class="flex flex-wrap items-center gap-3 mt-auto w-full">
                                 <button onclick="event.stopPropagation(); window.saveAndGo('${topAnime.id}', '${topSafeTitle}', '${topImg}', '${topType}', '${topSubEps}', '${topDubEps}')" class="bg-white text-black px-5 py-2.5 rounded-lg font-black text-[11px] md:text-xs uppercase tracking-widest hover:bg-[#F47521] hover:text-white transition shadow-lg"><i class="fas fa-play mr-2"></i> Watch Now</button>
                                 ${libraryBtnHtml}
                                 <button onclick="event.stopPropagation(); window.app.shareAnime('${topAnime.id}', '${topSafeTitle}')" class="bg-[#111]/80 backdrop-blur-sm text-white px-4 py-2.5 rounded-lg font-black text-[11px] md:text-xs uppercase hover:text-blue-400 hover:border-blue-400 transition border border-white/10 flex items-center gap-2">
                                     <i class="fas fa-share-nodes"></i> Share
                                 </button>
                                 
-                                <div class="flex gap-2 ml-auto text-[10px] md:text-xs font-bold mt-2 md:mt-0 w-full md:w-auto justify-end">
+                                <div class="flex gap-2 ml-auto text-[10px] md:text-xs font-bold mt-2 md:mt-0 w-full md:w-auto justify-end shrink-0">
                                     <span class="bg-black/50 backdrop-blur-sm text-white px-2 py-1 rounded border border-white/10">${topType}</span>
                                     <span class="bg-[#F47521]/20 border border-[#F47521]/40 text-[#F47521] px-2 py-1 rounded">SUB ${topSubEps}</span>
                                     ${topDubEps > 0 ? `<span class="bg-purple-500/20 border border-purple-500/40 text-purple-400 px-2 py-1 rounded">DUB ${topDubEps}</span>` : ''}
@@ -567,7 +569,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             if(resultsListContainer && restAnime.length > 0) {
-                resultsListContainer.className = "flex flex-col gap-4 mt-6 md:grid md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3";
+                // Applied Responsive Grid layout (Mobile single column, PC multi-column)
+                resultsListContainer.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6";
                 
                 resultsListContainer.innerHTML = restAnime.map(anime => {
                     const aSub = anime.tvInfo?.sub || anime.sub || '?';
@@ -591,7 +594,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <div class="flex flex-col flex-1 min-w-0 justify-between py-1">
                             <div>
                                 <h4 class="text-sm md:text-base font-bold text-white truncate group-hover:text-[#F47521] transition-colors">${anime.title}</h4>
-                                <p class="text-[10px] md:text-xs text-gray-400 line-clamp-2 md:line-clamp-3 mt-1.5 leading-relaxed">${descFallback}</p>
+                                <p class="text-[10px] md:text-xs text-gray-400 line-clamp-2 mt-1.5 leading-relaxed">${descFallback}</p>
                             </div>
                             
                             <div class="flex flex-col gap-2 mt-3">
@@ -638,6 +641,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
             const libDocRef = firestore.doc(window.app.db, "users", currentUserId, "library", docIdStr);
+            const notifDocRef = firestore.doc(window.app.db, "users", currentUserId, "notifications", `lib_${docIdStr}`);
 
             if (isCurrentlyAdded) {
                 // Remove from memory
@@ -657,6 +661,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 
                 // Delete from Firestore
                 await firestore.deleteDoc(libDocRef);
+
+                // Add to Notification (Optional Integration consistency)
+                await firestore.setDoc(notifDocRef, {
+                    id: `lib_${docIdStr}`, type: 'library', title: 'Library Updated',
+                    message: `You removed ${title} from your library.`, image: img,
+                    animeId: docIdStr, timestamp: Date.now(), read: false
+                }, { merge: true });
+
                 if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
             } else {
                 // Add to memory
@@ -674,6 +686,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 
                 // Add to Firestore
                 await firestore.setDoc(libDocRef, formattedAnime);
+
+                // Add to Notification (Optional Integration consistency)
+                await firestore.setDoc(notifDocRef, {
+                    id: `lib_${docIdStr}`, type: 'library', title: 'Library Updated',
+                    message: `You added ${title} to your library!`, image: img,
+                    animeId: docIdStr, timestamp: Date.now(), read: false
+                }, { merge: true });
+
                 if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
             }
         } catch (error) { 
