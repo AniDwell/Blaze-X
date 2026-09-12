@@ -1,4 +1,4 @@
-// newep_slider.js - Upcoming Episodes Slider (Live Sync, Add/Remove Notifs, Auto-Release Notifs)
+// newep_slider.js - Upcoming Episodes Slider (Live Sync, Deterministic Notifs, Baseline Tracking)
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
@@ -46,12 +46,12 @@ window.app.updateNewEpBtnUI = (btn, isAdded) => {
 };
 
 // --- INSTANT SAVE & NOTIFY LOGIC ---
-window.app.toggleNewEpLibrary = async (event, btn, id, title, img) => {
+window.app.toggleNewEpLibrary = async (event, btn, id, title, img, knownEpisodeCount = 0, status = 'RELEASING') => {
     event.stopPropagation(); 
     
     try {
         await initFirebaseNewEp();
-        const { doc, setDoc, deleteDoc, collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        const { doc, setDoc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         
         const auth = window.app.auth;
         const db = window.app.db;
@@ -65,34 +65,54 @@ window.app.toggleNewEpLibrary = async (event, btn, id, title, img) => {
         const docIdStr = String(id);
         const isAdded = btn.dataset.added === "true";
         const libDocRef = doc(db, "users", auth.currentUser.uid, "library", docIdStr);
-        const notifRef = collection(db, "users", auth.currentUser.uid, "notifications");
+        const notifDocRef = doc(db, "users", auth.currentUser.uid, "notifications", `lib_${docIdStr}`);
+
+        // Base payload for Release Manager baseline tracking
+        const payload = {
+            id: docIdStr,
+            title,
+            img,
+            timestamp: Date.now(),
+            lastKnownEpisode: parseInt(knownEpisodeCount) || 0,
+            releaseStatus: status
+        };
 
         if (isAdded) {
+            // Optimistic UI update
             window.app.updateNewEpBtnUI(btn, false);
             window.app.state.carouselLibrarySet.delete(docIdStr);
 
+            // DB Updates
             await deleteDoc(libDocRef);
-            await addDoc(notifRef, {
+            await setDoc(notifDocRef, {
+                id: `lib_${docIdStr}`,
                 type: 'library',
                 title: 'Library Updated',
                 message: `You removed ${title} from your library.`,
                 image: img,
-                timestamp: Date.now()
-            });
+                animeId: docIdStr,
+                timestamp: Date.now(),
+                read: false
+            }, { merge: true });
 
             if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
         } else {
+            // Optimistic UI update
             window.app.updateNewEpBtnUI(btn, true);
             window.app.state.carouselLibrarySet.add(docIdStr);
 
-            await setDoc(libDocRef, { id: docIdStr, title, img, timestamp: Date.now() });
-            await addDoc(notifRef, {
+            // DB Updates
+            await setDoc(libDocRef, payload, { merge: true });
+            await setDoc(notifDocRef, {
+                id: `lib_${docIdStr}`,
                 type: 'library',
                 title: 'Library Updated',
                 message: `You added ${title} to your library!`,
                 image: img,
-                timestamp: Date.now()
-            });
+                animeId: docIdStr,
+                timestamp: Date.now(),
+                read: false
+            }, { merge: true });
 
             if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
         }
@@ -102,23 +122,29 @@ window.app.toggleNewEpLibrary = async (event, btn, id, title, img) => {
     }
 };
 
-// --- EPISODE RELEASE NOTIFICATION LOGIC ---
+// --- DETERMINISTIC EPISODE RELEASE NOTIFICATION LOGIC ---
 window.app.triggerEpisodeReleaseNotification = async (id, title, img, ep) => {
     try {
         await initFirebaseNewEp();
-        const { collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const auth = window.app.auth;
         
         if (auth && auth.currentUser && !auth.currentUser.isAnonymous) {
-            const notifRef = collection(window.app.db, "users", auth.currentUser.uid, "notifications");
-            await addDoc(notifRef, {
-                type: 'library',
+            // UNIQUE DETERMINISTIC ID
+            const notifId = `ep_release_${id}_${ep}`;
+            const notifRef = doc(window.app.db, "users", auth.currentUser.uid, "notifications", notifId);
+            
+            await setDoc(notifRef, {
+                id: notifId,
+                type: 'episode_released',
                 title: 'New Episode Released!',
                 message: `Episode ${ep} of ${title} is now airing!`,
                 image: img,
                 timestamp: Date.now(),
-                animeId: id 
-            });
+                animeId: id,
+                read: false
+            }, { merge: true });
+            
             // Show toast so the user knows it dropped while they were browsing
             if (window.app.showCustomAlert) window.app.showCustomAlert(`Episode ${ep} of ${title} is out!`, "success");
         }
@@ -213,7 +239,7 @@ window.app.components.newEpSlider = async () => {
         releasingList.sort((a, b) => a.nextAiringEpisode.timeUntilAiring - b.nextAiringEpisode.timeUntilAiring);
 
         // 3. CROSS-REFERENCE API
-        const baseUrl = 'https://anikoto-api-xi.vercel.app';
+        const baseUrl = 'https://anikoto-api-lyart.vercel.app';
         
         const crossReferenced = await Promise.all(releasingList.map(async (ani) => {
             const title = ani.title.english || ani.title.romaji;
@@ -231,7 +257,8 @@ window.app.components.newEpSlider = async () => {
                         type: match.type || ani.format || 'TV',
                         sub: match.tvInfo?.sub || match.sub || '?',
                         dub: match.tvInfo?.dub || match.dub || 0,
-                        nextEpData: ani.nextAiringEpisode
+                        nextEpData: ani.nextAiringEpisode,
+                        status: match.status || 'RELEASING'
                     };
                 }
             } catch(e) {}
@@ -256,6 +283,7 @@ window.app.components.newEpSlider = async () => {
             const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
 
             const epNumber = anime.nextEpData.episode;
+            const currentKnownEp = Math.max(0, epNumber - 1); // Extract baseline known eps
             const targetTimestampMs = anime.nextEpData.airingAt * 1000;
 
             return `
@@ -268,7 +296,7 @@ window.app.components.newEpSlider = async () => {
                     <div class="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black via-black/50 to-transparent pointer-events-none"></div>
 
                     <!-- Permanent Save Button -->
-                    <button onclick="window.app.toggleNewEpLibrary(event, this, '${anime.id}', '${safeTitle}', '${anime.image}')" 
+                    <button onclick="window.app.toggleNewEpLibrary(event, this, '${anime.id}', '${safeTitle}', '${anime.image}', ${currentKnownEp}, '${anime.status}')" 
                             data-added="${isAdded}"
                             data-id="${docIdStr}"
                             class="newep-lib-btn absolute top-2 right-2 z-30 p-2 rounded ${isAdded ? 'bg-black/80' : 'bg-black/70'} backdrop-blur-md border border-white/10 shadow-lg hover:bg-black transition-all flex items-center justify-center">
