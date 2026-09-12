@@ -53,6 +53,13 @@
             0% { transform: translateX(15px) scale(0.8); z-index: 1; }
             100% { transform: translateX(-15px) scale(1); z-index: 2; }
         }
+
+        /* Enforce Maximum Z-Index for any dynamically injected share menus */
+        .share-menu-container, 
+        .share-modal, 
+        [id*="share"] {
+            z-index: 2147483647 !important;
+        }
     </style>
 </head>
 <body oncontextmenu="return false;">
@@ -64,7 +71,8 @@
         </div>
     </div>
 
-    <div id="modal-overlay" class="fixed inset-0 z-[70] hidden bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <!-- Updated z-[70] to z-[2147483647] to guarantee it sits above absolutely everything -->
+    <div id="modal-overlay" class="fixed inset-0 z-[2147483647] hidden bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
         <div id="modal-content" class="glass-modal w-full max-w-sm rounded-xl p-6 transform transition-all scale-95 opacity-0 shadow-2xl"></div>
     </div>
 
@@ -75,7 +83,7 @@
         <main id="main-content" class="flex-1 overflow-y-auto relative hide-scrollbar bg-black pb-20">
             
             <div id="info-container" class="w-full animate-fade-in">
-                </div>
+            </div>
 
         </main>
 
@@ -145,3 +153,4 @@
     </script>
 </body>
 </html>
+
