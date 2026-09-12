@@ -104,7 +104,7 @@
                         <!-- Badges & Share -->
                         <div class="flex items-center gap-2 mt-3">
                             <span id="view-badge" class="bg-white/10 text-gray-300 px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-widest border border-white/5">Authenticating</span>
-                            <!-- INTEGRATION: Triggers cinematic Share Modal -->
+                            <!-- Share Modal uses window.cachedProfileData directly -->
                             <button onclick="window.app.shareProfile(window.activeProfileUid, window.cachedProfileData?.username || 'User')" class="bg-white/5 hover:bg-white/20 text-gray-300 hover:text-white px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-widest border border-white/10 transition-colors flex items-center gap-1">
                                 <i class="fas fa-link"></i> Share
                             </button>
@@ -383,8 +383,8 @@
         let currentAuthenticatedUser = null; 
         let isOwnerMode = true; 
         
-        // FIX: Make cachedProfileData accessible globally for inline HTML functions
-        window.cachedProfileData = null;
+        // Fix scoping: attach to window so HTML buttons can read it
+        window.cachedProfileData = null; 
         
         let cropperInstance = null;
         
@@ -408,6 +408,208 @@
                 toast.classList.add('translate-y-full', 'opacity-0');
                 toast.classList.remove('translate-y-0', 'opacity-100');
             }, 3000);
+        };
+
+        // --- HELPER: Format AniList Date ---
+        const formatAniListDate = (dateObj) => {
+            if (!dateObj || !dateObj.year) return "TBA";
+            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            if (dateObj.month && dateObj.day) return `${months[dateObj.month - 1]} ${dateObj.day}, ${dateObj.year}`;
+            if (dateObj.month) return `${months[dateObj.month - 1]} ${dateObj.year}`;
+            return `${dateObj.year}`;
+        };
+
+        // --- DYNAMIC UPCOMING MODAL (Imported from upcoming_slider.js) ---
+        window.app.openUpcomingModal = async (animeId) => {
+            if (!document.getElementById('upcoming-modal-wrapper')) {
+                const modalHtml = `
+                    <div id="upcoming-modal-wrapper" class="fixed inset-0 z-[9999] flex flex-col justify-end pointer-events-none">
+                        <div id="upcoming-modal-backdrop" class="absolute inset-0 bg-black/80 backdrop-blur-sm opacity-0 transition-opacity duration-500 pointer-events-auto"></div>
+                        
+                        <div id="upcoming-modal-content" class="w-full h-[95vh] md:h-[100vh] bg-[#0a0a0a] rounded-t-3xl md:rounded-none transform translate-y-full transition-transform duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] pointer-events-auto flex flex-col overflow-hidden relative shadow-[0_-10px_40px_rgba(0,0,0,0.8)]">
+                            
+                            <button id="upcoming-close-btn-top" class="absolute top-4 right-4 md:top-6 md:right-6 z-[60] w-10 h-10 bg-black/50 hover:bg-[#F47521] backdrop-blur-md rounded-full text-white flex items-center justify-center transition-colors border border-white/10 shadow-lg">
+                                <i class="fas fa-times text-xl"></i>
+                            </button>
+                            
+                            <div class="absolute top-3 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-white/30 rounded-full z-[60] md:hidden"></div>
+
+                            <div id="upcoming-modal-scroll" class="flex-1 overflow-y-auto hide-scrollbar relative pb-20">
+                                <div id="upcoming-modal-body" class="min-h-full">
+                                    <div class="flex flex-col items-center justify-center h-[50vh] text-[#F47521]">
+                                        <i class="fas fa-circle-notch fa-spin text-4xl mb-4"></i>
+                                        <p class="text-sm font-bold tracking-widest uppercase text-white">Fetching Details...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+            }
+
+            const wrapper = document.getElementById('upcoming-modal-wrapper');
+            const backdrop = document.getElementById('upcoming-modal-backdrop');
+            const content = document.getElementById('upcoming-modal-content');
+            const body = document.getElementById('upcoming-modal-body');
+            const closeBtnTop = document.getElementById('upcoming-close-btn-top');
+            
+            wrapper.classList.remove('hidden');
+            void wrapper.offsetWidth;
+            
+            backdrop.classList.remove('opacity-0');
+            backdrop.classList.add('opacity-100');
+            content.classList.remove('translate-y-full');
+            content.classList.add('translate-y-0');
+
+            const closeHandler = () => window.app.closeUpcomingModal();
+            backdrop.onclick = closeHandler;
+            closeBtnTop.onclick = closeHandler;
+
+            try {
+                const query = `
+                    query($id: Int) { 
+                        Media(id: $id) { 
+                            title { english romaji native }
+                            coverImage { extraLarge }
+                            bannerImage
+                            format
+                            episodes
+                            status
+                            description(asHtml: false)
+                            startDate { year month day }
+                            genres
+                            studios(isMain: true) { nodes { name } }
+                            trailer { id site }
+                            recommendations(page: 1, perPage: 8, sort: RATING_DESC) {
+                                nodes { mediaRecommendation { id title { english romaji } coverImage { large } format status } }
+                            }
+                        } 
+                    }
+                `;
+                const res = await fetch('https://graphql.anilist.co', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query, variables: { id: parseInt(animeId) } })
+                });
+                const json = await res.json();
+                const data = json.data.Media;
+
+                const title = data.title.english || data.title.romaji;
+                const banner = data.bannerImage || 'https://via.placeholder.com/1200x400/111/111';
+                const cover = data.coverImage.extraLarge;
+                const releaseDate = formatAniListDate(data.startDate);
+                const description = (data.description || "No description available yet.").replace(/<[^>]*>?/gm, '');
+                const studio = data.studios?.nodes?.[0]?.name || "Unknown Studio";
+                
+                let trailerHtml = '';
+                if (data.trailer && data.trailer.site === 'youtube') {
+                    trailerHtml = `
+                        <div class="w-full max-w-4xl mx-auto mt-8 px-4">
+                            <h3 class="text-white font-black text-lg mb-3 uppercase tracking-wider border-l-4 border-[#F47521] pl-2">Official Trailer</h3>
+                            <div class="relative w-full aspect-video rounded-xl overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.5)] border border-white/5">
+                                <iframe class="absolute inset-0 w-full h-full" src="https://www.youtube.com/embed/${data.trailer.id}" frameborder="0" allowfullscreen></iframe>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                let genresHtml = (data.genres || []).map(g => `<span class="bg-white/10 border border-white/10 px-3 py-1 rounded-full text-xs font-bold text-gray-300 shadow-sm">${g}</span>`).join('');
+
+                let recsHtml = '';
+                const recs = (data.recommendations?.nodes || []).filter(n => n.mediaRecommendation);
+                if (recs.length > 0) {
+                    recsHtml = `
+                        <div class="w-full mt-10 px-4 pb-10">
+                            <h3 class="text-white font-black text-lg mb-4 uppercase tracking-wider border-l-4 border-[#F47521] pl-2">Similar Anime</h3>
+                            <div class="flex gap-3 overflow-x-auto hide-scrollbar snap-x pb-4">
+                                ${recs.map(r => {
+                                    const recAnime = r.mediaRecommendation;
+                                    const rTitle = recAnime.title.english || recAnime.title.romaji;
+                                    return `
+                                        <div class="snap-start shrink-0 w-[110px] md:w-[140px] relative group border border-white/5 rounded-lg overflow-hidden">
+                                            <div class="w-full aspect-[2/3]">
+                                                <img src="${recAnime.coverImage.large}" class="w-full h-full object-cover">
+                                            </div>
+                                            <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
+                                            <div class="absolute bottom-0 left-0 w-full p-2">
+                                                <h4 class="text-white text-[10px] md:text-xs font-bold truncate drop-shadow-md">${rTitle}</h4>
+                                            </div>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                body.innerHTML = `
+                    <div class="relative w-full h-48 md:h-72 bg-[#111]">
+                        <img src="${banner}" class="w-full h-full object-cover opacity-40">
+                        <div class="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/60 to-transparent"></div>
+                        <div class="absolute inset-0 bg-gradient-to-r from-[#0a0a0a]/90 via-transparent to-transparent"></div>
+                    </div>
+                    <div class="relative px-4 md:px-10 -mt-20 md:-mt-32 z-10">
+                        <div class="flex gap-4 md:gap-8 items-end md:items-stretch">
+                            <div class="w-28 md:w-48 shrink-0 relative">
+                                <img src="${cover}" class="w-full aspect-[2/3] object-cover rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.8)] border-2 border-white/10">
+                                <div class="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-[#F47521] text-white text-[9px] md:text-xs font-black uppercase px-3 py-1 rounded shadow-lg whitespace-nowrap">
+                                    ${data.status.replace(/_/g, ' ')}
+                                </div>
+                            </div>
+                            <div class="flex-1 pb-2 md:py-6">
+                                <h2 class="text-xl md:text-4xl font-black text-white leading-tight drop-shadow-lg mb-1 md:mb-2">${title}</h2>
+                                <h3 class="text-xs md:text-sm text-gray-400 font-bold mb-3 line-clamp-1">${data.title.native || ''}</h3>
+                                <div class="flex flex-wrap items-center gap-2 mb-2">
+                                    <span class="bg-white/10 text-white text-[10px] md:text-xs px-2 py-0.5 rounded font-bold uppercase border border-white/5">${data.format || 'TV'}</span>
+                                    <span class="bg-black/50 text-[#F47521] border border-[#F47521]/30 text-[10px] md:text-xs px-2 py-0.5 rounded font-bold">SUB: TBA</span>
+                                    <span class="bg-black/50 text-purple-400 border border-purple-400/30 text-[10px] md:text-xs px-2 py-0.5 rounded font-bold">DUB: TBA</span>
+                                </div>
+                                <p class="text-gray-300 text-xs md:text-sm font-semibold flex items-center gap-2">
+                                    <i class="far fa-calendar-alt text-[#F47521]"></i> 
+                                    Airing: <span class="text-white">${releaseDate}</span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="px-4 md:px-10 mt-8 max-w-4xl mx-auto">
+                        <div class="flex flex-wrap gap-2 mb-6">
+                            ${genresHtml}
+                        </div>
+                        <div class="bg-white/5 border border-white/5 rounded-xl p-4 md:p-6 shadow-lg">
+                            <div class="flex justify-between items-center mb-3">
+                                <span class="text-gray-400 text-xs font-bold uppercase tracking-widest">Studio</span>
+                                <span class="text-white text-sm md:text-base font-black">${studio}</span>
+                            </div>
+                            <p class="text-sm md:text-base text-gray-300 leading-relaxed font-medium">
+                                ${description}
+                            </p>
+                        </div>
+                    </div>
+                    ${trailerHtml}
+                    ${recsHtml}
+                `;
+
+            } catch (e) {
+                console.error(e);
+                body.innerHTML = `<div class="p-10 text-center text-red-500 font-bold">Failed to load details. Try again.</div>`;
+            }
+        };
+
+        window.app.closeUpcomingModal = () => {
+            const backdrop = document.getElementById('upcoming-modal-backdrop');
+            const content = document.getElementById('upcoming-modal-content');
+            
+            if (backdrop && content) {
+                backdrop.classList.remove('opacity-100');
+                backdrop.classList.add('opacity-0');
+                content.classList.remove('translate-y-0');
+                content.classList.add('translate-y-full');
+                setTimeout(() => {
+                    const wrapper = document.getElementById('upcoming-modal-wrapper');
+                    if (wrapper) wrapper.classList.add('hidden');
+                }, 500); 
+            }
         };
 
         // --- NEW: CINEMATIC SHARE MODAL FUNCTION ---
@@ -511,7 +713,6 @@
             const sheet = document.getElementById('share-sheet');
             const backdrop = document.getElementById('share-backdrop');
 
-            // FIX: Uses setTimeout instead of requestAnimationFrame so the browser actually triggers the CSS transition reliably
             setTimeout(() => {
                 backdrop.classList.remove('opacity-0');
                 backdrop.classList.add('opacity-100');
@@ -559,32 +760,10 @@
             document.getElementById('bio-modal').classList.add('hidden-el');
         };
 
-        // --- GLOBAL SLIDER NAVIGATION EFFECT ---
+        // --- GLOBAL SLIDER NAVIGATION (No Loading Bar Overlay) ---
         window.app.sliderNavigate = (id, title, image, type, sub, dub) => {
-            if (!document.getElementById('slider-transition-styles')) {
-                const style = document.createElement('style');
-                style.id = 'slider-transition-styles';
-                style.innerHTML = `@keyframes loadingSlide { 0% { transform: translateX(-100%); } 100% { transform: translateX(200%); } }`;
-                document.head.appendChild(style);
-            }
-
-            const overlayHtml = `
-                <div id="page-transition-overlay" class="fixed inset-0 z-[9999] flex flex-col transition-opacity duration-300 opacity-0">
-                    <div class="absolute inset-0 bg-black/80 backdrop-blur-sm"></div>
-                    <div class="w-full h-1 bg-black/50 relative overflow-hidden z-10">
-                        <div class="w-1/2 h-full bg-[#F47521] rounded-r-full shadow-[0_0_10px_#F47521] animate-[loadingSlide_1s_infinite_ease-in-out]"></div>
-                    </div>
-                </div>
-            `;
-            document.body.insertAdjacentHTML('beforeend', overlayHtml);
-            
-            const overlayEl = document.getElementById('page-transition-overlay');
-            requestAnimationFrame(() => {
-                overlayEl.classList.remove('opacity-0');
-                overlayEl.classList.add('opacity-100');
-            });
-
-            setTimeout(() => { window.location.href = `/info.html?id=${id}`; }, 300);
+            // Instant Navigation - Overlay code completely removed
+            window.location.href = `/info.html?id=${id}`;
         };
 
         // --- GLOBAL TOGGLE LIBRARY FUNC ---
@@ -725,7 +904,6 @@
                 const userDocRef = doc(db, "users", window.activeProfileUid);
                 const userDoc = await getDoc(userDocRef);
                 
-                // FIX: Use window.cachedProfileData
                 window.cachedProfileData = userDoc.exists() ? userDoc.data() : { username: "Anime Fan", hideLibrary: false };
 
                 const nameEl = document.getElementById('user-name');
@@ -779,7 +957,6 @@
                 const libRef = collection(db, "users", window.activeProfileUid, "library");
                 const libSnapshot = await getDocs(libRef);
                 
-                // FIX: Use window.cachedProfileData
                 if (!isOwnerMode && window.cachedProfileData && window.cachedProfileData.hideLibrary) {
                     document.getElementById('stat-library-count').innerText = "Locked";
                 } else {
@@ -795,7 +972,6 @@
             const privateMsg = document.getElementById('visitor-library-private');
             const publicSlider = document.getElementById('visitor-library-public');
             
-            // FIX: Use window.cachedProfileData
             if (window.cachedProfileData.hideLibrary) {
                 privateMsg.classList.remove('hidden-el');
                 publicSlider.classList.add('hidden-el');
@@ -883,6 +1059,8 @@
             const isUpcoming = item.status === 'NOT_YET_RELEASED';
             
             const posterImg = item.poster || item.img || item.image || 'https://via.placeholder.com/150x225?text=No+Cover';
+            
+            // IF UPCOMING -> Open Modal, ELSE -> Navigate to Info Page
             const clickAction = isUpcoming 
                 ? `window.app.openUpcomingModal('${item.id}')` 
                 : `window.app.sliderNavigate('${item.id}', '${safeTitle}', '${posterImg}', '${item.type || "TV"}', '${item.sub || "?"}', '${item.dub || 0}')`;
@@ -1013,7 +1191,6 @@
 
         // --- LIKES LIST MODAL ---
         window.openLikesModal = async () => {
-            // FIX: Use window.cachedProfileData
             if (!window.cachedProfileData || !window.cachedProfileData.likedByArray || window.cachedProfileData.likedByArray.length === 0) {
                 return;
             }
@@ -1030,7 +1207,6 @@
             container.innerHTML = `<div class="flex justify-center py-10"><i class="fas fa-spinner fa-spin text-3xl text-[#F47521]"></i></div>`;
 
             try {
-                // FIX: Use window.cachedProfileData
                 const promises = window.cachedProfileData.likedByArray.map(async (uid) => {
                     const userDoc = await getDoc(doc(db, "users", uid));
                     if (userDoc.exists()) {
@@ -1268,7 +1444,6 @@
             try {
                 const userDocRef = doc(db, "users", currentAuthenticatedUser.uid);
                 await updateDoc(userDocRef, { hideLibrary: checkedVal });
-                // FIX: Use window.cachedProfileData
                 window.cachedProfileData.hideLibrary = checkedVal;
                 if (checkedVal && !isOwnerMode) document.getElementById('stat-library-count').innerText = "Locked";
             } catch(e) {}
@@ -1289,7 +1464,6 @@
             try {
                 let currentLikes = parseInt(document.getElementById('stat-bottom-likes').innerText) || 0;
                 
-                // FIX: Use window.cachedProfileData
                 if (window.cachedProfileData.likedByArray && window.cachedProfileData.likedByArray.includes(currentAuthenticatedUser.uid)) {
                     await updateDoc(userDocRef, {
                         likedByArray: arrayRemove(currentAuthenticatedUser.uid),
@@ -1315,7 +1489,7 @@
                         
                         await setDoc(notifRef, {
                             id: notifId,
-                            type: 'profile_like', // Standardized for notification UI
+                            type: 'profile_like', 
                             title: 'New Profile Like!',
                             message: `${currentAuthenticatedUser.displayName || 'Someone'} liked your profile.`,
                             image: currentAuthenticatedUser.photoURL || 'https://ui-avatars.com/api/?name=User&background=111&color=F47521',
