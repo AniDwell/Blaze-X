@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>My Library | BlazeX</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            background-color: #030305;
+            color: white;
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+        }
+        
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #F47521; border-radius: 10px; }
+        
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .hidden-el { display: none !important; }
+
+        .glass-header {
+            background: rgba(3, 3, 5, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        /* Prevent sliders from hugging the absolute edge of the screen */
+        .slider-track {
+            padding-left: 1rem;
+            padding-right: 1rem;
+            scroll-padding-left: 1rem;
+        }
+        @media (min-width: 768px) {
+            .slider-track { padding-left: 1.5rem; padding-right: 1.5rem; scroll-padding-left: 1.5rem; }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col pb-20 relative">
+
+    <!-- Sticky Top Header & Search Bar -->
+    <header class="sticky top-0 z-50 glass-header w-full px-4 py-3">
+        <div class="max-w-4xl mx-auto flex flex-col gap-3">
+            <div class="flex items-center gap-3">
+                <button onclick="history.back()" class="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white transition-colors border border-white/10">
+                    <i class="fas fa-arrow-left text-sm"></i>
+                </button>
+                <h1 class="text-xl font-black text-white uppercase tracking-wider border-l-4 border-[#F47521] pl-2 drop-shadow-md">
+                    My Library
+                </h1>
+            </div>
+            
+            <div class="relative w-full">
+                <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm"></i>
+                <input type="text" id="library-search" placeholder="Search your saved anime..." class="w-full bg-[#111] border border-white/10 rounded-xl py-3 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-[#F47521]/50 transition-colors shadow-inner" oninput="handleSearch()">
+                <button id="clear-search-btn" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white hidden transition-colors" onclick="clearSearch()">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 w-full max-w-4xl mx-auto pt-6 relative z-10 w-full overflow-hidden">
+        
+        <!-- Loading State -->
+        <div id="loading-state" class="flex flex-col items-center justify-center py-20">
+            <i class="fas fa-circle-notch fa-spin text-4xl text-[#F47521] mb-4"></i>
+            <p class="text-gray-400 font-bold tracking-widest uppercase text-sm">Loading Library...</p>
+        </div>
+
+        <!-- Empty State -->
+        <div id="empty-state" class="hidden-el flex flex-col items-center justify-center py-20 px-4 text-center">
+            <div class="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center border border-white/10 mb-4 shadow-lg">
+                <i class="fas fa-box-open text-3xl text-gray-500"></i>
+            </div>
+            <h2 class="text-xl font-black text-white mb-2">Your Library is Empty</h2>
+            <p class="text-gray-400 text-sm max-w-xs leading-relaxed">You haven't saved any anime yet. Start exploring and bookmark your favorites!</p>
+            <button onclick="window.location.href='/index.html'" class="mt-6 bg-[#F47521] hover:bg-[#d96216] text-white px-6 py-2.5 rounded-xl font-bold transition-all shadow-[0_0_15px_rgba(244,117,33,0.3)]">
+                Explore Anime
+            </button>
+        </div>
+
+        <!-- Default View: Categorized Sliders -->
+        <div id="library-sliders-view" class="hidden-el pb-4">
+            <div id="sliders-mount"></div>
+        </div>
+
+        <!-- Search View: Flat Grid -->
+        <div id="library-search-view" class="hidden-el px-4 md:px-6 pb-4">
+            <h3 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4" id="search-results-count">Results (0)</h3>
+            <div id="search-grid-mount" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4">
+                <!-- Search results injected here -->
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Bottom Navigation Wrapper -->
+    <div id="bottomnav-container" class="fixed bottom-0 w-full z-50"></div>
+
+    <script src="/bottomnav.js"></script>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
+        import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
+            authDomain: "blaze-x-db2f5.firebaseapp.com",
+            projectId: "blaze-x-db2f5"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let fullLibraryItems = [];
+        let enrichedLibraryItems = [];
+
+        // Simple Navigation Function
+        window.sliderNavigate = (id) => {
+            window.location.href = `/info.html?id=${id}`;
+        };
+
+        // Scroll track manually for buttons
+        window.scrollTrack = (trackId, direction) => {
+            const track = document.getElementById(trackId);
+            if (track) {
+                const scrollAmount = window.innerWidth > 768 ? 600 : 300;
+                track.scrollBy({ left: scrollAmount * direction, behavior: 'smooth' });
+            }
+        };
+
+        // Load Library on Auth State Change
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                await fetchAndRenderLibrary(user.uid);
+            } else {
+                document.getElementById('loading-state').classList.add('hidden-el');
+                const emptyState = document.getElementById('empty-state');
+                emptyState.classList.remove('hidden-el');
+                emptyState.innerHTML = `
+                    <div class="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center border border-white/10 mb-4 shadow-lg">
+                        <i class="fas fa-user-lock text-3xl text-[#F47521]"></i>
+                    </div>
+                    <h2 class="text-xl font-black text-white mb-2">Login Required</h2>
+                    <p class="text-gray-400 text-sm max-w-xs leading-relaxed mb-6">You must be logged in to view your saved library.</p>
+                    <button onclick="window.location.href='/index.html'" class="bg-[#F47521] text-white px-6 py-2.5 rounded-xl font-bold">Return Home</button>
+                `;
+            }
+        });
+
+        async function fetchAndRenderLibrary(uid) {
+            try {
+                const libRef = collection(db, "users", uid, "library");
+                const snapshot = await getDocs(libRef);
+                
+                if (snapshot.empty) {
+                    document.getElementById('loading-state').classList.add('hidden-el');
+                    document.getElementById('empty-state').classList.remove('hidden-el');
+                    return;
+                }
+
+                fullLibraryItems = snapshot.docs.map(doc => doc.data());
+                
+                // Fetch AniList Details for genres, format, and high-res posters using the ID
+                enrichedLibraryItems = await enrichBatchWithAniList(fullLibraryItems);
+                
+                document.getElementById('loading-state').classList.add('hidden-el');
+                document.getElementById('library-sliders-view').classList.remove('hidden-el');
+                
+                renderSliders();
+            } catch (error) {
+                console.error("Error fetching library:", error);
+                document.getElementById('loading-state').innerHTML = `<p class="text-red-500 font-bold">Failed to load library.</p>`;
+            }
+        }
+
+        async function enrichBatchWithAniList(batch) {
+            if (batch.length === 0) return [];
+            
+            // Querying strictly by the Anime ID saved in Firebase for highly accurate results
+            const graphqlQuery = `
+                query {
+                    ${batch.map((item, index) => `
+                        anime${index}: Media(id: ${item.id}, type: ANIME) { 
+                            id status coverImage { extraLarge } genres format 
+                        }
+                    `).join('\n')}
+                }
+            `;
+            
+            let anilistData = {};
+            try {
+                const res = await fetch('https://graphql.anilist.co', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: graphqlQuery })
+                });
+                const json = await res.json();
+                anilistData = json.data || {};
+            } catch (e) {
+                console.error("AniList enrichment failed", e);
+            }
+
+            return batch.map((item, i) => {
+                const aniMatch = anilistData[`anime${i}`];
+                return {
+                    ...item,
+                    status: aniMatch?.status || item.releaseStatus || item.status || 'FINISHED',
+                    poster: aniMatch?.coverImage?.extraLarge || item.img || item.image || 'https://via.placeholder.com/150x225?text=No+Cover',
+                    genre: aniMatch?.genres?.[0] || 'Other',
+                    format: aniMatch?.format || item.type || 'TV'
+                };
+            });
+        }
+
+        // Shared Card Generation Logic
+        function generateCardHtml(item) {
+            const isUpcoming = item.status === 'NOT_YET_RELEASED';
+            const upcomingBadge = isUpcoming 
+                ? `<div class="absolute bottom-2 left-2 z-20 pointer-events-none"><span class="bg-[#F47521] text-white text-[9px] md:text-[10px] px-1.5 py-1 rounded shadow-md font-black uppercase tracking-wide">UPCOMING</span></div>` 
+                : '';
+
+            return `
+            <div class="snap-start shrink-0 w-full relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-10" onclick="window.sliderNavigate('${item.id}')">
+                <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden shadow-lg border border-white/10 group-hover:border-[#F47521]/70 transition-colors bg-[#111]">
+                    <img src="${item.poster}" loading="lazy" class="w-full h-full object-cover">
+                    
+                    ${upcomingBadge}
+
+                    <div class="absolute top-0 left-0 p-2 flex flex-col gap-1.5 items-start z-10 pointer-events-none">
+                        <span class="bg-black/80 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded border border-white/10 font-bold uppercase shadow-md">${item.format}</span>
+                    </div>
+                </div>
+                <h3 class="mt-2 text-sm md:text-base text-gray-100 font-bold truncate group-hover:text-white transition-colors drop-shadow-md">${item.title}</h3>
+            </div>
+            `;
+        }
+
+        function renderSliders() {
+            const grouped = {};
+            enrichedLibraryItems.forEach(item => {
+                const g = item.genre || 'Other';
+                if (!grouped[g]) grouped[g] = [];
+                grouped[g].push(item);
+            });
+
+            let fullHtml = '';
+            for (const [genre, items] of Object.entries(grouped)) {
+                const trackId = `track-${genre.replace(/\s+/g, '-')}`;
+                fullHtml += `
+                    <div class="mb-8 relative">
+                        <h3 class="text-lg md:text-xl font-black text-white mb-3 tracking-wider uppercase pl-4 md:pl-6 border-l-4 border-[#F47521] ml-4 md:ml-6 drop-shadow-md">
+                            ${genre} <span class="text-xs text-gray-500 ml-1 font-bold">(${items.length})</span>
+                        </h3>
+                        
+                        <div class="relative group/slider">
+                            <button onclick="scrollTrack('${trackId}', -1)" class="hidden md:flex absolute left-2 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl">
+                                <i class="fas fa-chevron-left text-lg"></i>
+                            </button>
+                            
+                            <div id="${trackId}" class="slider-track flex gap-3 md:gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-4 pt-2">
+                                ${items.map(item => `
+                                    <div class="w-[130px] md:w-[160px] shrink-0">
+                                        ${generateCardHtml(item)}
+                                    </div>
+                                `).join('')}
+                            </div>
+                            
+                            <button onclick="scrollTrack('${trackId}', 1)" class="hidden md:flex absolute right-2 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl">
+                                <i class="fas fa-chevron-right text-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            document.getElementById('sliders-mount').innerHTML = fullHtml;
+        }
+
+        // Search Filter Logic
+        window.handleSearch = () => {
+            const query = document.getElementById('library-search').value.trim().toLowerCase();
+            const clearBtn = document.getElementById('clear-search-btn');
+            
+            const slidersView = document.getElementById('library-sliders-view');
+            const searchView = document.getElementById('library-search-view');
+            const gridMount = document.getElementById('search-grid-mount');
+            const countLabel = document.getElementById('search-results-count');
+
+            if (query.length > 0) {
+                clearBtn.classList.remove('hidden');
+                slidersView.classList.add('hidden-el');
+                searchView.classList.remove('hidden-el');
+
+                const filtered = enrichedLibraryItems.filter(item => 
+                    item.title.toLowerCase().includes(query)
+                );
+
+                countLabel.innerText = `Results (${filtered.length})`;
+
+                if (filtered.length === 0) {
+                    gridMount.innerHTML = `
+                        <div class="col-span-full text-center py-10">
+                            <p class="text-gray-500 font-bold uppercase tracking-widest text-sm">No matches found</p>
+                        </div>
+                    `;
+                } else {
+                    gridMount.innerHTML = filtered.map(item => `
+                        <div class="w-full">
+                            ${generateCardHtml(item)}
+                        </div>
+                    `).join('');
+                }
+            } else {
+                clearSearch();
+            }
+        };
+
+        window.clearSearch = () => {
+            const searchInput = document.getElementById('library-search');
+            searchInput.value = '';
+            document.getElementById('clear-search-btn').classList.add('hidden');
+            
+            document.getElementById('library-search-view').classList.add('hidden-el');
+            if (enrichedLibraryItems.length > 0) {
+                document.getElementById('library-sliders-view').classList.remove('hidden-el');
+            }
+        };
+
+        // Initialize Bottom Nav manually if window.app doesn't
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                if (window.app && window.app.components && window.app.components.bottomnav) {
+                    window.app.components.bottomnav();
+                }
+            }, 500);
+        });
+
+    </script>
+</body>
+</html>
