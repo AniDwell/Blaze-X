@@ -105,7 +105,7 @@
                         <div class="flex items-center gap-2 mt-3">
                             <span id="view-badge" class="bg-white/10 text-gray-300 px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-widest border border-white/5">Authenticating</span>
                             <!-- INTEGRATION: Triggers cinematic Share Modal -->
-                            <button onclick="window.app.shareProfile(window.activeProfileUid, cachedProfileData?.username || 'User')" class="bg-white/5 hover:bg-white/20 text-gray-300 hover:text-white px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-widest border border-white/10 transition-colors flex items-center gap-1">
+                            <button onclick="window.app.shareProfile(window.activeProfileUid, window.cachedProfileData?.username || 'User')" class="bg-white/5 hover:bg-white/20 text-gray-300 hover:text-white px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-widest border border-white/10 transition-colors flex items-center gap-1">
                                 <i class="fas fa-link"></i> Share
                             </button>
                         </div>
@@ -382,7 +382,9 @@
         window.activeProfileUid = null; 
         let currentAuthenticatedUser = null; 
         let isOwnerMode = true; 
-        let cachedProfileData = null;
+        
+        // FIX: Make cachedProfileData accessible globally for inline HTML functions
+        window.cachedProfileData = null;
         
         let cropperInstance = null;
         
@@ -509,12 +511,13 @@
             const sheet = document.getElementById('share-sheet');
             const backdrop = document.getElementById('share-backdrop');
 
-            requestAnimationFrame(() => {
+            // FIX: Uses setTimeout instead of requestAnimationFrame so the browser actually triggers the CSS transition reliably
+            setTimeout(() => {
                 backdrop.classList.remove('opacity-0');
                 backdrop.classList.add('opacity-100');
                 sheet.classList.remove('translate-y-full');
                 sheet.classList.add('translate-y-0');
-            });
+            }, 10);
 
             const closeSheet = () => {
                 backdrop.classList.remove('opacity-100');
@@ -722,10 +725,11 @@
                 const userDocRef = doc(db, "users", window.activeProfileUid);
                 const userDoc = await getDoc(userDocRef);
                 
-                cachedProfileData = userDoc.exists() ? userDoc.data() : { username: "Anime Fan", hideLibrary: false };
+                // FIX: Use window.cachedProfileData
+                window.cachedProfileData = userDoc.exists() ? userDoc.data() : { username: "Anime Fan", hideLibrary: false };
 
                 const nameEl = document.getElementById('user-name');
-                nameEl.innerText = cachedProfileData.username || "Anime Fan";
+                nameEl.innerText = window.cachedProfileData.username || "Anime Fan";
                 const nameContainer = nameEl.parentElement;
                 
                 setTimeout(() => {
@@ -738,7 +742,7 @@
                     }
                 }, 50);
 
-                const bioText = cachedProfileData.bio || "No bio set.";
+                const bioText = window.cachedProfileData.bio || "No bio set.";
                 document.getElementById('user-bio').innerText = bioText;
                 if (bioText.length > 80) {
                     document.getElementById('read-more-bio').classList.remove('hidden-el');
@@ -747,25 +751,25 @@
                     document.getElementById('read-more-bio').classList.add('hidden-el');
                 }
                 
-                document.getElementById('input-edit-username').value = cachedProfileData.username || "";
-                document.getElementById('input-edit-bio').value = cachedProfileData.bio || "";
+                document.getElementById('input-edit-username').value = window.cachedProfileData.username || "";
+                document.getElementById('input-edit-bio').value = window.cachedProfileData.bio || "";
 
-                if (cachedProfileData.photoURL) document.getElementById('user-avatar').src = cachedProfileData.photoURL;
-                if (cachedProfileData.bgImage) document.getElementById('profile-card').style.backgroundImage = `url('${cachedProfileData.bgImage}')`;
+                if (window.cachedProfileData.photoURL) document.getElementById('user-avatar').src = window.cachedProfileData.photoURL;
+                if (window.cachedProfileData.bgImage) document.getElementById('profile-card').style.backgroundImage = `url('${window.cachedProfileData.bgImage}')`;
 
-                let countedLikes = cachedProfileData.likedByArray ? cachedProfileData.likedByArray.length : (cachedProfileData.likesCount || 0);
+                let countedLikes = window.cachedProfileData.likedByArray ? window.cachedProfileData.likedByArray.length : (window.cachedProfileData.likesCount || 0);
                 document.getElementById('stat-bottom-likes').innerText = countedLikes;
 
                 const heartIcon = document.getElementById('heart-icon');
-                if (currentAuthenticatedUser && cachedProfileData.likedByArray && cachedProfileData.likedByArray.includes(currentAuthenticatedUser.uid)) {
+                if (currentAuthenticatedUser && window.cachedProfileData.likedByArray && window.cachedProfileData.likedByArray.includes(currentAuthenticatedUser.uid)) {
                     heartIcon.className = "fas fa-heart text-[#F47521]";
                 } else {
                     heartIcon.className = "far fa-heart text-gray-400";
                 }
 
                 if (isOwnerMode) {
-                    document.getElementById('toggle-hide-library').checked = cachedProfileData.hideLibrary || false;
-                    document.getElementById('toggle-incognito').checked = cachedProfileData.incognitoMode || false;
+                    document.getElementById('toggle-hide-library').checked = window.cachedProfileData.hideLibrary || false;
+                    document.getElementById('toggle-incognito').checked = window.cachedProfileData.incognitoMode || false;
                 }
             } catch (error) { console.error(error); }
         }
@@ -775,7 +779,8 @@
                 const libRef = collection(db, "users", window.activeProfileUid, "library");
                 const libSnapshot = await getDocs(libRef);
                 
-                if (!isOwnerMode && cachedProfileData && cachedProfileData.hideLibrary) {
+                // FIX: Use window.cachedProfileData
+                if (!isOwnerMode && window.cachedProfileData && window.cachedProfileData.hideLibrary) {
                     document.getElementById('stat-library-count').innerText = "Locked";
                 } else {
                     document.getElementById('stat-library-count').innerText = libSnapshot.size || 0;
@@ -790,7 +795,8 @@
             const privateMsg = document.getElementById('visitor-library-private');
             const publicSlider = document.getElementById('visitor-library-public');
             
-            if (cachedProfileData.hideLibrary) {
+            // FIX: Use window.cachedProfileData
+            if (window.cachedProfileData.hideLibrary) {
                 privateMsg.classList.remove('hidden-el');
                 publicSlider.classList.add('hidden-el');
                 return;
@@ -1007,7 +1013,8 @@
 
         // --- LIKES LIST MODAL ---
         window.openLikesModal = async () => {
-            if (!cachedProfileData || !cachedProfileData.likedByArray || cachedProfileData.likedByArray.length === 0) {
+            // FIX: Use window.cachedProfileData
+            if (!window.cachedProfileData || !window.cachedProfileData.likedByArray || window.cachedProfileData.likedByArray.length === 0) {
                 return;
             }
 
@@ -1023,7 +1030,8 @@
             container.innerHTML = `<div class="flex justify-center py-10"><i class="fas fa-spinner fa-spin text-3xl text-[#F47521]"></i></div>`;
 
             try {
-                const promises = cachedProfileData.likedByArray.map(async (uid) => {
+                // FIX: Use window.cachedProfileData
+                const promises = window.cachedProfileData.likedByArray.map(async (uid) => {
                     const userDoc = await getDoc(doc(db, "users", uid));
                     if (userDoc.exists()) {
                         const data = userDoc.data();
@@ -1260,7 +1268,8 @@
             try {
                 const userDocRef = doc(db, "users", currentAuthenticatedUser.uid);
                 await updateDoc(userDocRef, { hideLibrary: checkedVal });
-                cachedProfileData.hideLibrary = checkedVal;
+                // FIX: Use window.cachedProfileData
+                window.cachedProfileData.hideLibrary = checkedVal;
                 if (checkedVal && !isOwnerMode) document.getElementById('stat-library-count').innerText = "Locked";
             } catch(e) {}
         };
@@ -1280,14 +1289,15 @@
             try {
                 let currentLikes = parseInt(document.getElementById('stat-bottom-likes').innerText) || 0;
                 
-                if (cachedProfileData.likedByArray && cachedProfileData.likedByArray.includes(currentAuthenticatedUser.uid)) {
+                // FIX: Use window.cachedProfileData
+                if (window.cachedProfileData.likedByArray && window.cachedProfileData.likedByArray.includes(currentAuthenticatedUser.uid)) {
                     await updateDoc(userDocRef, {
                         likedByArray: arrayRemove(currentAuthenticatedUser.uid),
                         likesCount: increment(-1)
                     });
                     document.getElementById('stat-bottom-likes').innerText = Math.max(0, currentLikes - 1);
                     document.getElementById('heart-icon').className = "far fa-heart text-gray-400";
-                    cachedProfileData.likedByArray = cachedProfileData.likedByArray.filter(uid => uid !== currentAuthenticatedUser.uid);
+                    window.cachedProfileData.likedByArray = window.cachedProfileData.likedByArray.filter(uid => uid !== currentAuthenticatedUser.uid);
                 } else {
                     await updateDoc(userDocRef, {
                         likedByArray: arrayUnion(currentAuthenticatedUser.uid),
@@ -1295,8 +1305,8 @@
                     });
                     document.getElementById('stat-bottom-likes').innerText = currentLikes + 1;
                     document.getElementById('heart-icon').className = "fas fa-heart text-[#F47521]";
-                    if (!cachedProfileData.likedByArray) cachedProfileData.likedByArray = [];
-                    cachedProfileData.likedByArray.push(currentAuthenticatedUser.uid);
+                    if (!window.cachedProfileData.likedByArray) window.cachedProfileData.likedByArray = [];
+                    window.cachedProfileData.likedByArray.push(currentAuthenticatedUser.uid);
 
                     // DETERMINISTIC PUSH NOTIFICATION: Prevents like spam duplicates
                     try {
