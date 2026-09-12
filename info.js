@@ -227,20 +227,8 @@ function renderAnimeInfoShell() {
         });
     }
 
-    // --- LIBRARY BUTTON DYNAMIC RENDER ---
-    const profile = window.app.state?.activeProfile || null;
-    let isAdded = false;
-    if (profile && profile.library && profile.uid && !profile.uid.startsWith('anon_')) {
-        isAdded = profile.library.some(item => item.id === data.id);
-    }
-
-    const libraryBtnHtml = isAdded 
-        ? `<button onclick="window.app.toggleLibrary(event, '${data.id}', '${data.title.replace(/'/g, "\\'")}', '${data.poster}')" class="bg-white text-black px-6 py-3.5 rounded-lg shadow-md font-black text-xs md:text-sm uppercase tracking-wider hover:bg-gray-200 transition-colors border border-white flex items-center gap-2">
-               <i class="fas fa-check text-green-500"></i> Added
-           </button>`
-        : `<button onclick="window.app.toggleLibrary(event, '${data.id}', '${data.title.replace(/'/g, "\\'")}', '${data.poster}')" class="bg-white/10 backdrop-blur-md text-white px-6 py-3.5 rounded-lg shadow-md font-bold text-xs md:text-sm uppercase tracking-wider hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2">
-               <i class="fas fa-plus"></i> Library
-           </button>`;
+    // Default Loading State for Library Button (Checked dynamically below)
+    const libraryBtnHtml = `<button id="info-library-btn" onclick="window.app.toggleLibrary(event, '${data.id}', '${data.title.replace(/'/g, "\\'")}', '${data.poster}')" class="bg-white/10 backdrop-blur-md text-white px-6 py-3.5 rounded-lg shadow-md font-bold text-xs md:text-sm uppercase tracking-wider transition-colors border border-white/10 flex items-center gap-2"><i class="fas fa-circle-notch fa-spin"></i> Loading</button>`;
 
     container.innerHTML = `
         <div class="w-full flex flex-col bg-[#050505] min-h-screen pb-24">
@@ -318,9 +306,44 @@ function renderAnimeInfoShell() {
     window.app.renderInfoInlineTabContent();
     injectVerifiedAlternativePills();
     setupDropdownListener();
+    verifyLibraryStateOnLoad(data.id);
 }
 
-// --- HALF-SCREEN SLIDE-UP SHARE MODAL WITH QR & SOCIAL CHANNELS ---
+// --- SECURE LIBRARY VERIFICATION ON PAGE LOAD ---
+async function verifyLibraryStateOnLoad(animeId) {
+    try {
+        const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+        const auth = getAuth();
+        
+        auth.onAuthStateChanged(async (user) => {
+            const btn = document.getElementById('info-library-btn');
+            if (!btn) return;
+            
+            if (user && !user.isAnonymous) {
+                const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+                const { getFirestore, doc, getDoc } = firestore;
+                const db = getFirestore();
+                const docRef = doc(db, "users", user.uid, "library", String(animeId));
+                const docSnap = await getDoc(docRef);
+                
+                if (docSnap.exists()) {
+                    btn.className = "bg-white text-black px-6 py-3.5 rounded-lg shadow-md font-black text-xs md:text-sm uppercase tracking-wider hover:bg-gray-200 transition-colors border border-white flex items-center gap-2";
+                    btn.innerHTML = `<i class="fas fa-check text-green-500"></i> Added`;
+                } else {
+                    btn.className = "bg-white/10 backdrop-blur-md text-white px-6 py-3.5 rounded-lg shadow-md font-bold text-xs md:text-sm uppercase tracking-wider hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2";
+                    btn.innerHTML = `<i class="fas fa-plus"></i> Library`;
+                }
+            } else {
+                btn.className = "bg-white/10 backdrop-blur-md text-white px-6 py-3.5 rounded-lg shadow-md font-bold text-xs md:text-sm uppercase tracking-wider hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2";
+                btn.innerHTML = `<i class="fas fa-plus"></i> Library`;
+            }
+        });
+    } catch(e) {
+        console.error("Library state verification failed", e);
+    }
+}
+
+// --- HALF-SCREEN SLIDE-UP SHARE MODAL (ENLARGED QR & NO NATIVE SHARE) ---
 window.app.shareAnime = (id, title) => {
     let modal = document.getElementById('blazex-share-modal');
     if (!modal) {
@@ -332,7 +355,9 @@ window.app.shareAnime = (id, title) => {
     const shareUrl = `${window.location.origin}/info.html?id=${encodeURIComponent(id)}`;
     const encodedUrl = encodeURIComponent(shareUrl);
     const encodedText = encodeURIComponent(`Watch ${title} on AniKoto!`);
-    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodedUrl}&bgcolor=111111&color=ffffff&margin=1`;
+    
+    // Increased QR Code Resolution
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodedUrl}&bgcolor=111111&color=ffffff&margin=1`;
 
     modal.className = "fixed inset-0 z-50 flex items-end justify-center pointer-events-auto";
     modal.innerHTML = `
@@ -352,19 +377,19 @@ window.app.shareAnime = (id, title) => {
                 </button>
             </div>
 
-            <!-- QR Section -->
-            <div class="flex items-center gap-4 bg-white/5 p-3.5 rounded-2xl border border-white/5">
-                <div class="w-24 h-24 bg-[#0a0a0a] rounded-xl p-1.5 border border-white/10 flex items-center justify-center shrink-0 shadow-inner">
+            <!-- Enlarged QR Section -->
+            <div class="flex flex-col sm:flex-row items-center sm:items-start gap-4 bg-white/5 p-5 rounded-2xl border border-white/5 text-center sm:text-left">
+                <div class="w-40 h-40 bg-[#0a0a0a] rounded-xl p-2 border border-white/10 flex items-center justify-center shrink-0 shadow-inner mx-auto sm:mx-0">
                     <img src="${qrCodeUrl}" alt="QR Code" class="w-full h-full rounded-lg object-contain">
                 </div>
-                <div class="flex flex-col justify-center">
-                    <span class="text-[#F47521] text-[10px] font-black uppercase tracking-widest mb-1"><i class="fas fa-qrcode mr-1"></i> Scan to Watch</span>
-                    <p class="text-gray-300 text-xs leading-relaxed">Point your mobile camera at this code to quickly jump directly to this anime.</p>
+                <div class="flex flex-col justify-center h-full pt-2">
+                    <span class="text-[#F47521] text-xs font-black uppercase tracking-widest mb-2"><i class="fas fa-qrcode mr-1"></i> Scan to Watch</span>
+                    <p class="text-gray-300 text-sm leading-relaxed">Point your mobile camera at this code to quickly jump directly to this anime.</p>
                 </div>
             </div>
 
             <!-- Direct Link Copy Input -->
-            <div class="flex items-center gap-2 bg-[#050505] border border-white/10 rounded-xl p-1.5 pl-3">
+            <div class="flex items-center gap-2 bg-[#050505] border border-white/10 rounded-xl p-1.5 pl-3 mt-2">
                 <input type="text" id="share-link-input" readonly value="${shareUrl}" class="bg-transparent text-xs text-gray-300 flex-1 outline-none font-mono select-all">
                 <button id="copy-share-btn" class="bg-[#F47521] text-black font-black text-xs px-4 py-2 rounded-lg hover:bg-white transition-colors flex items-center gap-1.5 shrink-0">
                     <i class="fas fa-copy"></i> Copy
@@ -372,7 +397,7 @@ window.app.shareAnime = (id, title) => {
             </div>
 
             <!-- Social Apps Matrix -->
-            <div class="flex flex-col gap-2">
+            <div class="flex flex-col gap-2 mt-2">
                 <span class="text-gray-400 text-[10px] font-black uppercase tracking-wider">Direct Social Share</span>
                 <div class="grid grid-cols-4 sm:grid-cols-5 gap-2 text-center">
                     
@@ -413,11 +438,6 @@ window.app.shareAnime = (id, title) => {
 
                 </div>
             </div>
-
-            <!-- Native OS Share Tray Button -->
-            <button id="native-share-trigger" class="w-full bg-white/10 border border-white/10 hover:bg-[#F47521] hover:text-black text-white font-black text-xs py-3 rounded-xl uppercase tracking-wider transition-colors flex items-center justify-center gap-2">
-                <i class="fas fa-share-alt"></i> Share Via System Menu
-            </button>
 
         </div>
     `;
@@ -462,64 +482,61 @@ window.app.shareAnime = (id, title) => {
             document.execCommand('copy');
         });
     };
-
-    document.getElementById('native-share-trigger').onclick = () => {
-        if (navigator.share) {
-            navigator.share({
-                title: `Watch ${title}`,
-                text: `Check out ${title} on AniKoto!`,
-                url: shareUrl
-            }).catch(console.error);
-        } else {
-            document.getElementById('copy-share-btn').click();
-        }
-    };
 };
 
-// --- DYNAMIC LIBRARY TOGGLE LOGIC ---
+// --- SECURE FIRESTORE LIBRARY TOGGLE LOGIC ---
 window.app.toggleLibrary = async (event, id, title, img) => {
-    const profile = window.app.state?.activeProfile || null;
-    
-    if (!profile || !profile.uid || profile.uid.startsWith('anon_')) {
-        if (window.app.components && window.app.components.auth) window.app.components.auth();
-        else if (window.app.showCustomAlert) window.app.showCustomAlert("Please log in to save to your Library!", "error");
-        return;
-    }
-
-    if (!profile.library) profile.library = [];
-    
-    const docIdStr = String(id);
-    const formattedAnime = { id: docIdStr, title, img, timestamp: Date.now() };
-    
-    const existingItemIndex = profile.library.findIndex(item => String(item.id) === docIdStr);
-    const isCurrentlyAdded = existingItemIndex !== -1;
-    const btn = event.currentTarget;
-
     try {
+        const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+        const auth = getAuth();
+        
+        if (!auth.currentUser || auth.currentUser.isAnonymous) {
+            if (window.app.components && window.app.components.auth) window.app.components.auth();
+            else if (window.app.showCustomAlert) window.app.showCustomAlert("Please log in to save to your Library!", "error");
+            return;
+        }
+
+        const uid = auth.currentUser.uid;
+        const docIdStr = String(id);
+        const formattedAnime = { id: docIdStr, title, img, timestamp: Date.now() };
+        
+        const btn = event.currentTarget;
+        const isAdded = btn.innerText.includes("ADDED") || btn.innerText.includes("Added");
+
         const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
-        const libDocRef = firestore.doc(window.app.db, "users", profile.uid, "library", docIdStr);
+        const { getFirestore, doc, setDoc, deleteDoc } = firestore;
+        const db = getFirestore();
+        
+        const libDocRef = doc(db, "users", uid, "library", docIdStr);
+        const notifDocRef = doc(db, "users", uid, "notifications", `lib_${docIdStr}`);
 
-        if (isCurrentlyAdded) {
-            profile.library.splice(existingItemIndex, 1);
-            localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
+        if (isAdded) {
+            // Remove Process
+            btn.className = "bg-white/10 backdrop-blur-md text-white px-6 py-3.5 rounded-lg shadow-md font-bold text-xs md:text-sm uppercase tracking-wider hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2";
+            btn.innerHTML = `<i class="fas fa-plus"></i> Library`;
 
-            if (btn) {
-                btn.className = "bg-white/10 backdrop-blur-md text-white px-6 py-3.5 rounded-lg shadow-md font-bold text-xs md:text-sm uppercase tracking-wider hover:bg-white/20 transition-colors border border-white/10 flex items-center gap-2";
-                btn.innerHTML = `<i class="fas fa-plus"></i> Library`;
-            }
+            await deleteDoc(libDocRef);
+            
+            await setDoc(notifDocRef, {
+                id: `lib_${docIdStr}`, type: 'library', title: 'Library Updated',
+                message: `You removed ${title} from your library.`, image: img,
+                animeId: docIdStr, timestamp: Date.now(), read: false
+            }, { merge: true });
 
-            await firestore.deleteDoc(libDocRef);
             if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
         } else {
-            profile.library.unshift(formattedAnime);
-            localStorage.setItem('blazex_user_profile', JSON.stringify(profile));
+            // Add Process
+            btn.className = "bg-white text-black px-6 py-3.5 rounded-lg shadow-md font-black text-xs md:text-sm uppercase tracking-wider hover:bg-gray-200 transition-colors border border-white flex items-center gap-2";
+            btn.innerHTML = `<i class="fas fa-check text-green-500"></i> Added`;
 
-            if (btn) {
-                btn.className = "bg-white text-black px-6 py-3.5 rounded-lg shadow-md font-black text-xs md:text-sm uppercase tracking-wider hover:bg-gray-200 transition-colors border border-white flex items-center gap-2";
-                btn.innerHTML = `<i class="fas fa-check text-green-500"></i> Added`;
-            }
+            await setDoc(libDocRef, formattedAnime, { merge: true });
+            
+            await setDoc(notifDocRef, {
+                id: `lib_${docIdStr}`, type: 'library', title: 'Library Updated',
+                message: `You added ${title} to your library!`, image: img,
+                animeId: docIdStr, timestamp: Date.now(), read: false
+            }, { merge: true });
 
-            await firestore.setDoc(libDocRef, formattedAnime);
             if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
         }
     } catch (error) {
