@@ -11,7 +11,7 @@
 
     <style>
         body {
-            background-color: #050505; /* Deep, premium black */
+            background-color: #050505; 
             color: white;
             font-family: 'Inter', sans-serif;
             -webkit-font-smoothing: antialiased;
@@ -27,7 +27,6 @@
 
         .hidden-el { display: none !important; }
 
-        /* Premium matte glass effect - No glow */
         .glass-header {
             background: rgba(5, 5, 5, 0.85);
             backdrop-filter: blur(16px);
@@ -92,20 +91,24 @@
 
         <!-- Default Categorized View -->
         <div id="library-sliders-view" class="hidden-el pb-4">
-            
             <!-- Big Rectangular Genre Slider -->
             <div id="genre-tiles-mount"></div>
-            
             <!-- Dynamic Genre Sliders -->
             <div id="genre-sliders-mount" class="mt-4"></div>
-            
         </div>
 
-        <!-- Search Results Grid -->
-        <div id="library-search-view" class="hidden-el px-4 md:px-6 pb-4 pt-4">
-            <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 border-b border-white/5 pb-2" id="search-results-count">Results (0)</h3>
-            <div id="search-grid-mount" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-5">
-                <!-- Search results injected here -->
+        <!-- Unified List View (For Search & Genre Clicks) -->
+        <div id="library-list-view" class="hidden-el px-4 md:px-6 pb-4">
+            <div class="flex items-center justify-between mb-4 border-b border-white/5 pb-3">
+                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-widest" id="list-view-title">Results (0)</h3>
+                <!-- Close List View Button (Shown only when clicking genres, hidden in search) -->
+                <button id="close-list-btn" onclick="closeListView()" class="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg transition-colors hidden font-bold">
+                    <i class="fas fa-arrow-left mr-1"></i> Back to Sliders
+                </button>
+            </div>
+            
+            <div id="list-view-mount" class="flex flex-col gap-3 md:gap-4">
+                <!-- Horizontal list cards injected here -->
             </div>
         </div>
 
@@ -133,7 +136,6 @@
         let enrichedLibraryItems = [];
         let groupedGenres = {};
         
-        // Define Base URL for Search API
         const baseUrl = 'https://anikoto-api-xi.vercel.app'; 
 
         // Shared Navigation
@@ -144,13 +146,6 @@
             if (track) {
                 const scrollAmount = window.innerWidth > 768 ? 600 : 300;
                 track.scrollBy({ left: scrollAmount * direction, behavior: 'smooth' });
-            }
-        };
-
-        window.scrollToGenre = (trackId) => {
-            const el = document.getElementById(`container-${trackId}`);
-            if (el) {
-                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
         };
 
@@ -167,6 +162,9 @@
                     setTimeout(() => card.remove(), 300);
                 }
                 enrichedLibraryItems = enrichedLibraryItems.filter(i => String(i.id) !== String(idStr));
+                
+                // If they remove the last item in a list view, maybe we should close it. 
+                // But letting them see it naturally empty is fine.
             } catch (err) { console.error("Failed to remove:", err); }
         };
 
@@ -200,8 +198,6 @@
                 }
 
                 const rawItems = snapshot.docs.map(doc => doc.data());
-                
-                // Fetch AniList & Live Sub/Dub details simultaneously
                 enrichedLibraryItems = await enrichItems(rawItems);
                 
                 document.getElementById('loading-state').classList.add('hidden-el');
@@ -214,7 +210,6 @@
             }
         }
 
-        // Extremely robust data fetching (AniList for Genre + Anikoto for Sub/Dub)
         async function enrichItems(batch) {
             if (batch.length === 0) return [];
             
@@ -223,7 +218,6 @@
                 let searchMatch = null;
                 const cleanTitle = (item.title || '').replace(/[^a-zA-Z0-9 ]/g, '');
 
-                // 1. Fetch AniList Data via GraphQL Variables (100% safe against weird titles)
                 try {
                     const aniQuery = `query($search: String) { Media(search: $search, type: ANIME) { status coverImage { extraLarge } genres format } }`;
                     const res = await fetch('https://graphql.anilist.co', {
@@ -237,7 +231,6 @@
                     }
                 } catch(e) {}
 
-                // 2. Fetch Live Sub/Dub Counts from Anikoto
                 try {
                     const searchRes = await fetch(`${baseUrl}/api/search?keyword=${encodeURIComponent(cleanTitle)}`);
                     if (searchRes.ok) {
@@ -247,7 +240,6 @@
                     }
                 } catch(e) {}
 
-                // Merge and prioritize data
                 const genres = aniMatch?.genres || ['Uncategorized'];
                 const primaryGenre = genres.length > 0 ? genres[0] : 'Uncategorized';
                 
@@ -267,15 +259,67 @@
 
         // --- CORE UI GENERATORS --- //
 
-        // Exact match for action_slider.js UI
+        // Horizontal List Card (Used for Search & Genre Click)
+        function generateListCardHtml(item) {
+            const safeTitle = (item.title || 'Untitled').replace(/'/g, "\\'");
+            const isUpcoming = item.status === 'NOT_YET_RELEASED' || item.releaseStatus === 'NOT_YET_RELEASED';
+            const cardId = `list-card-${item.id}-${Math.random().toString(36).substring(7)}`; 
+
+            const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521]" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>`;
+            
+            const upcomingBadge = isUpcoming ? `<span class="bg-[#F47521] text-white text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wide">UPCOMING</span>` : '';
+            const formatBadge = item.format ? `<span class="bg-white/10 text-white text-[9px] px-1.5 py-0.5 rounded border border-white/5 font-bold uppercase tracking-wide">${item.format}</span>` : '';
+            const subBadge = `<span class="bg-[#F47521]/90 text-white text-[10px] md:text-xs px-2 py-0.5 rounded font-bold shadow-sm">CC ${item.sub}</span>`;
+            const dubBadge = (item.dub && item.dub !== '0' && item.dub !== 0) ? `<span class="bg-purple-600/90 text-white text-[10px] md:text-xs px-2 py-0.5 rounded font-bold shadow-sm"><i class="fas fa-microphone text-[9px] mr-0.5"></i> ${item.dub}</span>` : '';
+            
+            // Limit to max 3 genres to keep UI clean
+            const genresHtml = (item.genres || []).slice(0, 3).map(g => `<span class="text-[9px] md:text-[10px] text-gray-400 border border-gray-700 px-1.5 py-0.5 rounded">${g}</span>`).join('');
+
+            return `
+            <div id="${cardId}" class="flex gap-4 p-3 bg-[#111] border border-white/5 rounded-xl cursor-pointer hover:bg-white/5 transition-colors relative group" onclick="window.sliderNavigate('${item.id}')">
+                
+                <!-- Left Side: Cover Image -->
+                <div class="w-24 md:w-28 shrink-0 aspect-[2/3] rounded-lg overflow-hidden relative shadow-md bg-black">
+                    <img src="${item.poster}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                </div>
+                
+                <!-- Right Side: Details -->
+                <div class="flex flex-col flex-1 py-1 min-w-0 pr-8">
+                    <h3 class="text-sm md:text-base text-white font-bold line-clamp-2 leading-snug mb-2 group-hover:text-[#F47521] transition-colors">${item.title}</h3>
+                    
+                    <div class="flex flex-wrap gap-1.5 mb-2">
+                        ${upcomingBadge}
+                        ${formatBadge}
+                    </div>
+
+                    <div class="flex flex-wrap gap-1.5 mb-auto">
+                        ${genresHtml}
+                    </div>
+                    
+                    <div class="flex items-center gap-1.5 mt-2">
+                        ${subBadge}
+                        ${dubBadge}
+                    </div>
+                </div>
+
+                <!-- Delete Button -->
+                <button onclick="window.removeFromLibrary(event, '${item.id}', '${cardId}')" 
+                        class="absolute bottom-3 right-3 p-2 rounded bg-black/50 border border-white/10 hover:bg-black transition-all flex items-center justify-center shadow-md">
+                    ${savedSvg}
+                </button>
+            </div>
+            `;
+        }
+
+        // Standard Slider Card
         function generateCardHtml(item) {
             const safeTitle = (item.title || 'Untitled').replace(/'/g, "\\'");
-            const isUpcoming = item.status === 'NOT_YET_RELEASED';
+            const isUpcoming = item.status === 'NOT_YET_RELEASED' || item.releaseStatus === 'NOT_YET_RELEASED';
             const cardId = `card-${item.id}-${Math.random().toString(36).substring(7)}`; 
             
             const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521]" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>`;
             
-            const upcomingBadge = isUpcoming ? `<div class="absolute bottom-2 left-2 z-20 pointer-events-none"><span class="bg-[#F47521] text-white text-[9px] md:text-[10px] px-1.5 py-1 rounded font-black uppercase tracking-wide">UPCOMING</span></div>` : '';
+            const upcomingBadge = isUpcoming ? `<div class="absolute bottom-2 left-2 z-20 pointer-events-none"><span class="bg-[#F47521] text-white text-[9px] md:text-[10px] px-1.5 py-1 rounded shadow-md font-black uppercase tracking-wide">UPCOMING</span></div>` : '';
             const formatBadge = item.format ? `<span class="bg-black/80 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded border border-white/5 font-bold uppercase shadow-sm">${item.format}</span>` : '';
             const subBadge = `<span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-sm font-bold">CC ${item.sub}</span>`;
             const dubBadge = (item.dub && item.dub !== '0' && item.dub !== 0) ? `<span class="bg-purple-600/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-sm font-bold"><i class="fas fa-microphone text-[9px] mr-0.5"></i> ${item.dub}</span>` : '';
@@ -349,9 +393,8 @@
                         
                         <div id="genre-tiles-track" class="slider-track flex gap-3 md:gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-4 pt-2">
                             ${allGenresArray.map(g => {
-                                const trackTarget = `track-${g.name.replace(/[^a-zA-Z0-9]/g, '-')}`;
                                 return `
-                                <div class="snap-start shrink-0 w-[160px] md:w-[220px] aspect-[16/9] relative rounded-xl overflow-hidden group cursor-pointer border border-white/5 shadow-lg hover:border-[#F47521]/50 transition-colors" onclick="scrollToGenre('${trackTarget}')">
+                                <div class="snap-start shrink-0 w-[160px] md:w-[220px] aspect-[16/9] relative rounded-xl overflow-hidden group cursor-pointer border border-white/5 shadow-lg hover:border-[#F47521]/50 transition-colors" onclick="window.openGenreListView('${g.name}')">
                                     <img src="${g.bg}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-80 group-hover:opacity-100">
                                     <div class="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
                                     <div class="absolute bottom-3 left-0 w-full text-center">
@@ -374,7 +417,7 @@
         function processAndRenderLayout() {
             groupedGenres = {};
             
-            // Group by strict Primary Genre
+            // Group by strict Primary Genre for Sliders
             enrichedLibraryItems.forEach(item => {
                 const g = item.primaryGenre;
                 if (!groupedGenres[g]) groupedGenres[g] = [];
@@ -399,20 +442,39 @@
             document.getElementById('genre-sliders-mount').innerHTML = slidersHtml;
         }
 
-        // --- SEARCH SYSTEM --- //
+        // --- LIST VIEW SYSTEM (Genres & Search) --- //
+
+        window.openGenreListView = (genreName) => {
+            document.getElementById('library-search').value = '';
+            document.getElementById('clear-search-btn').classList.add('hidden');
+
+            document.getElementById('library-sliders-view').classList.add('hidden-el');
+            document.getElementById('library-list-view').classList.remove('hidden-el');
+            document.getElementById('close-list-btn').classList.remove('hidden');
+
+            // Find all anime that have this genre anywhere in their genre array
+            const filtered = enrichedLibraryItems.filter(item => item.genres.includes(genreName));
+            
+            document.getElementById('list-view-title').innerText = `${genreName} Anime (${filtered.length})`;
+            document.getElementById('list-view-mount').innerHTML = filtered.map(generateListCardHtml).join('');
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
         window.handleSearch = () => {
             const query = document.getElementById('library-search').value.trim().toLowerCase();
             const clearBtn = document.getElementById('clear-search-btn');
             
             const slidersView = document.getElementById('library-sliders-view');
-            const searchView = document.getElementById('library-search-view');
-            const gridMount = document.getElementById('search-grid-mount');
-            const countLabel = document.getElementById('search-results-count');
+            const listView = document.getElementById('library-list-view');
+            const listMount = document.getElementById('list-view-mount');
+            const countLabel = document.getElementById('list-view-title');
 
             if (query.length > 0) {
                 clearBtn.classList.remove('hidden');
                 slidersView.classList.add('hidden-el');
-                searchView.classList.remove('hidden-el');
+                listView.classList.remove('hidden-el');
+                document.getElementById('close-list-btn').classList.add('hidden'); // Searching hides the manual back button
 
                 const filtered = enrichedLibraryItems.filter(item => 
                     item.title.toLowerCase().includes(query)
@@ -421,18 +483,14 @@
                 countLabel.innerText = `Search Results (${filtered.length})`;
 
                 if (filtered.length === 0) {
-                    gridMount.innerHTML = `
-                        <div class="col-span-full text-center py-16">
+                    listMount.innerHTML = `
+                        <div class="text-center py-16">
                             <i class="fas fa-ghost text-4xl text-gray-800 mb-3"></i>
                             <p class="text-gray-600 font-bold uppercase tracking-widest text-sm">No matches found</p>
                         </div>
                     `;
                 } else {
-                    gridMount.innerHTML = filtered.map(item => `
-                        <div class="w-full">
-                            ${generateCardHtml(item)}
-                        </div>
-                    `).join('');
+                    listMount.innerHTML = filtered.map(generateListCardHtml).join('');
                 }
             } else {
                 clearSearch();
@@ -440,11 +498,13 @@
         };
 
         window.clearSearch = () => {
-            const searchInput = document.getElementById('library-search');
-            searchInput.value = '';
+            document.getElementById('library-search').value = '';
             document.getElementById('clear-search-btn').classList.add('hidden');
-            
-            document.getElementById('library-search-view').classList.add('hidden-el');
+            closeListView();
+        };
+
+        window.closeListView = () => {
+            document.getElementById('library-list-view').classList.add('hidden-el');
             if (enrichedLibraryItems.length > 0) {
                 document.getElementById('library-sliders-view').classList.remove('hidden-el');
             }
