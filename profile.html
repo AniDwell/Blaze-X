@@ -1040,7 +1040,8 @@
 
                 return {
                     ...item,
-                    status: aniMatch?.status || 'FINISHED',
+                    // PRESERVES releaseStatus IF ANILIST FAILS SO IT DOESN'T LOSE UPCOMING STATUS
+                    status: aniMatch?.status || item.releaseStatus || item.status || 'FINISHED',
                     poster: aniMatch?.coverImage?.extraLarge || item.coverImage || item.img || item.image || 'https://via.placeholder.com/150x225?text=No+Cover',
                     genre: aniMatch?.genres?.[0] || 'Uncategorized',
                     type: type || 'TV',
@@ -1056,7 +1057,9 @@
             const safeTitle = (item.title || 'Untitled').replace(/'/g, "\\'");
             const docIdStr = String(item.id);
             const isAdded = window.app.state.carouselLibrarySet.has(docIdStr);
-            const isUpcoming = item.status === 'NOT_YET_RELEASED';
+            
+            // THE FIX: Check for 'releaseStatus' (used by upcoming_slider.js) or 'status' (used by AniList)
+            const isUpcoming = item.status === 'NOT_YET_RELEASED' || item.releaseStatus === 'NOT_YET_RELEASED';
             
             const posterImg = item.poster || item.img || item.image || 'https://via.placeholder.com/150x225?text=No+Cover';
             
