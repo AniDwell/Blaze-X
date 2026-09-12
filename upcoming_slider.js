@@ -1,4 +1,4 @@
-// upcoming_slider.js - 100% AniList Upcoming Slider & Full-Screen Detail Modal (Live Sync & Premiere Notifs)
+// upcoming_slider.js - 100% AniList Upcoming Slider & Full-Screen Detail Modal (Live Sync & Deterministic Premiere Notifs)
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
@@ -55,12 +55,12 @@ window.app.updateUpcomingBtnUI = (btn, isAdded) => {
 };
 
 // --- INSTANT SAVE & NOTIFY LOGIC ---
-window.app.toggleUpcomingLibrary = async (event, btn, id, title, img) => {
+window.app.toggleUpcomingLibrary = async (event, btn, id, title, img, knownEpisodeCount = 0) => {
     event.stopPropagation(); 
     
     try {
         await initFirebaseUpcoming();
-        const { doc, setDoc, deleteDoc, collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        const { doc, setDoc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         
         const auth = window.app.auth;
         const db = window.app.db;
@@ -74,34 +74,50 @@ window.app.toggleUpcomingLibrary = async (event, btn, id, title, img) => {
         const docIdStr = String(id);
         const isAdded = btn.dataset.added === "true";
         const libDocRef = doc(db, "users", auth.currentUser.uid, "library", docIdStr);
-        const notifRef = collection(db, "users", auth.currentUser.uid, "notifications");
+        const notifDocRef = doc(db, "users", auth.currentUser.uid, "notifications", `lib_${docIdStr}`);
+
+        // Ensure Release Tracking Baseline is integrated even for Upcoming
+        const payload = {
+            id: docIdStr,
+            title,
+            img,
+            timestamp: Date.now(),
+            lastKnownEpisode: knownEpisodeCount, 
+            releaseStatus: 'NOT_YET_RELEASED'
+        };
 
         if (isAdded) {
             window.app.updateUpcomingBtnUI(btn, false);
             window.app.state.carouselLibrarySet.delete(docIdStr);
 
             await deleteDoc(libDocRef);
-            await addDoc(notifRef, {
+            await setDoc(notifDocRef, {
+                id: `lib_${docIdStr}`,
                 type: 'library',
                 title: 'Library Updated',
                 message: `You removed ${title} from your library.`,
                 image: img,
-                timestamp: Date.now()
-            });
+                animeId: docIdStr,
+                timestamp: Date.now(),
+                read: false
+            }, { merge: true });
 
             if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
         } else {
             window.app.updateUpcomingBtnUI(btn, true);
             window.app.state.carouselLibrarySet.add(docIdStr);
 
-            await setDoc(libDocRef, { id: docIdStr, title, img, timestamp: Date.now() });
-            await addDoc(notifRef, {
+            await setDoc(libDocRef, payload, { merge: true });
+            await setDoc(notifDocRef, {
+                id: `lib_${docIdStr}`,
                 type: 'library',
                 title: 'Library Updated',
                 message: `You added ${title} to your library!`,
                 image: img,
-                timestamp: Date.now()
-            });
+                animeId: docIdStr,
+                timestamp: Date.now(),
+                read: false
+            }, { merge: true });
 
             if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
         }
@@ -111,23 +127,29 @@ window.app.toggleUpcomingLibrary = async (event, btn, id, title, img) => {
     }
 };
 
-// --- PREMIERE RELEASE NOTIFICATION LOGIC ---
+// --- DETERMINISTIC PREMIERE RELEASE NOTIFICATION LOGIC ---
 window.app.triggerUpcomingReleaseNotification = async (id, title, img, ep) => {
     try {
         await initFirebaseUpcoming();
-        const { collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const auth = window.app.auth;
         
         if (auth && auth.currentUser && !auth.currentUser.isAnonymous) {
-            const notifRef = collection(window.app.db, "users", auth.currentUser.uid, "notifications");
-            await addDoc(notifRef, {
-                type: 'library',
+            // UNIQUE DETERMINISTIC ID -> Prevents duplicate creation
+            const notifId = `ep_release_${id}_${ep}`;
+            const notifRef = doc(window.app.db, "users", auth.currentUser.uid, "notifications", notifId);
+            
+            await setDoc(notifRef, {
+                id: notifId,
+                type: 'episode_released', // Standardized for notification UI mapping
                 title: 'New Series Premiere!',
-                message: `${title} has officially started airing!`,
+                message: `${title} Episode ${ep} has officially started airing!`,
                 image: img,
                 timestamp: Date.now(),
-                animeId: id 
-            });
+                animeId: id,
+                read: false
+            }, { merge: true });
+
             if (window.app.showCustomAlert) window.app.showCustomAlert(`${title} is now out!`, "success");
         }
     } catch (err) {
@@ -140,11 +162,11 @@ window.app.openUpcomingModal = async (animeId) => {
     if (!document.getElementById('upcoming-modal-wrapper')) {
         const modalHtml = `
             <div id="upcoming-modal-wrapper" class="fixed inset-0 z-[9999] flex flex-col justify-end pointer-events-none">
-                <div id="upcoming-modal-backdrop" class="absolute inset-0 bg-black/80 backdrop-blur-sm opacity-0 transition-opacity duration-500 pointer-events-auto" onclick="window.app.closeUpcomingModal()"></div>
+                <div id="upcoming-modal-backdrop" class="absolute inset-0 bg-black/80 backdrop-blur-sm opacity-0 transition-opacity duration-500 pointer-events-auto"></div>
                 
                 <div id="upcoming-modal-content" class="w-full h-[95vh] md:h-[100vh] bg-[#0a0a0a] rounded-t-3xl md:rounded-none transform translate-y-full transition-transform duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] pointer-events-auto flex flex-col overflow-hidden relative shadow-[0_-10px_40px_rgba(0,0,0,0.8)]">
                     
-                    <button onclick="window.app.closeUpcomingModal()" class="absolute top-4 right-4 md:top-6 md:right-6 z-[60] w-10 h-10 bg-black/50 hover:bg-[#F47521] backdrop-blur-md rounded-full text-white flex items-center justify-center transition-colors border border-white/10 shadow-lg">
+                    <button id="upcoming-close-btn-top" class="absolute top-4 right-4 md:top-6 md:right-6 z-[60] w-10 h-10 bg-black/50 hover:bg-[#F47521] backdrop-blur-md rounded-full text-white flex items-center justify-center transition-colors border border-white/10 shadow-lg">
                         <i class="fas fa-times text-xl"></i>
                     </button>
                     
@@ -168,6 +190,7 @@ window.app.openUpcomingModal = async (animeId) => {
     const backdrop = document.getElementById('upcoming-modal-backdrop');
     const content = document.getElementById('upcoming-modal-content');
     const body = document.getElementById('upcoming-modal-body');
+    const closeBtnTop = document.getElementById('upcoming-close-btn-top');
     
     wrapper.classList.remove('hidden');
     void wrapper.offsetWidth;
@@ -176,6 +199,11 @@ window.app.openUpcomingModal = async (animeId) => {
     backdrop.classList.add('opacity-100');
     content.classList.remove('translate-y-full');
     content.classList.add('translate-y-0');
+
+    // Clean Event Listener Attachment
+    const closeHandler = () => window.app.closeUpcomingModal();
+    backdrop.onclick = closeHandler;
+    closeBtnTop.onclick = closeHandler;
 
     try {
         const query = `
@@ -425,6 +453,10 @@ window.app.components.upcomingSlider = async () => {
             const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>`;
             const unsavedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>`;
 
+            // Base tracking config
+            const nextEpNum = anime.nextAiringEpisode ? anime.nextAiringEpisode.episode : 0;
+            const currentKnownEp = Math.max(0, nextEpNum - 1); 
+
             // Invisible tracker for pushing release notifications dynamically
             let hiddenTimerHtml = '';
             if (anime.nextAiringEpisode) {
@@ -441,7 +473,7 @@ window.app.components.upcomingSlider = async () => {
                     
                     ${hiddenTimerHtml}
 
-                    <button onclick="window.app.toggleUpcomingLibrary(event, this, '${anime.id}', '${safeTitle}', '${anime.coverImage.extraLarge}')" 
+                    <button onclick="window.app.toggleUpcomingLibrary(event, this, '${anime.id}', '${safeTitle}', '${anime.coverImage.extraLarge}', ${currentKnownEp})" 
                             data-added="${isAdded}"
                             data-id="${docIdStr}"
                             class="upcoming-lib-btn absolute top-2 right-2 z-30 p-2 rounded ${isAdded ? 'bg-black/80' : 'bg-black/70'} backdrop-blur-md border border-white/10 shadow-lg hover:bg-black transition-all flex items-center justify-center">
