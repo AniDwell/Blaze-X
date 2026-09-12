@@ -28,7 +28,7 @@
         .hidden-el { display: none !important; }
 
         .glass-header {
-            background: rgba(3, 3, 5, 0.85);
+            background: rgba(3, 3, 5, 0.95);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
@@ -47,16 +47,16 @@
 </head>
 <body class="min-h-screen flex flex-col pb-24 relative">
 
-    <!-- Sticky Centered Header & Search Bar -->
+    <!-- Sticky Centered Header & Search Bar (No Glow, No Back Button) -->
     <header class="sticky top-0 z-50 glass-header w-full px-4 py-4">
         <div class="max-w-4xl mx-auto flex flex-col gap-4">
             
             <!-- Centered Header Logo -->
             <div class="flex items-center justify-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-[#F47521] drop-shadow-[0_0_8px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-[#F47521]" viewBox="0 0 20 20" fill="currentColor">
                     <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" />
                 </svg>
-                <h1 class="text-2xl font-black text-white uppercase tracking-wider drop-shadow-md">
+                <h1 class="text-2xl font-black text-white uppercase tracking-wider">
                     Library
                 </h1>
             </div>
@@ -76,7 +76,7 @@
         
         <!-- Loading State -->
         <div id="loading-state" class="flex flex-col items-center justify-center py-24">
-            <i class="fas fa-circle-notch fa-spin text-4xl text-[#F47521] mb-4 drop-shadow-[0_0_10px_#F47521]"></i>
+            <i class="fas fa-circle-notch fa-spin text-4xl text-[#F47521] mb-4"></i>
             <p class="text-gray-400 font-bold tracking-widest uppercase text-sm">Loading Data...</p>
         </div>
 
@@ -87,7 +87,7 @@
             </div>
             <h2 class="text-xl font-black text-white mb-2">Your Library is Empty</h2>
             <p class="text-gray-400 text-sm max-w-xs leading-relaxed">You haven't saved any anime yet. Start exploring and bookmark your favorites!</p>
-            <button onclick="window.location.href='/index.html'" class="mt-6 bg-[#F47521] hover:bg-[#d96216] text-white px-6 py-2.5 rounded-xl font-bold transition-all shadow-[0_0_15px_rgba(244,117,33,0.3)]">
+            <button onclick="window.location.href='/index.html'" class="mt-6 bg-[#F47521] hover:bg-[#d96216] text-white px-6 py-2.5 rounded-xl font-bold transition-all">
                 Explore Anime
             </button>
         </div>
@@ -155,7 +155,6 @@
             const el = document.getElementById(`container-${trackId}`);
             if (el) {
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                // Flash effect for focus
                 el.classList.add('bg-white/5');
                 setTimeout(() => el.classList.remove('bg-white/5'), 1000);
             }
@@ -167,20 +166,15 @@
             if (!auth.currentUser) return;
             
             try {
-                // Delete from DB
                 await deleteDoc(doc(db, "users", auth.currentUser.uid, "library", String(idStr)));
                 
-                // Hide Card with smooth scale down
                 const card = document.getElementById(cardElementId);
                 if (card) {
                     card.style.transform = 'scale(0.8)';
                     card.style.opacity = '0';
                     setTimeout(() => card.remove(), 300);
                 }
-
-                // Remove from in-memory arrays so search stays accurate
                 enrichedLibraryItems = enrichedLibraryItems.filter(i => String(i.id) !== String(idStr));
-
             } catch (err) {
                 console.error("Failed to remove:", err);
             }
@@ -217,8 +211,6 @@
                 }
 
                 fullLibraryItems = snapshot.docs.map(doc => doc.data());
-                
-                // Fetch details, converting string IDs to Int to prevent GraphQL crashes
                 enrichedLibraryItems = await enrichBatchWithAniList(fullLibraryItems);
                 
                 document.getElementById('loading-state').classList.add('hidden-el');
@@ -231,19 +223,16 @@
             }
         }
 
+        // Fix: Query AniList using Search Title, not Database ID
         async function enrichBatchWithAniList(batch) {
             if (batch.length === 0) return [];
             
-            const baseUrl = 'https://anikoto-api-lyart.vercel.app';
-
-            // 1. Fetch from AniList (ParseInt fixes the ID type mismatch)
             const graphqlQuery = `
                 query {
-                    ${batch.map((item, index) => `
-                        anime${index}: Media(id: ${parseInt(item.id)}, type: ANIME) { 
-                            id status coverImage { extraLarge } genres format 
-                        }
-                    `).join('\n')}
+                    ${batch.map((item, index) => {
+                        const cleanTitle = (item.title || 'Untitled').replace(/"/g, '').replace(/\\/g, '');
+                        return `anime${index}: Media(search: "${cleanTitle}", type: ANIME) { status coverImage { extraLarge } genres format }`;
+                    }).join('\n')}
                 }
             `;
             
@@ -255,48 +244,45 @@
                     body: JSON.stringify({ query: graphqlQuery })
                 });
                 const json = await res.json();
-                if (json.data) {
-                    anilistData = json.data;
-                }
+                anilistData = json.data || {};
             } catch (e) {
                 console.error("AniList enrichment failed", e);
             }
 
-            // 2. Fetch missing Sub/Dub details concurrently via Anikoto API
+            const baseUrl = 'https://anikoto-api-lyart.vercel.app';
+
+            // Parallel fetch to Anikoto Search API to get authentic live sub/dub counts
             const enriched = await Promise.all(batch.map(async (item, i) => {
                 const aniMatch = anilistData[`anime${i}`];
                 
-                let sub = item.sub;
-                let dub = item.dub;
-                let format = aniMatch?.format || item.type || item.format || 'TV';
+                let sub = '?';
+                let dub = 0;
+                let type = aniMatch?.format || item.type || 'TV';
 
-                // Fallback to fetch real-time sub/dub if missing from Firebase
-                if (!sub || sub === '?' || sub === undefined) {
-                    try {
-                        const cleanTitle = (item.title || '').replace(/"/g, '').replace(/\\/g, '');
-                        const searchRes = await fetch(`${baseUrl}/api/search?keyword=${encodeURIComponent(cleanTitle)}`);
-                        if (searchRes.ok) {
-                            const searchJson = await searchRes.json();
-                            const results = searchJson.data || searchJson.results || [];
-                            if (results.length > 0) {
-                                const match = results[0];
-                                sub = match.tvInfo?.sub || match.sub || '?';
-                                dub = match.tvInfo?.dub || match.dub || 0;
-                                format = match.type || format;
-                            }
+                try {
+                    const cleanTitle = (item.title || '').replace(/"/g, '').replace(/\\/g, '');
+                    const searchRes = await fetch(`${baseUrl}/api/search?keyword=${encodeURIComponent(cleanTitle)}`);
+                    if (searchRes.ok) {
+                        const searchJson = await searchRes.json();
+                        const results = searchJson.data || searchJson.results || [];
+                        if (results.length > 0) {
+                            const match = results[0];
+                            sub = match.tvInfo?.sub || match.sub || '?';
+                            dub = match.tvInfo?.dub || match.dub || 0;
+                            type = match.type || type;
                         }
-                    } catch(e) { }
-                }
+                    }
+                } catch(e) {} // Fail gracefully, fallback to defaults
 
                 return {
                     ...item,
                     status: aniMatch?.status || item.releaseStatus || item.status || 'FINISHED',
-                    poster: aniMatch?.coverImage?.extraLarge || item.img || item.image || item.poster || 'https://via.placeholder.com/150x225?text=No+Cover',
-                    genres: aniMatch?.genres && aniMatch.genres.length > 0 ? aniMatch.genres : ['Other'],
+                    poster: aniMatch?.coverImage?.extraLarge || item.img || item.image || 'https://via.placeholder.com/150x225?text=No+Cover',
+                    genres: aniMatch?.genres || ['Other'], 
                     primaryGenre: aniMatch?.genres?.[0] || 'Other',
-                    format: format,
-                    sub: sub || '?',
-                    dub: dub || 0
+                    format: type,
+                    sub: sub,
+                    dub: dub
                 };
             }));
 
@@ -305,20 +291,23 @@
 
         // --- CORE RENDER SYSTEM --- //
 
+        // Exact match for Action Slider Card UI
         function generateCardHtml(item) {
             const safeTitle = (item.title || 'Untitled').replace(/'/g, "\\'");
-            const isUpcoming = item.status === 'NOT_YET_RELEASED';
+            const isUpcoming = item.status === 'NOT_YET_RELEASED' || item.releaseStatus === 'NOT_YET_RELEASED';
             const cardId = `card-${item.id}-${Math.random().toString(36).substring(7)}`; 
             
-            const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>`;
+            // Solid Bookmark Icon (No Glow)
+            const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521]" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>`;
             
             const upcomingBadge = isUpcoming ? `<div class="absolute bottom-2 left-2 z-20 pointer-events-none"><span class="bg-[#F47521] text-white text-[9px] md:text-[10px] px-1.5 py-1 rounded shadow-md font-black uppercase tracking-wide">UPCOMING</span></div>` : '';
             const formatBadge = item.format ? `<span class="bg-black/80 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded border border-white/10 font-bold uppercase shadow-md">${item.format}</span>` : '';
             const subBadge = `<span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-md font-bold">CC ${item.sub}</span>`;
             const dubBadge = (item.dub && item.dub !== '0' && item.dub !== 0) ? `<span class="bg-purple-600/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-md font-bold"><i class="fas fa-microphone text-[9px] mr-0.5"></i> ${item.dub}</span>` : '';
 
+            // Layout perfectly matches action_slider.js
             return `
-            <div id="${cardId}" class="snap-start shrink-0 w-[140px] md:w-[190px] relative group cursor-pointer transition-all duration-300 hover:scale-[1.03] hover:z-10" onclick="window.sliderNavigate('${item.id}')">
+            <div id="${cardId}" class="snap-start shrink-0 w-[140px] md:w-[190px] relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-10" onclick="window.sliderNavigate('${item.id}')">
                 
                 <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden shadow-lg border border-white/10 group-hover:border-[#F47521]/70 transition-colors bg-[#111]">
                     <img src="${item.poster}" loading="lazy" class="w-full h-full object-cover">
@@ -332,14 +321,12 @@
 
                     <div class="absolute top-0 left-0 p-2 flex flex-col gap-1.5 items-start z-10 pointer-events-none">
                         ${formatBadge}
-                        <div class="flex gap-1 mt-0.5">
-                            ${subBadge}
-                            ${dubBadge}
-                        </div>
+                        ${subBadge}
+                        ${dubBadge}
                     </div>
                 </div>
                 
-                <h3 class="mt-2 text-sm md:text-base text-gray-100 font-bold truncate group-hover:text-white transition-colors drop-shadow-md">${item.title}</h3>
+                <h3 class="mt-2 text-sm md:text-base text-gray-100 font-bold truncate group-hover:text-white transition-colors">${item.title}</h3>
             </div>
             `;
         }
@@ -350,7 +337,7 @@
             return `
                 <div id="container-${trackId}" class="mb-8 relative transition-colors duration-500 rounded-xl py-2">
                     <div class="flex items-center justify-between mb-4 pl-4 md:pl-6 pr-4">
-                        <h2 class="text-xl md:text-2xl font-black text-white border-l-4 border-[#F47521] pl-3 uppercase tracking-wider drop-shadow-md">
+                        <h2 class="text-xl md:text-2xl font-black text-white border-l-4 border-[#F47521] pl-3 uppercase tracking-wider">
                             ${genreName} <span class="text-xs text-gray-500 font-bold ml-1">(${items.length})</span>
                         </h2>
                     </div>
@@ -390,11 +377,11 @@
                             ${allGenresArray.map(g => {
                                 const trackTarget = `track-${g.name.replace(/[^a-zA-Z0-9]/g, '-')}`;
                                 return `
-                                <div class="snap-start shrink-0 w-[180px] md:w-[240px] aspect-[16/9] relative rounded-xl overflow-hidden group cursor-pointer border border-white/10 shadow-[0_10px_20px_rgba(0,0,0,0.5)] hover:border-[#F47521]/70 transition-all" onclick="scrollToGenre('${trackTarget}')">
+                                <div class="snap-start shrink-0 w-[180px] md:w-[240px] aspect-[16/9] relative rounded-xl overflow-hidden group cursor-pointer border border-white/10 shadow-lg hover:border-[#F47521]/70 transition-all" onclick="scrollToGenre('${trackTarget}')">
                                     <img src="${g.bg}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700">
                                     <div class="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent group-hover:bg-black/40 transition-colors"></div>
                                     <div class="absolute bottom-3 left-0 w-full text-center">
-                                        <h3 class="text-white font-black text-lg md:text-xl uppercase tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">${g.name}</h3>
+                                        <h3 class="text-white font-black text-lg md:text-xl uppercase tracking-widest">${g.name}</h3>
                                         <p class="text-[10px] text-[#F47521] font-bold uppercase tracking-wider">${g.count} Series</p>
                                     </div>
                                 </div>
@@ -414,14 +401,12 @@
         function processAndRenderLayout() {
             groupedGenres = {};
             
-            // Group by primary genre
             enrichedLibraryItems.forEach(item => {
                 const g = item.primaryGenre;
                 if (!groupedGenres[g]) groupedGenres[g] = [];
                 groupedGenres[g].push(item);
             });
 
-            // Sort genres by count
             const sortedGenreKeys = Object.keys(groupedGenres).sort((a, b) => groupedGenres[b].length - groupedGenres[a].length);
 
             // 1. Top 2 Sliders
@@ -434,7 +419,7 @@
             const allGenresData = sortedGenreKeys.map(k => ({
                 name: k,
                 count: groupedGenres[k].length,
-                bg: groupedGenres[k][0].poster // Pick the first item's cover as the background
+                bg: groupedGenres[k][0].poster
             }));
             
             if (sortedGenreKeys.length > 0) {
@@ -499,7 +484,6 @@
             }
         };
 
-        // Initialize Bottom Nav manually if app state misses it
         document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 if (window.app && window.app.components && window.app.components.bottomnav) {
