@@ -218,7 +218,7 @@
 
                 fullLibraryItems = snapshot.docs.map(doc => doc.data());
                 
-                // Query AniList by ID array
+                // Fetch details, converting string IDs to Int to prevent GraphQL crashes
                 enrichedLibraryItems = await enrichBatchWithAniList(fullLibraryItems);
                 
                 document.getElementById('loading-state').classList.add('hidden-el');
@@ -234,11 +234,13 @@
         async function enrichBatchWithAniList(batch) {
             if (batch.length === 0) return [];
             
-            // Build the GraphQL query using Aliases for each ID
+            const baseUrl = 'https://anikoto-api-lyart.vercel.app';
+
+            // 1. Fetch from AniList (ParseInt fixes the ID type mismatch)
             const graphqlQuery = `
                 query {
                     ${batch.map((item, index) => `
-                        anime${index}: Media(id: ${item.id}, type: ANIME) { 
+                        anime${index}: Media(id: ${parseInt(item.id)}, type: ANIME) { 
                             id status coverImage { extraLarge } genres format 
                         }
                     `).join('\n')}
@@ -253,37 +255,63 @@
                     body: JSON.stringify({ query: graphqlQuery })
                 });
                 const json = await res.json();
-                anilistData = json.data || {};
+                if (json.data) {
+                    anilistData = json.data;
+                }
             } catch (e) {
                 console.error("AniList enrichment failed", e);
             }
 
-            return batch.map((item, i) => {
+            // 2. Fetch missing Sub/Dub details concurrently via Anikoto API
+            const enriched = await Promise.all(batch.map(async (item, i) => {
                 const aniMatch = anilistData[`anime${i}`];
                 
-                // We use DB saved sub/dub. If null/undefined we fall back.
+                let sub = item.sub;
+                let dub = item.dub;
+                let format = aniMatch?.format || item.type || item.format || 'TV';
+
+                // Fallback to fetch real-time sub/dub if missing from Firebase
+                if (!sub || sub === '?' || sub === undefined) {
+                    try {
+                        const cleanTitle = (item.title || '').replace(/"/g, '').replace(/\\/g, '');
+                        const searchRes = await fetch(`${baseUrl}/api/search?keyword=${encodeURIComponent(cleanTitle)}`);
+                        if (searchRes.ok) {
+                            const searchJson = await searchRes.json();
+                            const results = searchJson.data || searchJson.results || [];
+                            if (results.length > 0) {
+                                const match = results[0];
+                                sub = match.tvInfo?.sub || match.sub || '?';
+                                dub = match.tvInfo?.dub || match.dub || 0;
+                                format = match.type || format;
+                            }
+                        }
+                    } catch(e) { }
+                }
+
                 return {
                     ...item,
                     status: aniMatch?.status || item.releaseStatus || item.status || 'FINISHED',
-                    poster: aniMatch?.coverImage?.extraLarge || item.img || item.image || 'https://via.placeholder.com/150x225?text=No+Cover',
-                    genres: aniMatch?.genres || ['Other'], // Store all genres for the big tiles
+                    poster: aniMatch?.coverImage?.extraLarge || item.img || item.image || item.poster || 'https://via.placeholder.com/150x225?text=No+Cover',
+                    genres: aniMatch?.genres && aniMatch.genres.length > 0 ? aniMatch.genres : ['Other'],
                     primaryGenre: aniMatch?.genres?.[0] || 'Other',
-                    format: aniMatch?.format || item.type || 'TV',
-                    sub: item.sub || '?',
-                    dub: item.dub || 0
+                    format: format,
+                    sub: sub || '?',
+                    dub: dub || 0
                 };
-            });
+            }));
+
+            return enriched;
         }
 
         // --- CORE RENDER SYSTEM --- //
 
-        // Exact match for Action Slider Card UI
         function generateCardHtml(item) {
             const safeTitle = (item.title || 'Untitled').replace(/'/g, "\\'");
             const isUpcoming = item.status === 'NOT_YET_RELEASED';
-            const cardId = `card-${item.id}-${Math.random().toString(36).substring(7)}`; // Unique ID for removal
+            const cardId = `card-${item.id}-${Math.random().toString(36).substring(7)}`; 
             
             const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>`;
+            
             const upcomingBadge = isUpcoming ? `<div class="absolute bottom-2 left-2 z-20 pointer-events-none"><span class="bg-[#F47521] text-white text-[9px] md:text-[10px] px-1.5 py-1 rounded shadow-md font-black uppercase tracking-wide">UPCOMING</span></div>` : '';
             const formatBadge = item.format ? `<span class="bg-black/80 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded border border-white/10 font-bold uppercase shadow-md">${item.format}</span>` : '';
             const subBadge = `<span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-md font-bold">CC ${item.sub}</span>`;
@@ -304,8 +332,10 @@
 
                     <div class="absolute top-0 left-0 p-2 flex flex-col gap-1.5 items-start z-10 pointer-events-none">
                         ${formatBadge}
-                        ${subBadge}
-                        ${dubBadge}
+                        <div class="flex gap-1 mt-0.5">
+                            ${subBadge}
+                            ${dubBadge}
+                        </div>
                     </div>
                 </div>
                 
