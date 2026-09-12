@@ -34,7 +34,7 @@
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
 
-        /* Prevent sliders from hugging the absolute edge of the screen */
+        /* Safe Edge Padding for Sliders */
         .slider-track {
             padding-left: 1rem;
             padding-right: 1rem;
@@ -45,20 +45,23 @@
         }
     </style>
 </head>
-<body class="min-h-screen flex flex-col pb-20 relative">
+<body class="min-h-screen flex flex-col pb-24 relative">
 
-    <!-- Sticky Top Header & Search Bar -->
-    <header class="sticky top-0 z-50 glass-header w-full px-4 py-3">
-        <div class="max-w-4xl mx-auto flex flex-col gap-3">
-            <div class="flex items-center gap-3">
-                <button onclick="history.back()" class="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white transition-colors border border-white/10">
-                    <i class="fas fa-arrow-left text-sm"></i>
-                </button>
-                <h1 class="text-xl font-black text-white uppercase tracking-wider border-l-4 border-[#F47521] pl-2 drop-shadow-md">
-                    My Library
+    <!-- Sticky Centered Header & Search Bar -->
+    <header class="sticky top-0 z-50 glass-header w-full px-4 py-4">
+        <div class="max-w-4xl mx-auto flex flex-col gap-4">
+            
+            <!-- Centered Header Logo -->
+            <div class="flex items-center justify-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-[#F47521] drop-shadow-[0_0_8px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" />
+                </svg>
+                <h1 class="text-2xl font-black text-white uppercase tracking-wider drop-shadow-md">
+                    Library
                 </h1>
             </div>
             
+            <!-- Search Bar -->
             <div class="relative w-full">
                 <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm"></i>
                 <input type="text" id="library-search" placeholder="Search your saved anime..." class="w-full bg-[#111] border border-white/10 rounded-xl py-3 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-[#F47521]/50 transition-colors shadow-inner" oninput="handleSearch()">
@@ -69,12 +72,12 @@
         </div>
     </header>
 
-    <main class="flex-1 w-full max-w-4xl mx-auto pt-6 relative z-10 w-full overflow-hidden">
+    <main class="flex-1 w-full max-w-5xl mx-auto pt-6 relative z-10 w-full overflow-hidden">
         
         <!-- Loading State -->
-        <div id="loading-state" class="flex flex-col items-center justify-center py-20">
-            <i class="fas fa-circle-notch fa-spin text-4xl text-[#F47521] mb-4"></i>
-            <p class="text-gray-400 font-bold tracking-widest uppercase text-sm">Loading Library...</p>
+        <div id="loading-state" class="flex flex-col items-center justify-center py-24">
+            <i class="fas fa-circle-notch fa-spin text-4xl text-[#F47521] mb-4 drop-shadow-[0_0_10px_#F47521]"></i>
+            <p class="text-gray-400 font-bold tracking-widest uppercase text-sm">Loading Data...</p>
         </div>
 
         <!-- Empty State -->
@@ -89,30 +92,36 @@
             </button>
         </div>
 
-        <!-- Default View: Categorized Sliders -->
+        <!-- Default View: The Custom Segmented Sliders -->
         <div id="library-sliders-view" class="hidden-el pb-4">
-            <div id="sliders-mount"></div>
+            <!-- Top 2 Sliders -->
+            <div id="top-sliders-mount"></div>
+            
+            <!-- Big Rectangular Genre Slider -->
+            <div id="genre-tiles-mount"></div>
+            
+            <!-- Remaining Sliders -->
+            <div id="bottom-sliders-mount"></div>
         </div>
 
         <!-- Search View: Flat Grid -->
-        <div id="library-search-view" class="hidden-el px-4 md:px-6 pb-4">
-            <h3 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4" id="search-results-count">Results (0)</h3>
-            <div id="search-grid-mount" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4">
+        <div id="library-search-view" class="hidden-el px-4 md:px-6 pb-4 pt-4">
+            <h3 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 border-b border-white/10 pb-2" id="search-results-count">Results (0)</h3>
+            <div id="search-grid-mount" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-5">
                 <!-- Search results injected here -->
             </div>
         </div>
 
     </main>
 
-    <!-- Bottom Navigation Wrapper -->
+    <!-- Bottom Navigation -->
     <div id="bottomnav-container" class="fixed bottom-0 w-full z-50"></div>
-
     <script src="/bottomnav.js"></script>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
-        import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
@@ -126,13 +135,13 @@
 
         let fullLibraryItems = [];
         let enrichedLibraryItems = [];
+        let groupedGenres = {};
 
-        // Simple Navigation Function
+        // Custom Navigation Logic
         window.sliderNavigate = (id) => {
             window.location.href = `/info.html?id=${id}`;
         };
 
-        // Scroll track manually for buttons
         window.scrollTrack = (trackId, direction) => {
             const track = document.getElementById(trackId);
             if (track) {
@@ -141,7 +150,43 @@
             }
         };
 
-        // Load Library on Auth State Change
+        // Scroll to specific slider from Genre Tile click
+        window.scrollToGenre = (trackId) => {
+            const el = document.getElementById(`container-${trackId}`);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Flash effect for focus
+                el.classList.add('bg-white/5');
+                setTimeout(() => el.classList.remove('bg-white/5'), 1000);
+            }
+        };
+
+        // UI function to remove a card visually and from the Database
+        window.removeFromLibrary = async (event, idStr, cardElementId) => {
+            event.stopPropagation();
+            if (!auth.currentUser) return;
+            
+            try {
+                // Delete from DB
+                await deleteDoc(doc(db, "users", auth.currentUser.uid, "library", String(idStr)));
+                
+                // Hide Card with smooth scale down
+                const card = document.getElementById(cardElementId);
+                if (card) {
+                    card.style.transform = 'scale(0.8)';
+                    card.style.opacity = '0';
+                    setTimeout(() => card.remove(), 300);
+                }
+
+                // Remove from in-memory arrays so search stays accurate
+                enrichedLibraryItems = enrichedLibraryItems.filter(i => String(i.id) !== String(idStr));
+
+            } catch (err) {
+                console.error("Failed to remove:", err);
+            }
+        };
+
+        // Load Library Sequence
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 await fetchAndRenderLibrary(user.uid);
@@ -173,23 +218,23 @@
 
                 fullLibraryItems = snapshot.docs.map(doc => doc.data());
                 
-                // Fetch AniList Details for genres, format, and high-res posters using the ID
+                // Query AniList by ID array
                 enrichedLibraryItems = await enrichBatchWithAniList(fullLibraryItems);
                 
                 document.getElementById('loading-state').classList.add('hidden-el');
                 document.getElementById('library-sliders-view').classList.remove('hidden-el');
                 
-                renderSliders();
+                processAndRenderLayout();
             } catch (error) {
                 console.error("Error fetching library:", error);
-                document.getElementById('loading-state').innerHTML = `<p class="text-red-500 font-bold">Failed to load library.</p>`;
+                document.getElementById('loading-state').innerHTML = `<p class="text-red-500 font-bold">Failed to load library data.</p>`;
             }
         }
 
         async function enrichBatchWithAniList(batch) {
             if (batch.length === 0) return [];
             
-            // Querying strictly by the Anime ID saved in Firebase for highly accurate results
+            // Build the GraphQL query using Aliases for each ID
             const graphqlQuery = `
                 query {
                     ${batch.map((item, index) => `
@@ -215,81 +260,165 @@
 
             return batch.map((item, i) => {
                 const aniMatch = anilistData[`anime${i}`];
+                
+                // We use DB saved sub/dub. If null/undefined we fall back.
                 return {
                     ...item,
                     status: aniMatch?.status || item.releaseStatus || item.status || 'FINISHED',
                     poster: aniMatch?.coverImage?.extraLarge || item.img || item.image || 'https://via.placeholder.com/150x225?text=No+Cover',
-                    genre: aniMatch?.genres?.[0] || 'Other',
-                    format: aniMatch?.format || item.type || 'TV'
+                    genres: aniMatch?.genres || ['Other'], // Store all genres for the big tiles
+                    primaryGenre: aniMatch?.genres?.[0] || 'Other',
+                    format: aniMatch?.format || item.type || 'TV',
+                    sub: item.sub || '?',
+                    dub: item.dub || 0
                 };
             });
         }
 
-        // Shared Card Generation Logic
+        // --- CORE RENDER SYSTEM --- //
+
+        // Exact match for Action Slider Card UI
         function generateCardHtml(item) {
+            const safeTitle = (item.title || 'Untitled').replace(/'/g, "\\'");
             const isUpcoming = item.status === 'NOT_YET_RELEASED';
-            const upcomingBadge = isUpcoming 
-                ? `<div class="absolute bottom-2 left-2 z-20 pointer-events-none"><span class="bg-[#F47521] text-white text-[9px] md:text-[10px] px-1.5 py-1 rounded shadow-md font-black uppercase tracking-wide">UPCOMING</span></div>` 
-                : '';
+            const cardId = `card-${item.id}-${Math.random().toString(36).substring(7)}`; // Unique ID for removal
+            
+            const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521] drop-shadow-[0_0_5px_rgba(244,117,33,0.5)]" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>`;
+            const upcomingBadge = isUpcoming ? `<div class="absolute bottom-2 left-2 z-20 pointer-events-none"><span class="bg-[#F47521] text-white text-[9px] md:text-[10px] px-1.5 py-1 rounded shadow-md font-black uppercase tracking-wide">UPCOMING</span></div>` : '';
+            const formatBadge = item.format ? `<span class="bg-black/80 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded border border-white/10 font-bold uppercase shadow-md">${item.format}</span>` : '';
+            const subBadge = `<span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-md font-bold">CC ${item.sub}</span>`;
+            const dubBadge = (item.dub && item.dub !== '0' && item.dub !== 0) ? `<span class="bg-purple-600/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-md font-bold"><i class="fas fa-microphone text-[9px] mr-0.5"></i> ${item.dub}</span>` : '';
 
             return `
-            <div class="snap-start shrink-0 w-full relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-10" onclick="window.sliderNavigate('${item.id}')">
+            <div id="${cardId}" class="snap-start shrink-0 w-[140px] md:w-[190px] relative group cursor-pointer transition-all duration-300 hover:scale-[1.03] hover:z-10" onclick="window.sliderNavigate('${item.id}')">
+                
                 <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden shadow-lg border border-white/10 group-hover:border-[#F47521]/70 transition-colors bg-[#111]">
                     <img src="${item.poster}" loading="lazy" class="w-full h-full object-cover">
+                    
+                    <button onclick="window.removeFromLibrary(event, '${item.id}', '${cardId}')" 
+                            class="absolute top-2 right-2 z-30 p-2 rounded bg-black/80 backdrop-blur-md border border-white/10 shadow-lg hover:bg-black transition-all flex items-center justify-center">
+                        ${savedSvg}
+                    </button>
                     
                     ${upcomingBadge}
 
                     <div class="absolute top-0 left-0 p-2 flex flex-col gap-1.5 items-start z-10 pointer-events-none">
-                        <span class="bg-black/80 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded border border-white/10 font-bold uppercase shadow-md">${item.format}</span>
+                        ${formatBadge}
+                        ${subBadge}
+                        ${dubBadge}
                     </div>
                 </div>
+                
                 <h3 class="mt-2 text-sm md:text-base text-gray-100 font-bold truncate group-hover:text-white transition-colors drop-shadow-md">${item.title}</h3>
             </div>
             `;
         }
 
-        function renderSliders() {
-            const grouped = {};
-            enrichedLibraryItems.forEach(item => {
-                const g = item.genre || 'Other';
-                if (!grouped[g]) grouped[g] = [];
-                grouped[g].push(item);
-            });
-
-            let fullHtml = '';
-            for (const [genre, items] of Object.entries(grouped)) {
-                const trackId = `track-${genre.replace(/\s+/g, '-')}`;
-                fullHtml += `
-                    <div class="mb-8 relative">
-                        <h3 class="text-lg md:text-xl font-black text-white mb-3 tracking-wider uppercase pl-4 md:pl-6 border-l-4 border-[#F47521] ml-4 md:ml-6 drop-shadow-md">
-                            ${genre} <span class="text-xs text-gray-500 ml-1 font-bold">(${items.length})</span>
-                        </h3>
-                        
-                        <div class="relative group/slider">
-                            <button onclick="scrollTrack('${trackId}', -1)" class="hidden md:flex absolute left-2 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl">
-                                <i class="fas fa-chevron-left text-lg"></i>
-                            </button>
-                            
-                            <div id="${trackId}" class="slider-track flex gap-3 md:gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-4 pt-2">
-                                ${items.map(item => `
-                                    <div class="w-[130px] md:w-[160px] shrink-0">
-                                        ${generateCardHtml(item)}
-                                    </div>
-                                `).join('')}
-                            </div>
-                            
-                            <button onclick="scrollTrack('${trackId}', 1)" class="hidden md:flex absolute right-2 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl">
-                                <i class="fas fa-chevron-right text-lg"></i>
-                            </button>
-                        </div>
+        // Build a Standard Horizontal Slider Block
+        function buildSliderHtml(genreName, items) {
+            const trackId = `track-${genreName.replace(/[^a-zA-Z0-9]/g, '-')}`;
+            return `
+                <div id="container-${trackId}" class="mb-8 relative transition-colors duration-500 rounded-xl py-2">
+                    <div class="flex items-center justify-between mb-4 pl-4 md:pl-6 pr-4">
+                        <h2 class="text-xl md:text-2xl font-black text-white border-l-4 border-[#F47521] pl-3 uppercase tracking-wider drop-shadow-md">
+                            ${genreName} <span class="text-xs text-gray-500 font-bold ml-1">(${items.length})</span>
+                        </h2>
                     </div>
-                `;
-            }
-            
-            document.getElementById('sliders-mount').innerHTML = fullHtml;
+                    
+                    <div class="relative group/slider">
+                        <button onclick="scrollTrack('${trackId}', -1)" class="hidden md:flex absolute left-2 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl">
+                            <i class="fas fa-chevron-left text-lg"></i>
+                        </button>
+                        
+                        <div id="${trackId}" class="slider-track flex gap-4 md:gap-5 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-4 pt-2">
+                            ${items.map(generateCardHtml).join('')}
+                        </div>
+                        
+                        <button onclick="scrollTrack('${trackId}', 1)" class="hidden md:flex absolute right-2 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl">
+                            <i class="fas fa-chevron-right text-lg"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
         }
 
-        // Search Filter Logic
+        // Build the Big Rectangle Genre Tile Slider
+        function buildGenreTilesHtml(allGenresArray) {
+            if(allGenresArray.length === 0) return '';
+            
+            return `
+                <div class="mb-10 relative mt-6">
+                    <h2 class="text-xl md:text-2xl font-black text-gray-400 mb-4 pl-4 md:pl-6 uppercase tracking-widest text-sm">
+                        Browse by Genre
+                    </h2>
+                    <div class="relative group/slider">
+                        <button onclick="scrollTrack('genre-tiles-track', -1)" class="hidden md:flex absolute left-2 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl">
+                            <i class="fas fa-chevron-left text-lg"></i>
+                        </button>
+                        
+                        <div id="genre-tiles-track" class="slider-track flex gap-3 md:gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-4 pt-2">
+                            ${allGenresArray.map(g => {
+                                const trackTarget = `track-${g.name.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                                return `
+                                <div class="snap-start shrink-0 w-[180px] md:w-[240px] aspect-[16/9] relative rounded-xl overflow-hidden group cursor-pointer border border-white/10 shadow-[0_10px_20px_rgba(0,0,0,0.5)] hover:border-[#F47521]/70 transition-all" onclick="scrollToGenre('${trackTarget}')">
+                                    <img src="${g.bg}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700">
+                                    <div class="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent group-hover:bg-black/40 transition-colors"></div>
+                                    <div class="absolute bottom-3 left-0 w-full text-center">
+                                        <h3 class="text-white font-black text-lg md:text-xl uppercase tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">${g.name}</h3>
+                                        <p class="text-[10px] text-[#F47521] font-bold uppercase tracking-wider">${g.count} Series</p>
+                                    </div>
+                                </div>
+                                `;
+                            }).join('')}
+                        </div>
+                        
+                        <button onclick="scrollTrack('genre-tiles-track', 1)" class="hidden md:flex absolute right-2 top-[40%] -translate-y-1/2 z-20 w-12 h-12 bg-black/90 hover:bg-[#F47521] border border-white/10 rounded-full items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-all shadow-2xl">
+                            <i class="fas fa-chevron-right text-lg"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Core Layout Coordinator
+        function processAndRenderLayout() {
+            groupedGenres = {};
+            
+            // Group by primary genre
+            enrichedLibraryItems.forEach(item => {
+                const g = item.primaryGenre;
+                if (!groupedGenres[g]) groupedGenres[g] = [];
+                groupedGenres[g].push(item);
+            });
+
+            // Sort genres by count
+            const sortedGenreKeys = Object.keys(groupedGenres).sort((a, b) => groupedGenres[b].length - groupedGenres[a].length);
+
+            // 1. Top 2 Sliders
+            let topHtml = '';
+            const topKeys = sortedGenreKeys.slice(0, 2);
+            topKeys.forEach(k => topHtml += buildSliderHtml(k, groupedGenres[k]));
+            document.getElementById('top-sliders-mount').innerHTML = topHtml;
+
+            // 2. The Big Rectangle Genre Tiles
+            const allGenresData = sortedGenreKeys.map(k => ({
+                name: k,
+                count: groupedGenres[k].length,
+                bg: groupedGenres[k][0].poster // Pick the first item's cover as the background
+            }));
+            
+            if (sortedGenreKeys.length > 0) {
+                document.getElementById('genre-tiles-mount').innerHTML = buildGenreTilesHtml(allGenresData);
+            }
+
+            // 3. Remaining Sliders
+            let bottomHtml = '';
+            const bottomKeys = sortedGenreKeys.slice(2);
+            bottomKeys.forEach(k => bottomHtml += buildSliderHtml(k, groupedGenres[k]));
+            document.getElementById('bottom-sliders-mount').innerHTML = bottomHtml;
+        }
+
+        // --- SEARCH SYSTEM --- //
         window.handleSearch = () => {
             const query = document.getElementById('library-search').value.trim().toLowerCase();
             const clearBtn = document.getElementById('clear-search-btn');
@@ -308,11 +437,12 @@
                     item.title.toLowerCase().includes(query)
                 );
 
-                countLabel.innerText = `Results (${filtered.length})`;
+                countLabel.innerText = `Search Results (${filtered.length})`;
 
                 if (filtered.length === 0) {
                     gridMount.innerHTML = `
-                        <div class="col-span-full text-center py-10">
+                        <div class="col-span-full text-center py-16">
+                            <i class="fas fa-ghost text-4xl text-gray-600 mb-3"></i>
                             <p class="text-gray-500 font-bold uppercase tracking-widest text-sm">No matches found</p>
                         </div>
                     `;
@@ -339,7 +469,7 @@
             }
         };
 
-        // Initialize Bottom Nav manually if window.app doesn't
+        // Initialize Bottom Nav manually if app state misses it
         document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 if (window.app && window.app.components && window.app.components.bottomnav) {
