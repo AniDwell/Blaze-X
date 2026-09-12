@@ -112,7 +112,7 @@
             <div id="genre-sliders-mount" class="mt-4"></div>
         </div>
 
-        <!-- Search Results Grid -->
+        <!-- Search Results Grid (List View Format) -->
         <div id="library-search-view" class="hidden-el px-4 md:px-6 pb-4 pt-4">
             <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 border-b border-white/5 pb-2" id="search-results-count">Results (0)</h3>
             <div id="search-grid-mount" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 mt-6">
@@ -159,7 +159,7 @@
         let enrichedLibraryItems = [];
         let groupedGenres = {};
         
-        // Exact API used by info.html
+        // The API identical to info.html
         const baseUrl = 'https://anikoto-api-xi.vercel.app'; 
 
         // Shared Navigation
@@ -173,13 +173,6 @@
             }
         };
 
-        window.scrollToGenre = (trackId) => {
-            const el = document.getElementById(`container-${trackId}`);
-            if (el) {
-                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        };
-
         // Remove from Library (Visual + DB)
         window.removeFromLibrary = async (event, idStr, cardElementId) => {
             event.stopPropagation();
@@ -187,7 +180,7 @@
             try {
                 await deleteDoc(doc(db, "users", auth.currentUser.uid, "library", String(idStr)));
                 
-                // Visual Removal
+                // Hide specific elements if passed
                 if (cardElementId) {
                     const card = document.getElementById(cardElementId);
                     if (card) {
@@ -205,12 +198,11 @@
                     }
                 }
                 
-                // Update Local State silently
                 enrichedLibraryItems = enrichedLibraryItems.filter(i => String(i.id) !== String(idStr));
-            } catch (err) { console.error("Failed to remove from library:", err); }
+            } catch (err) { console.error("Failed to remove:", err); }
         };
 
-        // Initialize Authentication
+        // Initialize Library
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 await fetchAndRenderLibrary(user.uid);
@@ -241,7 +233,7 @@
 
                 const rawItems = snapshot.docs.map(doc => doc.data());
                 
-                // Process ALL items safely
+                // Process ALL items with the new rigorous Data Engine
                 enrichedLibraryItems = await enrichItemsSafely(rawItems);
                 
                 document.getElementById('loading-state').classList.add('hidden-el');
@@ -254,64 +246,123 @@
             }
         }
 
-        // --- THE NEW EXACT-ID DATA ENGINE --- //
+        // --- 🚀 THE NEW RIGOROUS DATA ENGINE --- //
+        // Firestore ID → Anikoto API Exact Match → Normalized Mapping → Categorized
         async function enrichItemsSafely(rawItems) {
             console.log(`[Library] Syncing ${rawItems.length} items from Firestore...`);
             
-            // Promise.allSettled ensures one broken API endpoint doesn't destroy the whole library
+            // Promise.allSettled ensures one broken API endpoint won't destroy the whole library
             const results = await Promise.allSettled(
                 rawItems.map(async (item) => {
                     const animeId = String(item.id);
                     let apiData = null;
+                    let anilistData = null;
 
-                    // 1. Primary Lookup: Exact Anikoto Info Endpoint
+                    // 1. PRIMARY LOOKUP: Exact Anikoto Info Endpoint (Same as info.html)
                     try {
                         const res = await fetch(`${baseUrl}/api/info?id=${encodeURIComponent(animeId)}`);
                         if (res.ok) {
                             const json = await res.json();
-                            apiData = json.data || json.results || json;
+                            // Handle varying response structures safely
+                            apiData = json.data || json.results || json.animeInfo || json.anime || json;
                         }
                     } catch (e) {
                         console.warn(`[Library] Exact ID fetch failed for ${animeId}`, e);
                     }
 
-                    // 2. Normalization
-                    // Safely extract sub/dub exactly as Anikoto structures it
-                    let sub = apiData?.episodes?.sub ?? apiData?.tvInfo?.sub ?? apiData?.sub ?? null;
-                    let dub = apiData?.episodes?.dub ?? apiData?.tvInfo?.dub ?? apiData?.dub ?? null;
+                    // Extract AniList ID supplied by Anikoto payload
+                    const extractedAlId = apiData?.alId || apiData?.anilistId || item?.anilistId || item?.alId;
+
+                    // 2. ENRICHMENT LOOKUP (Only if needed or ID exists)
+                    try {
+                        if (extractedAlId) {
+                            // EXACT ANILIST ID MATCH (Eliminates incorrect sequel matching)
+                            const aniQuery = `query($id: Int) { Media(id: $id, type: ANIME) { id title { english romaji native } status coverImage { extraLarge } bannerImage genres format description(asHtml: false) episodes } }`;
+                            const res = await fetch('https://graphql.anilist.co', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ query: aniQuery, variables: { id: parseInt(extractedAlId) } })
+                            });
+                            const json = await res.json();
+                            if (json.data && json.data.Media) {
+                                anilistData = json.data.Media;
+                            }
+                        } else {
+                            // FALLBACK: Title Search ONLY IF absolutely necessary
+                            const searchTitle = apiData?.title?.english || apiData?.title || item?.title;
+                            if (searchTitle) {
+                                const cleanTitle = searchTitle.replace(/[^a-zA-Z0-9 ]/g, ' ');
+                                const aniQuery = `query($search: String) { Media(search: $search, type: ANIME, sort: SEARCH_MATCH) { id title { english romaji native } status coverImage { extraLarge } bannerImage genres format description(asHtml: false) episodes } }`;
+                                const res = await fetch('https://graphql.anilist.co', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ query: aniQuery, variables: { search: cleanTitle } })
+                                });
+                                const json = await res.json();
+                                if (json.data && json.data.Media) {
+                                    anilistData = json.data.Media;
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.warn(`[Library] AniList enrichment failed for ${animeId}`, e);
+                    }
+
+                    // 3. NORMALIZATION & FALLBACK LOGIC
                     
+                    // Display Title Priorities
+                    const displayTitle = apiData?.title?.english || apiData?.title?.romaji || apiData?.title || anilistData?.title?.english || anilistData?.title?.romaji || item.title || 'Unknown Title';
+                    
+                    // Sub / Dub Extractions (Must come from Anikoto)
+                    let sub = apiData?.episodes?.sub ?? apiData?.tvInfo?.sub ?? apiData?.sub ?? item.sub ?? null;
+                    let dub = apiData?.episodes?.dub ?? apiData?.tvInfo?.dub ?? apiData?.dub ?? item.dub ?? null;
                     sub = Number.isFinite(Number(sub)) ? Number(sub) : null;
                     dub = Number.isFinite(Number(dub)) ? Number(dub) : null;
 
-                    // Safely extract status
-                    let status = (apiData?.status || item.releaseStatus || item.status || 'UNKNOWN').toUpperCase();
-                    if (status === 'ONGOING') status = 'RELEASING';
-                    if (status === 'FINISHED') status = 'COMPLETED';
+                    // Status Normalization
+                    let rawStatus = (apiData?.status || anilistData?.status || item.releaseStatus || item.status || 'UNKNOWN').toUpperCase();
+                    if (rawStatus === 'ONGOING' || rawStatus === 'RELEASING') rawStatus = 'RELEASING';
+                    else if (rawStatus === 'UPCOMING' || rawStatus === 'NOT_YET_RELEASED') rawStatus = 'UPCOMING';
+                    else if (rawStatus === 'FINISHED' || rawStatus === 'COMPLETED') rawStatus = 'COMPLETED';
 
-                    // Determine Genres
-                    let genres = Array.isArray(apiData?.genres) && apiData.genres.length > 0 
-                        ? apiData.genres 
-                        : ['Uncategorized'];
+                    // Format
+                    let rawFormat = (apiData?.type || anilistData?.format || item.type || 'TV').toUpperCase();
+                    if (rawFormat === 'TV_SHORT') rawFormat = 'TV';
 
-                    // Return normalized model
+                    // Genres (Merge, fallback to Uncategorized)
+                    let genres = apiData?.genres || anilistData?.genres || [];
+                    if (!Array.isArray(genres) || genres.length === 0) genres = ['Uncategorized'];
+
+                    // Authentic Synopsis
+                    let synopsis = apiData?.description || apiData?.synopsis || anilistData?.description || item.description || "Synopsis unavailable.";
+                    synopsis = synopsis.replace(/<[^>]*>?/gm, ''); 
+
+                    // Return Strict Normalized Model
                     return {
                         id: animeId,
-                        title: apiData?.title?.english || apiData?.title?.romaji || apiData?.title || item.title || 'Unknown Title',
-                        poster: apiData?.image || apiData?.coverImage || item.img || item.image || 'https://via.placeholder.com/150x225?text=No+Cover',
-                        banner: apiData?.cover || apiData?.bannerImage || null,
-                        synopsis: (apiData?.description || apiData?.synopsis || "Synopsis unavailable.").replace(/<[^>]*>?/gm, ''),
+                        title: displayTitle,
+                        englishTitle: anilistData?.title?.english || '',
+                        romajiTitle: anilistData?.title?.romaji || '',
+                        nativeTitle: anilistData?.title?.native || '',
+                        synonyms: apiData?.synonyms || [],
+                        
+                        poster: apiData?.image || apiData?.poster || item.img || item.image || anilistData?.coverImage?.extraLarge || 'https://via.placeholder.com/150x225?text=No+Cover',
+                        banner: apiData?.cover || apiData?.bannerImage || anilistData?.bannerImage || null,
+                        
+                        synopsis: synopsis,
                         genres: genres,
-                        format: (apiData?.type || apiData?.format || item.type || 'TV').toUpperCase(),
-                        status: status,
+                        format: rawFormat,
+                        status: rawStatus,
                         sub: sub,
                         dub: dub,
-                        timestamp: item.timestamp || Date.now(), // Preserve exact Firestore save time
+                        
+                        timestamp: item.timestamp || Date.now(), 
                         metadataSource: apiData ? 'api' : 'firestore-fallback'
                     };
                 })
             );
 
-            // Filter out absolute rejections (should be rare due to fallback)
+            // Extract successfully resolved items
             const successfulItems = results
                 .filter(res => res.status === 'fulfilled')
                 .map(res => res.value);
@@ -319,9 +370,9 @@
             return successfulItems;
         }
 
-        // --- CORE UI GENERATORS --- //
+        // --- UI GENERATORS --- //
 
-        // 1. SLIDER CARD (Matches action_slider.js flawlessly)
+        // 1. HORIZONTAL SLIDER CARD
         function generateSliderCardHtml(item) {
             const safeTitle = (item.title || 'Untitled').replace(/'/g, "\\'");
             const isUpcoming = item.status === 'NOT_YET_RELEASED' || item.status === 'UPCOMING';
@@ -332,7 +383,7 @@
             const upcomingBadge = isUpcoming ? `<div class="absolute bottom-2 left-2 z-20 pointer-events-none"><span class="bg-[#F47521] text-white text-[9px] md:text-[10px] px-1.5 py-1 rounded font-black uppercase tracking-wide shadow-md">UPCOMING</span></div>` : '';
             const formatBadge = item.format ? `<span class="bg-black/80 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded border border-white/5 font-bold uppercase shadow-sm">${item.format}</span>` : '';
             
-            // Strict sub/dub logic
+            // Authentic sub/dub representation
             const subBadge = item.sub !== null ? `<span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-sm font-bold">CC ${item.sub}</span>` : `<span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-sm font-bold">CC —</span>`;
             const dubBadge = (item.dub !== null && item.dub > 0) ? `<span class="bg-purple-600/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-sm font-bold"><i class="fas fa-microphone text-[9px] mr-0.5"></i> ${item.dub}</span>` : '';
 
@@ -361,7 +412,7 @@
             `;
         }
 
-        // 2. LIST VIEW CARD (Matches search.js results)
+        // 2. LIST VIEW CARD (Mimics search.js left-cover layout)
         function generateListCardHtml(item) {
             const safeTitle = item.title.replace(/'/g, "\\'");
             const cardId = `listcard-${item.id}-${Math.random().toString(36).substring(7)}`;
@@ -468,8 +519,8 @@
 
         // Logical Layout Coordinator
         function processAndRenderLayout() {
-            // 1. Dynamic Top Categories
-            const recentlyAdded = [...enrichedLibraryItems].sort((a, b) => b.timestamp - a.timestamp);
+            // 1. Dynamic Top Categories based on rigorous status normalizations
+            const recentlyAdded = [...enrichedLibraryItems].sort((a, b) => b.timestamp - a.timestamp).slice(0, 20); // Show 20 most recent
             const currentlyAiring = enrichedLibraryItems.filter(i => i.status === 'RELEASING');
             const completed = enrichedLibraryItems.filter(i => i.status === 'COMPLETED');
             const upcoming = enrichedLibraryItems.filter(i => i.status === 'UPCOMING' || i.status === 'NOT_YET_RELEASED');
@@ -486,10 +537,11 @@
             groupedGenres = {};
             enrichedLibraryItems.forEach(item => {
                 item.genres.forEach(g => {
-                    if (!groupedGenres[g]) groupedGenres[g] = [];
-                    // Prevent duplicates in the same genre
-                    if (!groupedGenres[g].find(i => i.id === item.id)) {
-                        groupedGenres[g].push(item);
+                    const cleanGenre = g.trim();
+                    if (!groupedGenres[cleanGenre]) groupedGenres[cleanGenre] = [];
+                    // Deduplicate anime within the genre array
+                    if (!groupedGenres[cleanGenre].find(i => i.id === item.id)) {
+                        groupedGenres[cleanGenre].push(item);
                     }
                 });
             });
@@ -501,7 +553,8 @@
             const allGenresData = sortedGenreKeys.map(k => ({
                 name: k,
                 count: groupedGenres[k].length,
-                bg: groupedGenres[k][0].banner || groupedGenres[k][0].poster // Prefer banner for wide tiles
+                // Prefer banner for wide rectangular tiles, fallback to poster
+                bg: groupedGenres[k][0].banner || groupedGenres[k][0].poster 
             }));
             
             if (sortedGenreKeys.length > 0) {
@@ -523,6 +576,7 @@
             title.innerText = genreName;
             
             const items = groupedGenres[genreName] || [];
+            // Generate list-view style cards
             mount.innerHTML = items.map(generateListCardHtml).join('');
             
             overlay.classList.remove('hidden-el');
@@ -539,7 +593,7 @@
             }, 300);
         };
 
-        // --- SEARCH SYSTEM (Uses Local Enriched Data) --- //
+        // --- FAST LOCAL SEARCH ENGINE --- //
         window.handleSearch = () => {
             const query = document.getElementById('library-search').value.trim().toLowerCase();
             const clearBtn = document.getElementById('clear-search-btn');
@@ -554,10 +608,14 @@
                 slidersView.classList.add('hidden-el');
                 searchView.classList.remove('hidden-el');
 
-                // Filter locally without API requests
+                // Instant local filtering without triggering new API requests
                 const filtered = enrichedLibraryItems.filter(item => {
                     const haystack = [
                         item.title,
+                        item.englishTitle,
+                        item.romajiTitle,
+                        item.nativeTitle,
+                        ...(item.synonyms || []),
                         item.format,
                         item.status,
                         ...(item.genres || [])
@@ -599,11 +657,11 @@
                 window.navigator.share({ title: `Watch ${title}`, url: `${window.location.origin}/info.html?id=${id}` });
             } else {
                 navigator.clipboard.writeText(`${window.location.origin}/info.html?id=${id}`);
-                alert("Link copied!");
+                alert("Link copied to clipboard!");
             }
         };
 
-        // Fallback initialization
+        // Fallback initialization for Bottom Navigation
         document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 if (window.app && window.app.components && window.app.components.bottomnav) {
