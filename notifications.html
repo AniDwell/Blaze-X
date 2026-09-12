@@ -88,13 +88,11 @@
                 
                 <!-- Custom CSS Sort Dropdown -->
                 <div class="relative z-50" id="custom-sort-wrapper">
-                    <!-- Dropdown Button -->
                     <button onclick="window.app.toggleSortDropdown(event)" id="sort-display" class="bg-[#111] border border-white/10 text-xs font-bold text-gray-300 rounded-lg pl-4 pr-3 py-2.5 outline-none hover:border-white/20 transition-colors cursor-pointer uppercase tracking-wider flex items-center justify-between gap-3 min-w-[150px]">
                         <span>Newest First</span>
                         <i class="fas fa-chevron-down text-[10px] transition-transform duration-200" id="sort-arrow"></i>
                     </button>
 
-                    <!-- Dropdown Options List -->
                     <div id="sort-dropdown" class="dropdown-menu absolute top-full right-0 mt-2 w-full min-w-[150px] bg-[#111] border border-white/10 rounded-lg shadow-2xl overflow-hidden flex flex-col">
                         <button onclick="window.app.selectSort('date-desc', 'Newest First')" class="text-left px-4 py-3 text-xs font-bold text-gray-400 hover:bg-white/10 hover:text-white uppercase tracking-wider transition-colors border-b border-white/5">Newest First</button>
                         <button onclick="window.app.selectSort('date-asc', 'Oldest First')" class="text-left px-4 py-3 text-xs font-bold text-gray-400 hover:bg-white/10 hover:text-white uppercase tracking-wider transition-colors border-b border-white/5">Oldest First</button>
@@ -121,7 +119,6 @@
 
         <!-- Notifications Feed -->
         <div id="notifications-feed" class="flex flex-col gap-4 mt-4">
-            <!-- Loading State -->
             <div class="flex justify-center items-center py-12">
                 <i class="fas fa-spinner fa-spin text-3xl text-[#F47521]"></i>
             </div>
@@ -134,7 +131,6 @@
         
         <div id="release-popup-content" class="relative w-full max-w-md bg-[#0a0a0a] rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.9)] border border-white/10 opacity-0 pointer-events-auto flex flex-col">
             
-            <!-- Anime Queue Selector Dropdown (Shown only if > 1 notification) -->
             <div id="popup-queue-selector" class="absolute top-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-md border-b border-white/10 hidden">
                 <button onclick="window.app.togglePopupQueue()" class="w-full px-4 py-3 flex items-center justify-between text-white text-sm font-bold tracking-wide hover:bg-white/5 transition-colors">
                     <span id="popup-queue-active-title" class="truncate pr-4">Select Anime</span>
@@ -144,16 +140,13 @@
                     </div>
                 </button>
                 <div id="popup-queue-list" class="hidden max-h-48 overflow-y-auto no-scrollbar bg-[#111] border-t border-white/5">
-                    <!-- Populated via JS -->
                 </div>
             </div>
 
-            <!-- Header / Close -->
             <button onclick="window.app.closeReleasePopup()" class="absolute top-4 right-4 z-40 w-8 h-8 bg-black/50 hover:bg-[#F47521] backdrop-blur-md rounded-full text-white flex items-center justify-center transition-colors border border-white/10">
                 <i class="fas fa-times"></i>
             </button>
 
-            <!-- Cinematic Image Area -->
             <div class="relative w-full h-56 md:h-64 bg-[#111]">
                 <img id="popup-poster" src="" class="w-full h-full object-cover opacity-60">
                 <div class="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/80 to-transparent"></div>
@@ -169,17 +162,13 @@
                 </div>
             </div>
 
-            <!-- Body Details -->
             <div class="p-4 md:p-5 flex-1 bg-[#0a0a0a]">
-                <div id="popup-genres" class="flex flex-wrap gap-1.5 mb-3">
-                    <!-- Genres populated here -->
-                </div>
+                <div id="popup-genres" class="flex flex-wrap gap-1.5 mb-3"></div>
                 <p id="popup-synopsis" class="text-gray-300 text-xs md:text-sm line-clamp-3 leading-relaxed mb-6 font-medium"></p>
                 
-                <!-- Action Buttons -->
                 <div class="flex gap-3">
                     <button id="popup-watch-btn" class="flex-1 bg-[#F47521] hover:bg-[#e06616] text-white font-black text-sm uppercase tracking-wider py-3 rounded-xl transition-colors shadow-[0_4px_15px_rgba(244,117,33,0.3)] flex items-center justify-center gap-2">
-                        <i class="fas fa-play"></i> Watch Now
+                        <i class="fas fa-play"></i> View Details
                     </button>
                     <button id="popup-share-btn" class="w-12 h-12 bg-white/10 hover:bg-white/20 border border-white/10 rounded-xl flex items-center justify-center text-white transition-colors">
                         <i class="fas fa-share-alt"></i>
@@ -197,7 +186,6 @@
 
     <!-- Custom Confirmation Modal -->
     <div id="confirm-modal" class="modal-overlay fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex justify-center items-center px-4">
-        <!-- Kept exactly as provided -->
         <div class="bg-[#0a0a0a] border border-white/10 rounded-2xl p-6 w-full max-w-sm text-center shadow-2xl transform transition-transform duration-300 scale-95" id="modal-content">
             <div class="w-14 h-14 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/5">
                 <i class="fas fa-exclamation-triangle text-xl text-gray-400"></i>
@@ -230,10 +218,7 @@
         const firebaseConfig = {
             apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
             authDomain: "blaze-x-db2f5.firebaseapp.com",
-            projectId: "blaze-x-db2f5",
-            storageBucket: "blaze-x-db2f5.firebasestorage.app",
-            messagingSenderId: "770812306638",
-            appId: "1:770812306638:web:eaf5ded647861f32c25c9f"
+            projectId: "blaze-x-db2f5"
         };
 
         const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
@@ -242,48 +227,206 @@
         window.app.db = db;
         window.app.auth = auth;
 
-        // RELEASE MANAGER 
-        window.app.releaseManager = {
-            isChecking: false,
-            apiBase: 'https://anikoto-api-lyart.vercel.app',
-            cache: {},
+        // HELPER: Format AniList Date
+        const formatAniListDate = (dateObj) => {
+            if (!dateObj || !dateObj.year) return "TBA";
+            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            if (dateObj.month && dateObj.day) return `${months[dateObj.month - 1]} ${dateObj.day}, ${dateObj.year}`;
+            if (dateObj.month) return `${months[dateObj.month - 1]} ${dateObj.year}`;
+            return `${dateObj.year}`;
+        };
 
-            normalizeAnimeData: function(apiResponse) {
-                return {
-                    animeId: apiResponse.id || apiResponse.animeId,
-                    title: apiResponse.title || apiResponse.name,
-                    poster: apiResponse.image || apiResponse.poster,
-                    synopsis: apiResponse.description || apiResponse.synopsis,
-                    genres: apiResponse.genres || [],
-                    sub: !!apiResponse.hasSub,
-                    dub: !!apiResponse.hasDub,
-                    episodes: apiResponse.episodes || apiResponse.episodeCount,
-                    status: apiResponse.status || 'UNKNOWN'
-                };
-            },
+        // --- DYNAMIC FULL-SCREEN UPCOMING MODAL ---
+        window.app.openUpcomingModal = async (animeId) => {
+            if (!document.getElementById('upcoming-modal-wrapper')) {
+                const modalHtml = `
+                    <div id="upcoming-modal-wrapper" class="fixed inset-0 z-[9999] flex flex-col justify-end pointer-events-none">
+                        <div id="upcoming-modal-backdrop" class="absolute inset-0 bg-black/80 backdrop-blur-sm opacity-0 transition-opacity duration-500 pointer-events-auto"></div>
+                        
+                        <div id="upcoming-modal-content" class="w-full h-[95vh] md:h-[100vh] bg-[#0a0a0a] rounded-t-3xl md:rounded-none transform translate-y-full transition-transform duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] pointer-events-auto flex flex-col overflow-hidden relative shadow-[0_-10px_40px_rgba(0,0,0,0.8)]">
+                            
+                            <button id="upcoming-close-btn-top" class="absolute top-4 right-4 md:top-6 md:right-6 z-[60] w-10 h-10 bg-black/50 hover:bg-[#F47521] backdrop-blur-md rounded-full text-white flex items-center justify-center transition-colors border border-white/10 shadow-lg">
+                                <i class="fas fa-times text-xl"></i>
+                            </button>
+                            
+                            <div class="absolute top-3 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-white/30 rounded-full z-[60] md:hidden"></div>
 
-            createNotification: async function(uid, eventType, animeData, specificMessage, uniqueSuffix) {
-                const docId = `rel_${animeData.animeId}_${eventType}_${uniqueSuffix}`;
-                const notifRef = doc(db, "users", uid, "notifications", docId);
+                            <div id="upcoming-modal-scroll" class="flex-1 overflow-y-auto hide-scrollbar relative pb-20">
+                                <div id="upcoming-modal-body" class="min-h-full">
+                                    <div class="flex flex-col items-center justify-center h-[50vh] text-[#F47521]">
+                                        <i class="fas fa-circle-notch fa-spin text-4xl mb-4"></i>
+                                        <p class="text-sm font-bold tracking-widest uppercase text-white">Fetching Details...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+            }
+
+            const wrapper = document.getElementById('upcoming-modal-wrapper');
+            const backdrop = document.getElementById('upcoming-modal-backdrop');
+            const content = document.getElementById('upcoming-modal-content');
+            const body = document.getElementById('upcoming-modal-body');
+            const closeBtnTop = document.getElementById('upcoming-close-btn-top');
+            
+            wrapper.classList.remove('hidden');
+            void wrapper.offsetWidth;
+            
+            backdrop.classList.remove('opacity-0');
+            backdrop.classList.add('opacity-100');
+            content.classList.remove('translate-y-full');
+            content.classList.add('translate-y-0');
+
+            const closeHandler = () => window.app.closeUpcomingModal();
+            backdrop.onclick = closeHandler;
+            closeBtnTop.onclick = closeHandler;
+
+            try {
+                const query = `
+                    query($id: Int) { 
+                        Media(id: $id) { 
+                            title { english romaji native }
+                            coverImage { extraLarge }
+                            bannerImage
+                            format
+                            episodes
+                            status
+                            description(asHtml: false)
+                            startDate { year month day }
+                            genres
+                            studios(isMain: true) { nodes { name } }
+                            trailer { id site }
+                            recommendations(page: 1, perPage: 8, sort: RATING_DESC) {
+                                nodes { mediaRecommendation { id title { english romaji } coverImage { large } format status } }
+                            }
+                        } 
+                    }
+                `;
+                const res = await fetch('https://graphql.anilist.co', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query, variables: { id: parseInt(animeId) } })
+                });
+                const json = await res.json();
+                const data = json.data.Media;
+
+                const title = data.title.english || data.title.romaji;
+                const banner = data.bannerImage || 'https://via.placeholder.com/1200x400/111/111';
+                const cover = data.coverImage.extraLarge;
+                const releaseDate = formatAniListDate(data.startDate);
+                const description = (data.description || "No description available yet.").replace(/<[^>]*>?/gm, '');
+                const studio = data.studios?.nodes?.[0]?.name || "Unknown Studio";
                 
-                const notifPayload = {
-                    type: eventType,
-                    animeId: animeData.animeId,
-                    title: animeData.title,
-                    image: animeData.poster,
-                    synopsis: animeData.synopsis,
-                    genres: animeData.genres,
-                    sub: animeData.sub,
-                    dub: animeData.dub,
-                    message: specificMessage,
-                    timestamp: Date.now(),
-                    read: false,
-                    uniqueEventId: docId
-                };
+                let trailerHtml = '';
+                if (data.trailer && data.trailer.site === 'youtube') {
+                    trailerHtml = `
+                        <div class="w-full max-w-4xl mx-auto mt-8 px-4">
+                            <h3 class="text-white font-black text-lg mb-3 uppercase tracking-wider border-l-4 border-[#F47521] pl-2">Official Trailer</h3>
+                            <div class="relative w-full aspect-video rounded-xl overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.5)] border border-white/5">
+                                <iframe class="absolute inset-0 w-full h-full" src="https://www.youtube.com/embed/${data.trailer.id}" frameborder="0" allowfullscreen></iframe>
+                            </div>
+                        </div>
+                    `;
+                }
 
-                try { await setDoc(notifRef, notifPayload, { merge: true }); } catch(e) { console.error("Failed to write release notification", e); }
+                let genresHtml = (data.genres || []).map(g => `<span class="bg-white/10 border border-white/10 px-3 py-1 rounded-full text-xs font-bold text-gray-300 shadow-sm">${g}</span>`).join('');
+
+                let recsHtml = '';
+                const recs = (data.recommendations?.nodes || []).filter(n => n.mediaRecommendation);
+                if (recs.length > 0) {
+                    recsHtml = `
+                        <div class="w-full mt-10 px-4 pb-10">
+                            <h3 class="text-white font-black text-lg mb-4 uppercase tracking-wider border-l-4 border-[#F47521] pl-2">Similar Anime</h3>
+                            <div class="flex gap-3 overflow-x-auto hide-scrollbar snap-x pb-4">
+                                ${recs.map(r => {
+                                    const recAnime = r.mediaRecommendation;
+                                    const rTitle = recAnime.title.english || recAnime.title.romaji;
+                                    return `
+                                        <div class="snap-start shrink-0 w-[110px] md:w-[140px] relative group border border-white/5 rounded-lg overflow-hidden cursor-pointer" onclick="window.app.openUpcomingModal('${recAnime.id}')">
+                                            <div class="w-full aspect-[2/3]">
+                                                <img src="${recAnime.coverImage.large}" class="w-full h-full object-cover">
+                                            </div>
+                                            <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
+                                            <div class="absolute bottom-0 left-0 w-full p-2">
+                                                <h4 class="text-white text-[10px] md:text-xs font-bold truncate drop-shadow-md">${rTitle}</h4>
+                                            </div>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                body.innerHTML = `
+                    <div class="relative w-full h-48 md:h-72 bg-[#111]">
+                        <img src="${banner}" class="w-full h-full object-cover opacity-40">
+                        <div class="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/60 to-transparent"></div>
+                        <div class="absolute inset-0 bg-gradient-to-r from-[#0a0a0a]/90 via-transparent to-transparent"></div>
+                    </div>
+                    <div class="relative px-4 md:px-10 -mt-20 md:-mt-32 z-10">
+                        <div class="flex gap-4 md:gap-8 items-end md:items-stretch">
+                            <div class="w-28 md:w-48 shrink-0 relative">
+                                <img src="${cover}" class="w-full aspect-[2/3] object-cover rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.8)] border-2 border-white/10">
+                                <div class="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-[#F47521] text-white text-[9px] md:text-xs font-black uppercase px-3 py-1 rounded shadow-lg whitespace-nowrap">
+                                    ${data.status.replace(/_/g, ' ')}
+                                </div>
+                            </div>
+                            <div class="flex-1 pb-2 md:py-6">
+                                <h2 class="text-xl md:text-4xl font-black text-white leading-tight drop-shadow-lg mb-1 md:mb-2">${title}</h2>
+                                <h3 class="text-xs md:text-sm text-gray-400 font-bold mb-3 line-clamp-1">${data.title.native || ''}</h3>
+                                <div class="flex flex-wrap items-center gap-2 mb-2">
+                                    <span class="bg-white/10 text-white text-[10px] md:text-xs px-2 py-0.5 rounded font-bold uppercase border border-white/5">${data.format || 'TV'}</span>
+                                </div>
+                                <p class="text-gray-300 text-xs md:text-sm font-semibold flex items-center gap-2">
+                                    <i class="far fa-calendar-alt text-[#F47521]"></i> 
+                                    Airing: <span class="text-white">${releaseDate}</span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="px-4 md:px-10 mt-8 max-w-4xl mx-auto">
+                        <div class="flex flex-wrap gap-2 mb-6">
+                            ${genresHtml}
+                        </div>
+                        <div class="bg-white/5 border border-white/5 rounded-xl p-4 md:p-6 shadow-lg">
+                            <div class="flex justify-between items-center mb-3">
+                                <span class="text-gray-400 text-xs font-bold uppercase tracking-widest">Studio</span>
+                                <span class="text-white text-sm md:text-base font-black">${studio}</span>
+                            </div>
+                            <p class="text-sm md:text-base text-gray-300 leading-relaxed font-medium">
+                                ${description}
+                            </p>
+                        </div>
+                    </div>
+                    ${trailerHtml}
+                    ${recsHtml}
+                `;
+
+            } catch (e) {
+                console.error(e);
+                body.innerHTML = `<div class="p-10 text-center text-red-500 font-bold">Failed to load details. Try again.</div>`;
             }
         };
+
+        window.app.closeUpcomingModal = () => {
+            const backdrop = document.getElementById('upcoming-modal-backdrop');
+            const content = document.getElementById('upcoming-modal-content');
+            
+            if (backdrop && content) {
+                backdrop.classList.remove('opacity-100');
+                backdrop.classList.add('opacity-0');
+                content.classList.remove('translate-y-0');
+                content.classList.add('translate-y-full');
+                setTimeout(() => {
+                    const wrapper = document.getElementById('upcoming-modal-wrapper');
+                    if (wrapper) wrapper.classList.add('hidden');
+                }, 500); 
+            }
+        };
+
 
         // CUSTOM DROPDOWN LOGIC 
         window.app.toggleSortDropdown = (e) => {
@@ -420,17 +563,17 @@
             }, 400);
         };
 
-        // CLICK ROUTING LOGIC
+        // --- THE FIX: ROUTE CLICKS TO MODAL INSTEAD OF DIRECT URL ---
         window.app.handleNotificationClick = async (type, animeId, userId) => {
             if (type === 'like' && userId) {
                 window.location.href = `/profile.html?id=${userId}`;
-            } else if (['library', 'episode_released', 'series_released', 'release_delayed'].includes(type) && animeId) {
-                // This routes directly to the anime page exactly like the carousel button 
-                window.location.href = `/info.html?id=${animeId}`;
+            } else if (['library', 'episode_released', 'series_released', 'release_delayed', 'comment'].includes(type) && animeId) {
+                // Now triggers the Full-Screen UI instead of info.html
+                window.app.openUpcomingModal(animeId);
             }
         };
 
-        // RENDER NOTIFICATIONS FEED (NEW CINEMATIC DESIGN)
+        // RENDER NOTIFICATIONS FEED 
         window.app.renderNotifications = () => {
             const feed = document.getElementById('notifications-feed');
             
@@ -465,7 +608,6 @@
             processedData.forEach(notif => {
                 const imgUrl = notif.image || notif.userPfp || 'https://via.placeholder.com/150x225/111/fff?text=No+Image';
                 
-                // NEW: Larger, sleeker poster dimensions
                 let imgClass = "w-20 h-28 md:w-28 md:h-40 object-cover rounded-xl shadow-lg transition-transform duration-500 group-hover:scale-105";
                 let iconHtml = '';
                 
@@ -481,7 +623,6 @@
 
                 const isAnimeCard = ['library', 'episode_released', 'series_released', 'release_delayed'].includes(notif.type);
 
-                // NEW: Borderless card wrapper, scales and reveals play button on hover
                 html += `
                     <div class="group flex gap-4 md:gap-6 p-3 md:p-4 bg-white/5 hover:bg-white/10 rounded-2xl relative transition-all overflow-hidden items-center cursor-pointer shadow-sm hover:shadow-xl border border-transparent"
                          onclick="window.app.handleNotificationClick('${notif.type}', '${notif.animeId || ''}', '${notif.userId || ''}')">
@@ -489,7 +630,6 @@
                         <div class="shrink-0 relative flex items-center justify-center rounded-xl overflow-hidden shadow-md bg-[#111]">
                             <img src="${imgUrl}" alt="Cover" class="${imgClass}">
                             
-                            <!-- Play Icon Hover Overlay for Series -->
                             ${isAnimeCard ? `
                             <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
                                 <i class="fas fa-play text-white text-2xl md:text-3xl drop-shadow-lg scale-75 group-hover:scale-100 transition-transform duration-300"></i>
@@ -508,7 +648,6 @@
                             <p class="text-gray-400 text-xs md:text-sm line-clamp-2 md:line-clamp-3 leading-relaxed font-medium">${notif.message || ''}</p>
                         </div>
 
-                        <!-- Subtler Delete Button -->
                         <button onclick="event.stopPropagation(); window.app.deleteNotification('${notif.id}')" class="absolute top-1/2 -translate-y-1/2 right-3 md:right-5 text-gray-500 hover:text-red-500 w-10 h-10 rounded-full hover:bg-red-500/10 flex items-center justify-center transition-colors z-50">
                             <i class="fas fa-times text-lg md:text-xl"></i>
                         </button>
