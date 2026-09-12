@@ -304,19 +304,6 @@
         <span id="toast-text" class="text-sm font-medium tracking-wide"></span>
     </div>
 
-    <!-- Upcoming Anime Modal -->
-    <div id="upcoming-modal" class="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center hidden-el p-4 backdrop-blur-sm transition-opacity opacity-0 duration-300">
-        <div class="glass-panel border border-white/10 w-full max-w-sm rounded-2xl p-6 relative shadow-2xl text-center transform scale-95 transition-transform duration-300" id="upcoming-modal-content">
-            <button onclick="window.app.closeUpcomingModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-[#F47521] transition-colors"><i class="fas fa-times"></i></button>
-            <div class="w-16 h-16 rounded-full bg-[#F47521]/20 text-[#F47521] flex items-center justify-center mx-auto mb-4 text-2xl">
-                <i class="fas fa-calendar-alt"></i>
-            </div>
-            <h3 class="text-xl font-black text-white mb-2 tracking-wider">Not Yet Released</h3>
-            <p class="text-sm text-gray-400 mb-6">This series is currently marked as upcoming and isn't available to stream just yet.</p>
-            <button onclick="window.app.closeUpcomingModal()" class="w-full bg-[#F47521] hover:bg-white hover:text-black text-white font-bold py-3 rounded-xl transition-colors shadow-lg">Got it</button>
-        </div>
-    </div>
-
     <!-- Bio Read More Modal -->
     <div id="bio-modal" class="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center hidden-el p-4 backdrop-blur-sm transition-opacity">
         <div class="bg-[#0a0a0c] border border-white/10 w-full max-w-md rounded-2xl p-6 relative shadow-2xl">
@@ -423,33 +410,206 @@
             }, 3000);
         };
 
-        // --- UPCOMING MODAL FUNCTIONS ---
-        window.app.openUpcomingModal = (id) => {
-            const modal = document.getElementById('upcoming-modal');
+        // --- HELPER: Format AniList Date ---
+        const formatAniListDate = (dateObj) => {
+            if (!dateObj || !dateObj.year) return "TBA";
+            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            if (dateObj.month && dateObj.day) return `${months[dateObj.month - 1]} ${dateObj.day}, ${dateObj.year}`;
+            if (dateObj.month) return `${months[dateObj.month - 1]} ${dateObj.year}`;
+            return `${dateObj.year}`;
+        };
+
+        // --- DYNAMIC UPCOMING MODAL (Imported from upcoming_slider.js) ---
+        window.app.openUpcomingModal = async (animeId) => {
+            if (!document.getElementById('upcoming-modal-wrapper')) {
+                const modalHtml = `
+                    <div id="upcoming-modal-wrapper" class="fixed inset-0 z-[9999] flex flex-col justify-end pointer-events-none">
+                        <div id="upcoming-modal-backdrop" class="absolute inset-0 bg-black/80 backdrop-blur-sm opacity-0 transition-opacity duration-500 pointer-events-auto"></div>
+                        
+                        <div id="upcoming-modal-content" class="w-full h-[95vh] md:h-[100vh] bg-[#0a0a0a] rounded-t-3xl md:rounded-none transform translate-y-full transition-transform duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] pointer-events-auto flex flex-col overflow-hidden relative shadow-[0_-10px_40px_rgba(0,0,0,0.8)]">
+                            
+                            <button id="upcoming-close-btn-top" class="absolute top-4 right-4 md:top-6 md:right-6 z-[60] w-10 h-10 bg-black/50 hover:bg-[#F47521] backdrop-blur-md rounded-full text-white flex items-center justify-center transition-colors border border-white/10 shadow-lg">
+                                <i class="fas fa-times text-xl"></i>
+                            </button>
+                            
+                            <div class="absolute top-3 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-white/30 rounded-full z-[60] md:hidden"></div>
+
+                            <div id="upcoming-modal-scroll" class="flex-1 overflow-y-auto hide-scrollbar relative pb-20">
+                                <div id="upcoming-modal-body" class="min-h-full">
+                                    <div class="flex flex-col items-center justify-center h-[50vh] text-[#F47521]">
+                                        <i class="fas fa-circle-notch fa-spin text-4xl mb-4"></i>
+                                        <p class="text-sm font-bold tracking-widest uppercase text-white">Fetching Details...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+            }
+
+            const wrapper = document.getElementById('upcoming-modal-wrapper');
+            const backdrop = document.getElementById('upcoming-modal-backdrop');
             const content = document.getElementById('upcoming-modal-content');
-            modal.classList.remove('hidden-el');
+            const body = document.getElementById('upcoming-modal-body');
+            const closeBtnTop = document.getElementById('upcoming-close-btn-top');
             
-            // Trigger reflow for smooth animation
-            void modal.offsetWidth; 
+            wrapper.classList.remove('hidden');
+            void wrapper.offsetWidth;
             
-            modal.classList.remove('opacity-0');
-            modal.classList.add('opacity-100');
-            content.classList.remove('scale-95');
-            content.classList.add('scale-100');
+            backdrop.classList.remove('opacity-0');
+            backdrop.classList.add('opacity-100');
+            content.classList.remove('translate-y-full');
+            content.classList.add('translate-y-0');
+
+            const closeHandler = () => window.app.closeUpcomingModal();
+            backdrop.onclick = closeHandler;
+            closeBtnTop.onclick = closeHandler;
+
+            try {
+                const query = `
+                    query($id: Int) { 
+                        Media(id: $id) { 
+                            title { english romaji native }
+                            coverImage { extraLarge }
+                            bannerImage
+                            format
+                            episodes
+                            status
+                            description(asHtml: false)
+                            startDate { year month day }
+                            genres
+                            studios(isMain: true) { nodes { name } }
+                            trailer { id site }
+                            recommendations(page: 1, perPage: 8, sort: RATING_DESC) {
+                                nodes { mediaRecommendation { id title { english romaji } coverImage { large } format status } }
+                            }
+                        } 
+                    }
+                `;
+                const res = await fetch('https://graphql.anilist.co', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query, variables: { id: parseInt(animeId) } })
+                });
+                const json = await res.json();
+                const data = json.data.Media;
+
+                const title = data.title.english || data.title.romaji;
+                const banner = data.bannerImage || 'https://via.placeholder.com/1200x400/111/111';
+                const cover = data.coverImage.extraLarge;
+                const releaseDate = formatAniListDate(data.startDate);
+                const description = (data.description || "No description available yet.").replace(/<[^>]*>?/gm, '');
+                const studio = data.studios?.nodes?.[0]?.name || "Unknown Studio";
+                
+                let trailerHtml = '';
+                if (data.trailer && data.trailer.site === 'youtube') {
+                    trailerHtml = `
+                        <div class="w-full max-w-4xl mx-auto mt-8 px-4">
+                            <h3 class="text-white font-black text-lg mb-3 uppercase tracking-wider border-l-4 border-[#F47521] pl-2">Official Trailer</h3>
+                            <div class="relative w-full aspect-video rounded-xl overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.5)] border border-white/5">
+                                <iframe class="absolute inset-0 w-full h-full" src="https://www.youtube.com/embed/${data.trailer.id}" frameborder="0" allowfullscreen></iframe>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                let genresHtml = (data.genres || []).map(g => `<span class="bg-white/10 border border-white/10 px-3 py-1 rounded-full text-xs font-bold text-gray-300 shadow-sm">${g}</span>`).join('');
+
+                let recsHtml = '';
+                const recs = (data.recommendations?.nodes || []).filter(n => n.mediaRecommendation);
+                if (recs.length > 0) {
+                    recsHtml = `
+                        <div class="w-full mt-10 px-4 pb-10">
+                            <h3 class="text-white font-black text-lg mb-4 uppercase tracking-wider border-l-4 border-[#F47521] pl-2">Similar Anime</h3>
+                            <div class="flex gap-3 overflow-x-auto hide-scrollbar snap-x pb-4">
+                                ${recs.map(r => {
+                                    const recAnime = r.mediaRecommendation;
+                                    const rTitle = recAnime.title.english || recAnime.title.romaji;
+                                    return `
+                                        <div class="snap-start shrink-0 w-[110px] md:w-[140px] relative group border border-white/5 rounded-lg overflow-hidden">
+                                            <div class="w-full aspect-[2/3]">
+                                                <img src="${recAnime.coverImage.large}" class="w-full h-full object-cover">
+                                            </div>
+                                            <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
+                                            <div class="absolute bottom-0 left-0 w-full p-2">
+                                                <h4 class="text-white text-[10px] md:text-xs font-bold truncate drop-shadow-md">${rTitle}</h4>
+                                            </div>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                body.innerHTML = `
+                    <div class="relative w-full h-48 md:h-72 bg-[#111]">
+                        <img src="${banner}" class="w-full h-full object-cover opacity-40">
+                        <div class="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/60 to-transparent"></div>
+                        <div class="absolute inset-0 bg-gradient-to-r from-[#0a0a0a]/90 via-transparent to-transparent"></div>
+                    </div>
+                    <div class="relative px-4 md:px-10 -mt-20 md:-mt-32 z-10">
+                        <div class="flex gap-4 md:gap-8 items-end md:items-stretch">
+                            <div class="w-28 md:w-48 shrink-0 relative">
+                                <img src="${cover}" class="w-full aspect-[2/3] object-cover rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.8)] border-2 border-white/10">
+                                <div class="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-[#F47521] text-white text-[9px] md:text-xs font-black uppercase px-3 py-1 rounded shadow-lg whitespace-nowrap">
+                                    ${data.status.replace(/_/g, ' ')}
+                                </div>
+                            </div>
+                            <div class="flex-1 pb-2 md:py-6">
+                                <h2 class="text-xl md:text-4xl font-black text-white leading-tight drop-shadow-lg mb-1 md:mb-2">${title}</h2>
+                                <h3 class="text-xs md:text-sm text-gray-400 font-bold mb-3 line-clamp-1">${data.title.native || ''}</h3>
+                                <div class="flex flex-wrap items-center gap-2 mb-2">
+                                    <span class="bg-white/10 text-white text-[10px] md:text-xs px-2 py-0.5 rounded font-bold uppercase border border-white/5">${data.format || 'TV'}</span>
+                                    <span class="bg-black/50 text-[#F47521] border border-[#F47521]/30 text-[10px] md:text-xs px-2 py-0.5 rounded font-bold">SUB: TBA</span>
+                                    <span class="bg-black/50 text-purple-400 border border-purple-400/30 text-[10px] md:text-xs px-2 py-0.5 rounded font-bold">DUB: TBA</span>
+                                </div>
+                                <p class="text-gray-300 text-xs md:text-sm font-semibold flex items-center gap-2">
+                                    <i class="far fa-calendar-alt text-[#F47521]"></i> 
+                                    Airing: <span class="text-white">${releaseDate}</span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="px-4 md:px-10 mt-8 max-w-4xl mx-auto">
+                        <div class="flex flex-wrap gap-2 mb-6">
+                            ${genresHtml}
+                        </div>
+                        <div class="bg-white/5 border border-white/5 rounded-xl p-4 md:p-6 shadow-lg">
+                            <div class="flex justify-between items-center mb-3">
+                                <span class="text-gray-400 text-xs font-bold uppercase tracking-widest">Studio</span>
+                                <span class="text-white text-sm md:text-base font-black">${studio}</span>
+                            </div>
+                            <p class="text-sm md:text-base text-gray-300 leading-relaxed font-medium">
+                                ${description}
+                            </p>
+                        </div>
+                    </div>
+                    ${trailerHtml}
+                    ${recsHtml}
+                `;
+
+            } catch (e) {
+                console.error(e);
+                body.innerHTML = `<div class="p-10 text-center text-red-500 font-bold">Failed to load details. Try again.</div>`;
+            }
         };
 
         window.app.closeUpcomingModal = () => {
-            const modal = document.getElementById('upcoming-modal');
+            const backdrop = document.getElementById('upcoming-modal-backdrop');
             const content = document.getElementById('upcoming-modal-content');
             
-            modal.classList.remove('opacity-100');
-            modal.classList.add('opacity-0');
-            content.classList.remove('scale-100');
-            content.classList.add('scale-95');
-            
-            setTimeout(() => {
-                modal.classList.add('hidden-el');
-            }, 300);
+            if (backdrop && content) {
+                backdrop.classList.remove('opacity-100');
+                backdrop.classList.add('opacity-0');
+                content.classList.remove('translate-y-0');
+                content.classList.add('translate-y-full');
+                setTimeout(() => {
+                    const wrapper = document.getElementById('upcoming-modal-wrapper');
+                    if (wrapper) wrapper.classList.add('hidden');
+                }, 500); 
+            }
         };
 
         // --- NEW: CINEMATIC SHARE MODAL FUNCTION ---
@@ -899,6 +1059,8 @@
             const isUpcoming = item.status === 'NOT_YET_RELEASED';
             
             const posterImg = item.poster || item.img || item.image || 'https://via.placeholder.com/150x225?text=No+Cover';
+            
+            // IF UPCOMING -> Open Modal, ELSE -> Navigate to Info Page
             const clickAction = isUpcoming 
                 ? `window.app.openUpcomingModal('${item.id}')` 
                 : `window.app.sliderNavigate('${item.id}', '${safeTitle}', '${posterImg}', '${item.type || "TV"}', '${item.sub || "?"}', '${item.dub || 0}')`;
