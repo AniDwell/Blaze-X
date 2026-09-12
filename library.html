@@ -97,14 +97,14 @@
             </div>
             <h2 class="text-xl font-black text-white mb-2">Your Library is Empty</h2>
             <p class="text-gray-400 text-sm max-w-xs leading-relaxed">You haven't saved any anime yet. Start exploring and bookmark your favorites!</p>
-            <button onclick="window.location.href='/index.html'" class="mt-6 bg-[#F47521] hover:bg-[#d96216] text-white px-6 py-2.5 rounded-xl font-bold transition-all">
+            <button onclick="window.location.href='/index.html'" class="mt-6 bg-[#F47521] hover:bg-[#d96216] text-white px-6 py-2.5 rounded-xl font-bold transition-all shadow-[0_4px_15px_rgba(244,117,33,0.2)]">
                 Explore Anime
             </button>
         </div>
 
         <!-- Default Categorized View -->
         <div id="library-sliders-view" class="hidden-el pb-4">
-            <!-- 1. Top Dynamic Categories (Recent, Airing, Completed) -->
+            <!-- 1. Top Dynamic Categories (Recent, Airing, Completed, Movies, etc.) -->
             <div id="top-sliders-mount"></div>
             <!-- 2. Genre Rectangle Tiles -->
             <div id="genre-tiles-mount"></div>
@@ -156,13 +156,14 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
+        // Global State
         let enrichedLibraryItems = [];
         let groupedGenres = {};
         
-        // The API identical to info.html
+        // Exact API used by info.html
         const baseUrl = 'https://anikoto-api-xi.vercel.app'; 
 
-        // Shared Navigation
+        // --- NAVIGATION & UTILITY --- //
         window.sliderNavigate = (id) => window.location.href = `/info.html?id=${id}`;
 
         window.scrollTrack = (trackId, direction) => {
@@ -173,36 +174,42 @@
             }
         };
 
-        // Remove from Library (Visual + DB)
-        window.removeFromLibrary = async (event, idStr, cardElementId) => {
+        window.scrollToGenre = (trackId) => {
+            const el = document.getElementById(`container-${trackId}`);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        };
+
+        // --- REMOVE FROM LIBRARY (DB + DOM Cleanup) --- //
+        window.removeFromLibrary = async (event, idStr) => {
             event.stopPropagation();
             if (!auth.currentUser) return;
             try {
+                // Remove from DB
                 await deleteDoc(doc(db, "users", auth.currentUser.uid, "library", String(idStr)));
                 
-                // Hide specific elements if passed
-                if (cardElementId) {
-                    const card = document.getElementById(cardElementId);
-                    if (card) {
-                        card.style.transform = 'scale(0.9)';
-                        card.style.opacity = '0';
-                        setTimeout(() => card.remove(), 300);
-                    }
-                } else {
-                    const targetBtn = event.currentTarget;
-                    if(targetBtn) {
-                        targetBtn.innerHTML = '<i class="fas fa-bookmark"></i> Removed';
-                        targetBtn.classList.replace('text-[#F47521]', 'text-gray-500');
-                        targetBtn.classList.replace('bg-[#F47521]/10', 'bg-white/5');
-                        targetBtn.disabled = true;
-                    }
-                }
+                // Remove all DOM elements associated with this anime ID (both sliders and lists)
+                const targetCards = document.querySelectorAll(`[data-anime-id="${idStr}"]`);
+                targetCards.forEach(card => {
+                    card.style.transform = 'scale(0.9)';
+                    card.style.opacity = '0';
+                    setTimeout(() => card.remove(), 300);
+                });
                 
+                // Update Local Memory so Search continues to work properly
                 enrichedLibraryItems = enrichedLibraryItems.filter(i => String(i.id) !== String(idStr));
-            } catch (err) { console.error("Failed to remove:", err); }
+                
+                // If library is now totally empty, show the empty state
+                if (enrichedLibraryItems.length === 0) {
+                    document.getElementById('library-sliders-view').classList.add('hidden-el');
+                    document.getElementById('library-search-view').classList.add('hidden-el');
+                    document.getElementById('empty-state').classList.remove('hidden-el');
+                }
+            } catch (err) { console.error("[Library] Failed to remove:", err); }
         };
 
-        // Initialize Library
+        // --- INITIALIZATION --- //
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 await fetchAndRenderLibrary(user.uid);
@@ -232,110 +239,97 @@
                 }
 
                 const rawItems = snapshot.docs.map(doc => doc.data());
+                console.log('[Library] Raw Firestore items:', rawItems);
                 
-                // Process ALL items with the new rigorous Data Engine
-                enrichedLibraryItems = await enrichItemsSafely(rawItems);
+                // Process ALL items with the STRICT Exact-ID Data Engine
+                enrichedLibraryItems = await enrichItemsStrictly(rawItems);
+                console.log('[Library] Final Normalized Items:', enrichedLibraryItems);
                 
                 document.getElementById('loading-state').classList.add('hidden-el');
                 document.getElementById('library-sliders-view').classList.remove('hidden-el');
                 
                 processAndRenderLayout();
             } catch (error) {
-                console.error("Error fetching library:", error);
+                console.error("[Library] Error fetching library:", error);
                 document.getElementById('loading-state').innerHTML = `<p class="text-red-500 font-bold">Critical error loading library data.</p>`;
             }
         }
 
-        // --- 🚀 THE NEW RIGOROUS DATA ENGINE --- //
-        // Firestore ID → Anikoto API Exact Match → Normalized Mapping → Categorized
-        async function enrichItemsSafely(rawItems) {
-            console.log(`[Library] Syncing ${rawItems.length} items from Firestore...`);
+        // --- 🚀 THE NEW STRICT EXACT-ID DATA ENGINE --- //
+        async function enrichItemsStrictly(rawItems) {
             
-            // Promise.allSettled ensures one broken API endpoint won't destroy the whole library
+            // Use Promise.allSettled so one broken API doesn't kill the entire library
             const results = await Promise.allSettled(
                 rawItems.map(async (item) => {
                     const animeId = String(item.id);
                     let apiData = null;
                     let anilistData = null;
 
+                    console.log(`[Library] Fetching exact Anikoto anime info: ${animeId}`);
+
                     // 1. PRIMARY LOOKUP: Exact Anikoto Info Endpoint (Same as info.html)
                     try {
                         const res = await fetch(`${baseUrl}/api/info?id=${encodeURIComponent(animeId)}`);
                         if (res.ok) {
                             const json = await res.json();
-                            // Handle varying response structures safely
+                            // Safely handle Anikoto's varying response shells
                             apiData = json.data || json.results || json.animeInfo || json.anime || json;
                         }
                     } catch (e) {
                         console.warn(`[Library] Exact ID fetch failed for ${animeId}`, e);
                     }
 
-                    // Extract AniList ID supplied by Anikoto payload
-                    const extractedAlId = apiData?.alId || apiData?.anilistId || item?.anilistId || item?.alId;
+                    // Extract strict AniList ID provided by Anikoto payload
+                    const exactAlId = apiData?.alId || apiData?.anilistId || item?.anilistId || item?.alId;
 
-                    // 2. ENRICHMENT LOOKUP (Only if needed or ID exists)
+                    // 2. SECONDARY ENRICHMENT: AniList by ID (Only if we have the ID to avoid sequel mixups)
                     try {
-                        if (extractedAlId) {
-                            // EXACT ANILIST ID MATCH (Eliminates incorrect sequel matching)
+                        if (exactAlId) {
                             const aniQuery = `query($id: Int) { Media(id: $id, type: ANIME) { id title { english romaji native } status coverImage { extraLarge } bannerImage genres format description(asHtml: false) episodes } }`;
                             const res = await fetch('https://graphql.anilist.co', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ query: aniQuery, variables: { id: parseInt(extractedAlId) } })
+                                body: JSON.stringify({ query: aniQuery, variables: { id: parseInt(exactAlId) } })
                             });
                             const json = await res.json();
                             if (json.data && json.data.Media) {
                                 anilistData = json.data.Media;
                             }
-                        } else {
-                            // FALLBACK: Title Search ONLY IF absolutely necessary
-                            const searchTitle = apiData?.title?.english || apiData?.title || item?.title;
-                            if (searchTitle) {
-                                const cleanTitle = searchTitle.replace(/[^a-zA-Z0-9 ]/g, ' ');
-                                const aniQuery = `query($search: String) { Media(search: $search, type: ANIME, sort: SEARCH_MATCH) { id title { english romaji native } status coverImage { extraLarge } bannerImage genres format description(asHtml: false) episodes } }`;
-                                const res = await fetch('https://graphql.anilist.co', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ query: aniQuery, variables: { search: cleanTitle } })
-                                });
-                                const json = await res.json();
-                                if (json.data && json.data.Media) {
-                                    anilistData = json.data.Media;
-                                }
-                            }
                         }
                     } catch (e) {
-                        console.warn(`[Library] AniList enrichment failed for ${animeId}`, e);
+                        console.warn(`[Library] AniList ID enrichment failed for ${animeId}`, e);
                     }
 
-                    // 3. NORMALIZATION & FALLBACK LOGIC
+                    // 3. NORMALIZATION TO STRICT MODEL
                     
-                    // Display Title Priorities
-                    const displayTitle = apiData?.title?.english || apiData?.title?.romaji || apiData?.title || anilistData?.title?.english || anilistData?.title?.romaji || item.title || 'Unknown Title';
+                    // Display Title Priorities (Best available API title)
+                    const titleObj = apiData?.title || {};
+                    const displayTitle = typeof titleObj === 'string' ? titleObj : (titleObj.english || titleObj.romaji || titleObj.native || anilistData?.title?.english || anilistData?.title?.romaji || item.title || 'Unknown Title');
                     
-                    // Sub / Dub Extractions (Must come from Anikoto)
+                    // Sub / Dub Extractions (Must come strictly from Anikoto)
                     let sub = apiData?.episodes?.sub ?? apiData?.tvInfo?.sub ?? apiData?.sub ?? item.sub ?? null;
                     let dub = apiData?.episodes?.dub ?? apiData?.tvInfo?.dub ?? apiData?.dub ?? item.dub ?? null;
                     sub = Number.isFinite(Number(sub)) ? Number(sub) : null;
                     dub = Number.isFinite(Number(dub)) ? Number(dub) : null;
 
                     // Status Normalization
-                    let rawStatus = (apiData?.status || anilistData?.status || item.releaseStatus || item.status || 'UNKNOWN').toUpperCase();
-                    if (rawStatus === 'ONGOING' || rawStatus === 'RELEASING') rawStatus = 'RELEASING';
-                    else if (rawStatus === 'UPCOMING' || rawStatus === 'NOT_YET_RELEASED') rawStatus = 'UPCOMING';
-                    else if (rawStatus === 'FINISHED' || rawStatus === 'COMPLETED') rawStatus = 'COMPLETED';
+                    let rawStatus = String(apiData?.status || anilistData?.status || item.releaseStatus || item.status || 'UNKNOWN').toUpperCase();
+                    if (rawStatus.includes('ONGOING') || rawStatus.includes('RELEASING')) rawStatus = 'RELEASING';
+                    else if (rawStatus.includes('UPCOMING') || rawStatus.includes('NOT_YET')) rawStatus = 'UPCOMING';
+                    else if (rawStatus.includes('FINISHED') || rawStatus.includes('COMPLETED')) rawStatus = 'COMPLETED';
 
-                    // Format
-                    let rawFormat = (apiData?.type || anilistData?.format || item.type || 'TV').toUpperCase();
+                    // Format Normalization
+                    let rawFormat = String(apiData?.type || anilistData?.format || item.type || 'TV').toUpperCase();
                     if (rawFormat === 'TV_SHORT') rawFormat = 'TV';
 
-                    // Genres (Merge, fallback to Uncategorized)
+                    // Genres (Merge, deduplicate, fallback to Uncategorized)
                     let genres = apiData?.genres || anilistData?.genres || [];
                     if (!Array.isArray(genres) || genres.length === 0) genres = ['Uncategorized'];
+                    genres = [...new Set(genres)]; // Deduplicate just in case
 
                     // Authentic Synopsis
                     let synopsis = apiData?.description || apiData?.synopsis || anilistData?.description || item.description || "Synopsis unavailable.";
-                    synopsis = synopsis.replace(/<[^>]*>?/gm, ''); 
+                    synopsis = synopsis.replace(/<[^>]*>?/gm, '').trim(); 
 
                     // Return Strict Normalized Model
                     return {
@@ -344,8 +338,9 @@
                         englishTitle: anilistData?.title?.english || '',
                         romajiTitle: anilistData?.title?.romaji || '',
                         nativeTitle: anilistData?.title?.native || '',
-                        synonyms: apiData?.synonyms || [],
+                        synonyms: Array.isArray(apiData?.synonyms) ? apiData.synonyms : [],
                         
+                        // Poster Priority
                         poster: apiData?.image || apiData?.poster || item.img || item.image || anilistData?.coverImage?.extraLarge || 'https://via.placeholder.com/150x225?text=No+Cover',
                         banner: apiData?.cover || apiData?.bannerImage || anilistData?.bannerImage || null,
                         
@@ -356,30 +351,26 @@
                         sub: sub,
                         dub: dub,
                         
-                        timestamp: item.timestamp || Date.now(), 
+                        timestamp: item.timestamp || Date.now(), // Preserve exact Firestore save time
                         metadataSource: apiData ? 'api' : 'firestore-fallback'
                     };
                 })
             );
 
-            // Extract successfully resolved items
-            const successfulItems = results
+            // Filter out rare rejections, return successfully normalized items
+            return results
                 .filter(res => res.status === 'fulfilled')
                 .map(res => res.value);
-
-            return successfulItems;
         }
 
         // --- UI GENERATORS --- //
 
-        // 1. HORIZONTAL SLIDER CARD
+        // 1. SLIDER CARD (Matches action_slider.js flawlessly)
         function generateSliderCardHtml(item) {
             const safeTitle = (item.title || 'Untitled').replace(/'/g, "\\'");
-            const isUpcoming = item.status === 'NOT_YET_RELEASED' || item.status === 'UPCOMING';
-            const cardId = `card-${item.id}-${Math.random().toString(36).substring(7)}`; 
+            const isUpcoming = item.status === 'UPCOMING';
             
             const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521]" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>`;
-            
             const upcomingBadge = isUpcoming ? `<div class="absolute bottom-2 left-2 z-20 pointer-events-none"><span class="bg-[#F47521] text-white text-[9px] md:text-[10px] px-1.5 py-1 rounded font-black uppercase tracking-wide shadow-md">UPCOMING</span></div>` : '';
             const formatBadge = item.format ? `<span class="bg-black/80 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded border border-white/5 font-bold uppercase shadow-sm">${item.format}</span>` : '';
             
@@ -387,13 +378,14 @@
             const subBadge = item.sub !== null ? `<span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-sm font-bold">CC ${item.sub}</span>` : `<span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-sm font-bold">CC —</span>`;
             const dubBadge = (item.dub !== null && item.dub > 0) ? `<span class="bg-purple-600/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-sm font-bold"><i class="fas fa-microphone text-[9px] mr-0.5"></i> ${item.dub}</span>` : '';
 
+            // Using data-anime-id for clean global DOM removals
             return `
-            <div id="${cardId}" class="snap-start shrink-0 w-[140px] md:w-[190px] relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-10" onclick="window.sliderNavigate('${item.id}')">
+            <div data-anime-id="${item.id}" class="snap-start shrink-0 w-[140px] md:w-[190px] relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-10" onclick="window.sliderNavigate('${item.id}')">
                 
                 <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden shadow-lg border border-white/5 group-hover:border-[#F47521]/70 transition-colors bg-[#111]">
                     <img src="${item.poster}" loading="lazy" class="w-full h-full object-cover">
                     
-                    <button onclick="window.removeFromLibrary(event, '${item.id}', '${cardId}')" 
+                    <button onclick="window.removeFromLibrary(event, '${item.id}')" 
                             class="absolute top-2 right-2 z-30 p-2 rounded bg-black/80 backdrop-blur-md border border-white/5 shadow-md hover:bg-black transition-all flex items-center justify-center">
                         ${savedSvg}
                     </button>
@@ -415,14 +407,11 @@
         // 2. LIST VIEW CARD (Mimics search.js left-cover layout)
         function generateListCardHtml(item) {
             const safeTitle = item.title.replace(/'/g, "\\'");
-            const cardId = `listcard-${item.id}-${Math.random().toString(36).substring(7)}`;
-            
-            const listSaveBtn = `<button onclick="window.removeFromLibrary(event, '${item.id}', '${cardId}')" class="text-[#F47521] bg-[#F47521]/10 px-2.5 py-1.5 rounded text-[10px] font-bold hover:bg-[#F47521] hover:text-black transition flex items-center gap-1.5"><i class="fas fa-check"></i> Saved</button>`;
-            
+            const listSaveBtn = `<button onclick="window.removeFromLibrary(event, '${item.id}')" class="text-[#F47521] bg-[#F47521]/10 px-2.5 py-1.5 rounded text-[10px] font-bold hover:bg-[#F47521] hover:text-black transition flex items-center gap-1.5"><i class="fas fa-check"></i> Saved</button>`;
             const subStr = item.sub !== null ? item.sub : '—';
 
             return `
-            <div id="${cardId}" onclick="window.sliderNavigate('${item.id}')" class="flex gap-4 items-stretch bg-gradient-to-br from-[#141414] to-[#0a0a0a] p-3 rounded-xl cursor-pointer hover:border-[#F47521]/50 border border-white/5 transition-all duration-300 shadow-md hover:shadow-xl hover:-translate-y-0.5 group h-full">
+            <div data-anime-id="${item.id}" onclick="window.sliderNavigate('${item.id}')" class="flex gap-4 items-stretch bg-gradient-to-br from-[#141414] to-[#0a0a0a] p-3 rounded-xl cursor-pointer hover:border-[#F47521]/50 border border-white/5 transition-all duration-300 shadow-md hover:shadow-xl hover:-translate-y-0.5 group h-full">
                 <div class="relative w-24 md:w-28 shrink-0">
                     <img src="${item.poster}" class="w-full h-full object-cover rounded-lg shadow-md group-hover:brightness-110 transition">
                     <div class="absolute inset-0 bg-black/10 group-hover:bg-transparent transition rounded-lg"></div>
@@ -519,17 +508,23 @@
 
         // Logical Layout Coordinator
         function processAndRenderLayout() {
-            // 1. Dynamic Top Categories based on rigorous status normalizations
-            const recentlyAdded = [...enrichedLibraryItems].sort((a, b) => b.timestamp - a.timestamp).slice(0, 20); // Show 20 most recent
+            // 1. Dynamic Top Categories (Meaningful Organization)
+            const recentlyAdded = [...enrichedLibraryItems].sort((a, b) => b.timestamp - a.timestamp);
             const currentlyAiring = enrichedLibraryItems.filter(i => i.status === 'RELEASING');
             const completed = enrichedLibraryItems.filter(i => i.status === 'COMPLETED');
-            const upcoming = enrichedLibraryItems.filter(i => i.status === 'UPCOMING' || i.status === 'NOT_YET_RELEASED');
+            const upcoming = enrichedLibraryItems.filter(i => i.status === 'UPCOMING');
+            const movies = enrichedLibraryItems.filter(i => i.format === 'MOVIE');
+            const tv = enrichedLibraryItems.filter(i => i.format === 'TV');
+            const ovas = enrichedLibraryItems.filter(i => ['OVA', 'ONA', 'SPECIAL'].includes(i.format));
 
             let topHtml = '';
             topHtml += buildSliderHtml('Recently Added', recentlyAdded);
             topHtml += buildSliderHtml('Currently Airing', currentlyAiring);
             topHtml += buildSliderHtml('Upcoming', upcoming);
             topHtml += buildSliderHtml('Completed', completed);
+            topHtml += buildSliderHtml('Movies', movies);
+            topHtml += buildSliderHtml('TV Series', tv);
+            topHtml += buildSliderHtml('Specials & OVAs', ovas);
             
             document.getElementById('top-sliders-mount').innerHTML = topHtml;
 
@@ -539,22 +534,20 @@
                 item.genres.forEach(g => {
                     const cleanGenre = g.trim();
                     if (!groupedGenres[cleanGenre]) groupedGenres[cleanGenre] = [];
-                    // Deduplicate anime within the genre array
-                    if (!groupedGenres[cleanGenre].find(i => i.id === item.id)) {
+                    // Deduplicate anime within the genre array using strict ID
+                    if (!groupedGenres[cleanGenre].find(i => String(i.id) === String(item.id))) {
                         groupedGenres[cleanGenre].push(item);
                     }
                 });
             });
 
-            // Sort genres alphabetically
             const sortedGenreKeys = Object.keys(groupedGenres).sort();
 
             // 3. The Big Rectangle Genre Tiles
             const allGenresData = sortedGenreKeys.map(k => ({
                 name: k,
-                count: groupedGenres[k].length,
-                // Prefer banner for wide rectangular tiles, fallback to poster
-                bg: groupedGenres[k][0].banner || groupedGenres[k][0].poster 
+                count: groupedGenres[k].length, // True, deduplicated count
+                bg: groupedGenres[k][0].banner || groupedGenres[k][0].poster // Prefer banner
             }));
             
             if (sortedGenreKeys.length > 0) {
@@ -565,6 +558,8 @@
             let slidersHtml = '';
             sortedGenreKeys.forEach(k => slidersHtml += buildSliderHtml(k, groupedGenres[k]));
             document.getElementById('genre-sliders-mount').innerHTML = slidersHtml;
+            
+            console.log('[Library] Layout rendered successfully. Grouped Genres:', groupedGenres);
         }
 
         // --- FULLSCREEN GENRE LIST OVERLAY --- //
@@ -576,7 +571,7 @@
             title.innerText = genreName;
             
             const items = groupedGenres[genreName] || [];
-            // Generate list-view style cards
+            // Generate exact list-view style cards
             mount.innerHTML = items.map(generateListCardHtml).join('');
             
             overlay.classList.remove('hidden-el');
