@@ -1,7 +1,34 @@
-// continue_watching.js - Horizontal Continue Watching Slider with Custom Modals
+// continue_watching.js - Cloud-Synced Horizontal Continue Watching Slider
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
+
+// --- SAFE FIREBASE INITIALIZATION ---
+let firebaseInitCW = false;
+const initFirebaseCW = async () => {
+    if (firebaseInitCW) return;
+    try {
+        const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js');
+        const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+        const { getFirestore } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyChgVcbDPzc6AMeoac1hCOx39YK_1mEKvU",
+            authDomain: "blaze-x-db2f5.firebaseapp.com",
+            projectId: "blaze-x-db2f5",
+            storageBucket: "blaze-x-db2f5.firebasestorage.app",
+            messagingSenderId: "770812306638",
+            appId: "1:770812306638:web:eaf5ded647861f32c25c9f"
+        };
+
+        const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
+        window.app.auth = getAuth(app);
+        window.app.db = getFirestore(app);
+        firebaseInitCW = true;
+    } catch (err) {
+        console.error("Firebase Init Error (Continue Watching):", err);
+    }
+};
 
 // --- CUSTOM CSS MODAL LOGIC ---
 window.app.showConfirmModal = (title, message, confirmCallback) => {
@@ -10,7 +37,6 @@ window.app.showConfirmModal = (title, message, confirmCallback) => {
     
     if (!overlay || !content) return;
 
-    // Build the modal UI
     content.innerHTML = `
         <div class="text-center">
             <div class="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20">
@@ -25,13 +51,10 @@ window.app.showConfirmModal = (title, message, confirmCallback) => {
         </div>
     `;
 
-    // Animation and Close Logic
     const closeModal = () => {
         content.classList.remove('scale-100', 'opacity-100');
         content.classList.add('scale-95', 'opacity-0');
-        setTimeout(() => { 
-            overlay.classList.add('hidden'); 
-        }, 300); // Matches transition duration
+        setTimeout(() => { overlay.classList.add('hidden'); }, 300);
     };
 
     document.getElementById('modal-cancel-btn').onclick = closeModal;
@@ -40,93 +63,149 @@ window.app.showConfirmModal = (title, message, confirmCallback) => {
         if(confirmCallback) confirmCallback();
     };
 
-    // Open Modal smoothly
     overlay.classList.remove('hidden');
-    void overlay.offsetWidth; // Trigger reflow to ensure animation plays
+    void overlay.offsetWidth; 
     content.classList.remove('scale-95', 'opacity-0');
     content.classList.add('scale-100', 'opacity-100');
 };
 
-// --- DELETION LOGIC ---
-window.app.deleteContinueWatching = (event, animeId, animeTitle) => {
-    event.stopPropagation(); // Stop click from redirecting to player
+// --- CLOUD DELETION LOGIC ---
+window.app.deleteContinueWatching = async (event, animeId, animeTitle) => {
+    event.stopPropagation(); 
     
     window.app.showConfirmModal(
         "Remove Anime",
         `Are you sure you want to remove <span class="text-white font-bold">${animeTitle}</span> from your continue watching list?`,
-        () => {
-            const profile = window.app.state?.activeProfile || JSON.parse(localStorage.getItem('blazex_user_profile') || '{}');
-            const uid = profile.uid || 'guest';
-            
-            const keysToDelete = [];
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && (key.startsWith(`blazex_progress_${uid}_${animeId}`) || key.startsWith(`blazex_time_${uid}_${animeId}`))) {
-                    keysToDelete.push(key);
+        async () => {
+            try {
+                await initFirebaseCW();
+                const profile = window.app.state?.activeProfile || JSON.parse(localStorage.getItem('blazex_user_profile') || '{}');
+                const uid = profile.uid || 'guest';
+                
+                // 1. Delete from Cloud
+                if (uid !== 'guest' && window.app.db) {
+                    const { doc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+                    await deleteDoc(doc(window.app.db, "users", uid, "continue_watching", String(animeId)));
                 }
+
+                // 2. Delete from Legacy Local Storage (Cleanup)
+                const keysToDelete = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && (key.startsWith(`blazex_progress_${uid}_${animeId}`) || key.startsWith(`blazex_time_${uid}_${animeId}`))) {
+                        keysToDelete.push(key);
+                    }
+                }
+                keysToDelete.forEach(k => localStorage.removeItem(k));
+                
+                // 3. Re-render
+                if (window.app.components.continueWatching) window.app.components.continueWatching();
+            } catch(e) {
+                console.error("Failed to delete watch history", e);
             }
-            keysToDelete.forEach(k => localStorage.removeItem(k));
-            
-            if (window.app.components.continueWatching) window.app.components.continueWatching();
         }
     );
 };
 
-window.app.clearAllContinueWatching = () => {
+window.app.clearAllContinueWatching = async () => {
     window.app.showConfirmModal(
         "Clear History",
         "Are you sure you want to permanently clear all your continue watching progress? This cannot be undone.",
-        () => {
-            const profile = window.app.state?.activeProfile || JSON.parse(localStorage.getItem('blazex_user_profile') || '{}');
-            const uid = profile.uid || 'guest';
-            
-            const keysToDelete = [];
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && (key.startsWith(`blazex_progress_${uid}_`) || key.startsWith(`blazex_time_${uid}_`))) {
-                    keysToDelete.push(key);
+        async () => {
+            try {
+                await initFirebaseCW();
+                const profile = window.app.state?.activeProfile || JSON.parse(localStorage.getItem('blazex_user_profile') || '{}');
+                const uid = profile.uid || 'guest';
+                
+                // 1. Delete all from Cloud
+                if (uid !== 'guest' && window.app.db) {
+                    const { collection, getDocs, deleteDoc, doc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+                    const cwRef = collection(window.app.db, "users", uid, "continue_watching");
+                    const snapshot = await getDocs(cwRef);
+                    snapshot.forEach(async (d) => {
+                        await deleteDoc(doc(window.app.db, "users", uid, "continue_watching", d.id));
+                    });
                 }
+
+                // 2. Clear Legacy Local Storage
+                const keysToDelete = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && (key.startsWith(`blazex_progress_${uid}_`) || key.startsWith(`blazex_time_${uid}_`))) {
+                        keysToDelete.push(key);
+                    }
+                }
+                keysToDelete.forEach(k => localStorage.removeItem(k));
+                
+                // 3. Re-render
+                if (window.app.components.continueWatching) window.app.components.continueWatching();
+            } catch(e) {
+                console.error("Failed to clear watch history", e);
             }
-            keysToDelete.forEach(k => localStorage.removeItem(k));
-            
-            if (window.app.components.continueWatching) window.app.components.continueWatching();
         }
     );
 };
 
 
-// --- SLIDER RENDERING ---
+// --- CLOUD SYNC & SLIDER RENDERING ---
 window.app.components.continueWatching = async () => {
     const container = document.getElementById('history-container');
     if (!container) return;
 
-    // 1. IDENTIFY USER AND SCAN LOCAL STORAGE
+    await initFirebaseCW();
+
     const profile = window.app.state?.activeProfile || JSON.parse(localStorage.getItem('blazex_user_profile') || '{}');
     const uid = profile.uid || 'guest';
-    const prefix = `blazex_progress_${uid}_`;
     
-    let historyItems = [];
-
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith(prefix)) {
-            const animeId = key.replace(prefix, '');
-            try {
-                const data = JSON.parse(localStorage.getItem(key));
-                if (data && data.lastWatchedEp) {
-                    const timeKey = `blazex_time_${uid}_${animeId}_${data.lastWatchedEp}`;
-                    const timeProgress = parseFloat(localStorage.getItem(timeKey)) || 0;
-                    
-                    if (timeProgress > 10) {
-                        historyItems.push({
-                            animeId: animeId,
-                            epNum: parseInt(data.lastWatchedEp),
-                            slug: data.lastSlug || String(data.lastWatchedEp),
-                            time: timeProgress
-                        });
-                    }
+    // --- 1. SILENT MIGRATION: Push legacy local storage to cloud to ensure zero data loss ---
+    if (uid !== 'guest' && window.app.db) {
+        try {
+            const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+            const prefix = `blazex_progress_${uid}_`;
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith(prefix)) {
+                    const animeId = key.replace(prefix, '');
+                    try {
+                        const data = JSON.parse(localStorage.getItem(key));
+                        if (data && data.lastWatchedEp) {
+                            const timeKey = `blazex_time_${uid}_${animeId}_${data.lastWatchedEp}`;
+                            const timeProgress = parseFloat(localStorage.getItem(timeKey)) || 0;
+                            
+                            // Push to firestore
+                            await setDoc(doc(window.app.db, "users", uid, "continue_watching", animeId), {
+                                animeId: animeId,
+                                epNum: parseInt(data.lastWatchedEp),
+                                slug: data.lastSlug || String(data.lastWatchedEp),
+                                time: timeProgress,
+                                timestamp: Date.now() // Update timestamp to put it at front
+                            }, { merge: true });
+                            
+                            // Remove legacy local storage so it relies entirely on cloud moving forward
+                            localStorage.removeItem(key);
+                            localStorage.removeItem(timeKey);
+                        }
+                    } catch(e) {}
                 }
-            } catch(e) {}
+            }
+        } catch(e) { console.error("Migration phase failed", e); }
+    }
+
+    // --- 2. FETCH FROM CLOUD (Saving All History) ---
+    let historyItems = [];
+    
+    if (uid !== 'guest' && window.app.db) {
+        try {
+            const { collection, getDocs, query, orderBy, limit } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+            // Extract up to 50 items (Removing the old limit of 3-10)
+            const q = query(collection(window.app.db, "users", uid, "continue_watching"), orderBy("timestamp", "desc"), limit(50));
+            const snapshot = await getDocs(q);
+            
+            snapshot.forEach(doc => {
+                historyItems.push(doc.data());
+            });
+        } catch(e) {
+            console.error("Failed to fetch cloud history", e);
         }
     }
 
@@ -135,9 +214,7 @@ window.app.components.continueWatching = async () => {
         return;
     }
 
-    historyItems = historyItems.reverse().slice(0, 10);
-
-    // 2. SHOW HORIZONTAL LOADING SKELETON
+    // 3. SHOW HORIZONTAL LOADING SKELETON
     container.innerHTML = `
         <div class="py-6 relative overflow-visible">
             <div class="px-4 md:px-8 mb-4 flex items-center justify-between">
@@ -152,31 +229,38 @@ window.app.components.continueWatching = async () => {
     `;
 
     try {
-        // 3. FETCH METADATA
-        const baseUrl = 'https://anikoto-api-xi.vercel.app';
+        // 4. FETCH METADATA
+        const baseUrl = 'https://anikoto-api-lyart.vercel.app';
         const enrichedItems = [];
 
-        for (const item of historyItems) {
+        // Parallel fetch for speed
+        const fetchPromises = historyItems.map(async (item) => {
             try {
                 const res = await fetch(`${baseUrl}/api/info?id=${item.animeId}`);
                 const json = await res.json();
                 if (json && json.success && json.data) {
-                    const title = json.data.title || 'Unknown Title';
-                    const image = json.data.banner || json.data.poster || 'https://via.placeholder.com/1280x720/111/fff';
-                    enrichedItems.push({ ...item, title, image });
+                    return {
+                        ...item,
+                        title: json.data.title || 'Unknown Title',
+                        image: json.data.banner || json.data.poster || 'https://via.placeholder.com/1280x720/111/fff'
+                    };
                 }
             } catch(e) {}
-        }
+            return null;
+        });
+
+        const resolvedItems = await Promise.all(fetchPromises);
+        resolvedItems.forEach(item => { if(item) enrichedItems.push(item); });
 
         if (enrichedItems.length === 0) {
             container.innerHTML = ''; 
             return;
         }
 
-        // 4. RENDER HORIZONTAL CARDS WITH SLIM PROGRESS BARS
+        // 5. RENDER HORIZONTAL CARDS WITH SLIM PROGRESS BARS
         let cardsHtml = enrichedItems.map(item => {
             const targetUrl = `play.html?id=${encodeURIComponent(item.slug)}&anime=${item.animeId}&ep=${item.epNum}&type=sub`;
-            let progressPct = (item.time / 1440) * 100;
+            let progressPct = (item.time / 1440) * 100; // 24 mins avg episode length
             if (progressPct > 100) progressPct = 100;
             if (progressPct < 2) progressPct = 2; 
 
@@ -212,7 +296,7 @@ window.app.components.continueWatching = async () => {
                         <p class="text-[10px] md:text-xs text-gray-300 font-bold tracking-wide drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">Episode ${item.epNum}</p>
                     </div>
                     
-                    <!-- SLIM PROGRESS BAR (No Glow, 2px Height) -->
+                    <!-- SLIM PROGRESS BAR -->
                     <div class="absolute bottom-0 left-0 w-full h-[2px] bg-white/20 z-30">
                         <div class="h-full bg-[#F47521] transition-all duration-500 ease-out" style="width: ${progressPct}%"></div>
                     </div>
@@ -254,7 +338,7 @@ window.app.components.continueWatching = async () => {
             </div>
         `;
 
-        // 5. ATTACH SCROLL LOGIC
+        // 6. ATTACH SCROLL LOGIC
         const track = document.getElementById('cw-slider-track');
         const leftBtn = document.getElementById('cw-slide-left-btn');
         const rightBtn = document.getElementById('cw-slide-right-btn');
@@ -274,5 +358,28 @@ window.app.components.continueWatching = async () => {
     } catch (error) {
         console.error("Continue Watching Slider Error:", error);
         container.innerHTML = ''; 
+    }
+};
+
+// --- GLOBAL HELPER FOR PLAYER TO UPDATE CLOUD SYNC ---
+// You can call this from your play.js file when video progress is made.
+window.app.saveWatchProgressToCloud = async (animeId, epNum, slug, timeSeconds) => {
+    try {
+        await initFirebaseCW();
+        const profile = window.app.state?.activeProfile || JSON.parse(localStorage.getItem('blazex_user_profile') || '{}');
+        const uid = profile.uid;
+        
+        if (uid && uid !== 'guest' && window.app.db) {
+            const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+            await setDoc(doc(window.app.db, "users", uid, "continue_watching", String(animeId)), {
+                animeId: String(animeId),
+                epNum: parseInt(epNum),
+                slug: String(slug),
+                time: parseFloat(timeSeconds),
+                timestamp: Date.now()
+            }, { merge: true });
+        }
+    } catch(e) {
+        console.error("Cloud watch progress save failed", e);
     }
 };
