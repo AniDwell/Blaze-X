@@ -1,4 +1,4 @@
-// top10_slider.js - Top 10 Slider (Live Sync, Notifications, Solid SVGs)
+// top10_slider.js - Top 10 Slider (Live Sync, Deterministic Notifications, Release Baseline)
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
@@ -46,12 +46,12 @@ window.app.updateTop10BtnUI = (btn, isAdded) => {
 };
 
 // --- INSTANT SAVE & NOTIFY LOGIC ---
-window.app.toggleTop10Library = async (event, btn, id, title, img) => {
+window.app.toggleTop10Library = async (event, btn, id, title, img, episodes = 0, status = 'UNKNOWN') => {
     event.stopPropagation(); 
     
     try {
         await initFirebaseTop10();
-        const { doc, setDoc, deleteDoc, collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        const { doc, setDoc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         
         const auth = window.app.auth;
         const db = window.app.db;
@@ -65,34 +65,54 @@ window.app.toggleTop10Library = async (event, btn, id, title, img) => {
         const docIdStr = String(id);
         const isAdded = btn.dataset.added === "true";
         const libDocRef = doc(db, "users", auth.currentUser.uid, "library", docIdStr);
-        const notifRef = collection(db, "users", auth.currentUser.uid, "notifications");
+        const notifDocRef = doc(db, "users", auth.currentUser.uid, "notifications", `lib_${docIdStr}`);
+
+        // Base payload for Release Manager baseline tracking
+        const formattedAnime = {
+            id: docIdStr,
+            title,
+            img,
+            timestamp: Date.now(),
+            lastKnownEpisode: parseInt(episodes) || 0,
+            releaseStatus: status
+        };
 
         if (isAdded) {
+            // Optimistic UI update
             window.app.updateTop10BtnUI(btn, false);
             window.app.state.carouselLibrarySet.delete(docIdStr);
 
+            // DB Updates
             await deleteDoc(libDocRef);
-            await addDoc(notifRef, {
+            await setDoc(notifDocRef, {
+                id: `lib_${docIdStr}`,
                 type: 'library',
                 title: 'Library Updated',
                 message: `You removed ${title} from your library.`,
                 image: img,
-                timestamp: Date.now()
-            });
+                animeId: docIdStr,
+                timestamp: Date.now(),
+                read: false
+            }, { merge: true });
 
             if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
         } else {
+            // Optimistic UI update
             window.app.updateTop10BtnUI(btn, true);
             window.app.state.carouselLibrarySet.add(docIdStr);
 
-            await setDoc(libDocRef, { id: docIdStr, title, img, timestamp: Date.now() });
-            await addDoc(notifRef, {
+            // DB Updates
+            await setDoc(libDocRef, formattedAnime, { merge: true });
+            await setDoc(notifDocRef, {
+                id: `lib_${docIdStr}`,
                 type: 'library',
                 title: 'Library Updated',
                 message: `You added ${title} to your library!`,
                 image: img,
-                timestamp: Date.now()
-            });
+                animeId: docIdStr,
+                timestamp: Date.now(),
+                read: false
+            }, { merge: true });
 
             if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
         }
@@ -247,7 +267,7 @@ window.app.components.topTenSlider = async () => {
         const aniData = await aniRes.json();
         const topAnimeList = aniData?.data?.Page?.media || [];
 
-        const baseUrl = 'https://anikoto-api-xi.vercel.app';
+        const baseUrl = 'https://anikoto-api-lyart.vercel.app';
         
         const crossReferenced = await Promise.all(topAnimeList.map(async (ani) => {
             const title = ani.title.english || ani.title.romaji;
@@ -257,13 +277,19 @@ window.app.components.topTenSlider = async () => {
                 const results = searchJson.data || searchJson.results || [];
                 if (results.length > 0) {
                     const match = results[0]; 
+                    
+                    let epCount = match.episodes?.sub || match.episodes?.dub || match.episodes || match.episodeCount || 0;
+                    if (typeof epCount === 'object') epCount = 0;
+
                     return {
                         id: match.id,
                         title: title, 
                         image: ani.coverImage.extraLarge || match.image || match.poster, 
                         type: match.type || 'TV',
                         sub: match.tvInfo?.sub || match.sub || '?',
-                        dub: match.tvInfo?.dub || match.dub || 0
+                        dub: match.tvInfo?.dub || match.dub || 0,
+                        episodes: parseInt(epCount, 10) || 0,
+                        status: match.status || 'UNKNOWN'
                     };
                 }
             } catch(e) {}
@@ -291,7 +317,7 @@ window.app.components.topTenSlider = async () => {
                     <div class="relative w-full aspect-[2/3] rounded-[16px] shadow-[0_6px_18px_rgba(0,0,0,0.35)] group-hover:border-[#F47521]/70 border border-transparent transition-colors">
                         <span class="top10-slide-number">${rank}</span>
                         <img src="${anime.image}" alt="Slide ${rank}" class="w-full h-full object-cover rounded-[16px] block">
-                        <button onclick="window.app.toggleTop10Library(event, this, '${anime.id}', '${safeTitle}', '${anime.image}')" 
+                        <button onclick="window.app.toggleTop10Library(event, this, '${anime.id}', '${safeTitle}', '${anime.image}', ${anime.episodes}, '${anime.status}')" 
                                 data-added="${isAdded}"
                                 data-id="${docIdStr}"
                                 class="top10-lib-btn absolute top-2 right-2 z-30 p-2 rounded-[8px] ${isAdded ? 'bg-black/80' : 'bg-black/50'} backdrop-blur-md border border-white/10 shadow-[0_4px_10px_rgba(0,0,0,0.5)] hover:bg-black/90 hover:scale-110 transition-all flex items-center justify-center">
