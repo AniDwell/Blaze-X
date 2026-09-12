@@ -27,7 +27,7 @@
 
         .hidden-el { display: none !important; }
 
-        /* Premium matte glass effect - No glow */
+        /* Premium matte glass effect - No glows */
         .glass-header {
             background: rgba(5, 5, 5, 0.85);
             backdrop-filter: blur(16px);
@@ -87,7 +87,7 @@
         <!-- Loading State -->
         <div id="loading-state" class="flex flex-col items-center justify-center py-24">
             <i class="fas fa-circle-notch fa-spin text-4xl text-[#F47521] mb-4"></i>
-            <p class="text-gray-500 font-bold tracking-widest uppercase text-sm">Syncing Library...</p>
+            <p class="text-gray-500 font-bold tracking-widest uppercase text-sm">Syncing Library Data...</p>
         </div>
 
         <!-- Empty State -->
@@ -104,18 +104,17 @@
 
         <!-- Default Categorized View -->
         <div id="library-sliders-view" class="hidden-el pb-4">
-            <!-- 1. Top Sliders -->
+            <!-- 1. Top Dynamic Categories (Recent, Airing, Completed) -->
             <div id="top-sliders-mount"></div>
             <!-- 2. Genre Rectangle Tiles -->
             <div id="genre-tiles-mount"></div>
-            <!-- 3. Bottom Sliders -->
-            <div id="bottom-sliders-mount"></div>
+            <!-- 3. Genre Sliders -->
+            <div id="genre-sliders-mount" class="mt-4"></div>
         </div>
 
-        <!-- Search Results View (Mimicking search.js layout) -->
+        <!-- Search Results Grid -->
         <div id="library-search-view" class="hidden-el px-4 md:px-6 pb-4 pt-4">
             <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 border-b border-white/5 pb-2" id="search-results-count">Results (0)</h3>
-            <!-- search.js grid structure -->
             <div id="search-grid-mount" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 mt-6">
                 <!-- Search results injected here -->
             </div>
@@ -160,6 +159,7 @@
         let enrichedLibraryItems = [];
         let groupedGenres = {};
         
+        // Exact API used by info.html
         const baseUrl = 'https://anikoto-api-xi.vercel.app'; 
 
         // Shared Navigation
@@ -173,6 +173,13 @@
             }
         };
 
+        window.scrollToGenre = (trackId) => {
+            const el = document.getElementById(`container-${trackId}`);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        };
+
         // Remove from Library (Visual + DB)
         window.removeFromLibrary = async (event, idStr, cardElementId) => {
             event.stopPropagation();
@@ -180,7 +187,7 @@
             try {
                 await deleteDoc(doc(db, "users", auth.currentUser.uid, "library", String(idStr)));
                 
-                // Hide specific elements if passed
+                // Visual Removal
                 if (cardElementId) {
                     const card = document.getElementById(cardElementId);
                     if (card) {
@@ -189,21 +196,21 @@
                         setTimeout(() => card.remove(), 300);
                     }
                 } else {
-                    // Fallback visual update for list views where cardElementId might not be easily isolated
                     const targetBtn = event.currentTarget;
                     if(targetBtn) {
-                        targetBtn.innerHTML = '<i class="fas fa-bookmark"></i> Save';
-                        targetBtn.classList.replace('text-[#F47521]', 'text-gray-400');
+                        targetBtn.innerHTML = '<i class="fas fa-bookmark"></i> Removed';
+                        targetBtn.classList.replace('text-[#F47521]', 'text-gray-500');
                         targetBtn.classList.replace('bg-[#F47521]/10', 'bg-white/5');
-                        targetBtn.onclick = () => window.location.reload(); // Quick hack to avoid complex re-mounting logic for re-adding in library view
+                        targetBtn.disabled = true;
                     }
                 }
                 
+                // Update Local State silently
                 enrichedLibraryItems = enrichedLibraryItems.filter(i => String(i.id) !== String(idStr));
-            } catch (err) { console.error("Failed to remove:", err); }
+            } catch (err) { console.error("Failed to remove from library:", err); }
         };
 
-        // Initialize Library
+        // Initialize Authentication
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 await fetchAndRenderLibrary(user.uid);
@@ -234,8 +241,8 @@
 
                 const rawItems = snapshot.docs.map(doc => doc.data());
                 
-                // Fetch AniList & Live Sub/Dub details simultaneously
-                enrichedLibraryItems = await enrichItems(rawItems);
+                // Process ALL items safely
+                enrichedLibraryItems = await enrichItemsSafely(rawItems);
                 
                 document.getElementById('loading-state').classList.add('hidden-el');
                 document.getElementById('library-sliders-view').classList.remove('hidden-el');
@@ -243,75 +250,91 @@
                 processAndRenderLayout();
             } catch (error) {
                 console.error("Error fetching library:", error);
-                document.getElementById('loading-state').innerHTML = `<p class="text-red-500 font-bold">Failed to load library data.</p>`;
+                document.getElementById('loading-state').innerHTML = `<p class="text-red-500 font-bold">Critical error loading library data.</p>`;
             }
         }
 
-        // Heavy Lifting Data Engine
-        async function enrichItems(batch) {
-            if (batch.length === 0) return [];
+        // --- THE NEW EXACT-ID DATA ENGINE --- //
+        async function enrichItemsSafely(rawItems) {
+            console.log(`[Library] Syncing ${rawItems.length} items from Firestore...`);
             
-            return await Promise.all(batch.map(async (item) => {
-                let aniMatch = null;
-                let searchMatch = null;
-                const cleanTitle = (item.title || '').replace(/[^a-zA-Z0-9 ]/g, '');
+            // Promise.allSettled ensures one broken API endpoint doesn't destroy the whole library
+            const results = await Promise.allSettled(
+                rawItems.map(async (item) => {
+                    const animeId = String(item.id);
+                    let apiData = null;
 
-                // 1. Fetch AniList Data via GraphQL Variables
-                try {
-                    const aniQuery = `query($search: String) { Media(search: $search, type: ANIME) { status coverImage { extraLarge } genres format description(asHtml: false) } }`;
-                    const res = await fetch('https://graphql.anilist.co', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ query: aniQuery, variables: { search: cleanTitle } })
-                    });
-                    const json = await res.json();
-                    if (json.data && json.data.Media) {
-                        aniMatch = json.data.Media;
+                    // 1. Primary Lookup: Exact Anikoto Info Endpoint
+                    try {
+                        const res = await fetch(`${baseUrl}/api/info?id=${encodeURIComponent(animeId)}`);
+                        if (res.ok) {
+                            const json = await res.json();
+                            apiData = json.data || json.results || json;
+                        }
+                    } catch (e) {
+                        console.warn(`[Library] Exact ID fetch failed for ${animeId}`, e);
                     }
-                } catch(e) {}
 
-                // 2. Fetch Live Sub/Dub Counts from Anikoto Search API
-                try {
-                    const searchRes = await fetch(`${baseUrl}/api/search?keyword=${encodeURIComponent(cleanTitle)}`);
-                    if (searchRes.ok) {
-                        const searchJson = await searchRes.json();
-                        const results = searchJson.data || searchJson.results || [];
-                        if (results.length > 0) searchMatch = results[0];
-                    }
-                } catch(e) {}
+                    // 2. Normalization
+                    // Safely extract sub/dub exactly as Anikoto structures it
+                    let sub = apiData?.episodes?.sub ?? apiData?.tvInfo?.sub ?? apiData?.sub ?? null;
+                    let dub = apiData?.episodes?.dub ?? apiData?.tvInfo?.dub ?? apiData?.dub ?? null;
+                    
+                    sub = Number.isFinite(Number(sub)) ? Number(sub) : null;
+                    dub = Number.isFinite(Number(dub)) ? Number(dub) : null;
 
-                const genres = aniMatch?.genres || ['Uncategorized'];
-                const primaryGenre = genres.length > 0 ? genres[0] : 'Uncategorized';
-                
-                return {
-                    id: item.id, // Mandatory: Anikoto ID for routing
-                    title: item.title,
-                    poster: aniMatch?.coverImage?.extraLarge || searchMatch?.image || searchMatch?.poster || item.img || 'https://via.placeholder.com/150x225?text=No+Cover',
-                    description: (aniMatch?.description || item.description || "Dive into this exciting series. Click to view more details and start watching.").replace(/<[^>]*>?/gm, ''),
-                    genres: genres,
-                    primaryGenre: primaryGenre,
-                    format: aniMatch?.format || searchMatch?.type || item.type || 'TV',
-                    status: aniMatch?.status || item.releaseStatus || item.status || 'FINISHED',
-                    sub: searchMatch?.tvInfo?.sub || searchMatch?.sub || item.sub || '?',
-                    dub: searchMatch?.tvInfo?.dub || searchMatch?.dub || item.dub || 0
-                };
-            }));
+                    // Safely extract status
+                    let status = (apiData?.status || item.releaseStatus || item.status || 'UNKNOWN').toUpperCase();
+                    if (status === 'ONGOING') status = 'RELEASING';
+                    if (status === 'FINISHED') status = 'COMPLETED';
+
+                    // Determine Genres
+                    let genres = Array.isArray(apiData?.genres) && apiData.genres.length > 0 
+                        ? apiData.genres 
+                        : ['Uncategorized'];
+
+                    // Return normalized model
+                    return {
+                        id: animeId,
+                        title: apiData?.title?.english || apiData?.title?.romaji || apiData?.title || item.title || 'Unknown Title',
+                        poster: apiData?.image || apiData?.coverImage || item.img || item.image || 'https://via.placeholder.com/150x225?text=No+Cover',
+                        banner: apiData?.cover || apiData?.bannerImage || null,
+                        synopsis: (apiData?.description || apiData?.synopsis || "Synopsis unavailable.").replace(/<[^>]*>?/gm, ''),
+                        genres: genres,
+                        format: (apiData?.type || apiData?.format || item.type || 'TV').toUpperCase(),
+                        status: status,
+                        sub: sub,
+                        dub: dub,
+                        timestamp: item.timestamp || Date.now(), // Preserve exact Firestore save time
+                        metadataSource: apiData ? 'api' : 'firestore-fallback'
+                    };
+                })
+            );
+
+            // Filter out absolute rejections (should be rare due to fallback)
+            const successfulItems = results
+                .filter(res => res.status === 'fulfilled')
+                .map(res => res.value);
+
+            return successfulItems;
         }
 
-        // --- UI GENERATORS --- //
+        // --- CORE UI GENERATORS --- //
 
-        // 1. SLIDER CARD (Matches action_slider.js)
+        // 1. SLIDER CARD (Matches action_slider.js flawlessly)
         function generateSliderCardHtml(item) {
             const safeTitle = (item.title || 'Untitled').replace(/'/g, "\\'");
-            const isUpcoming = item.status === 'NOT_YET_RELEASED';
+            const isUpcoming = item.status === 'NOT_YET_RELEASED' || item.status === 'UPCOMING';
             const cardId = `card-${item.id}-${Math.random().toString(36).substring(7)}`; 
             
             const savedSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#F47521]" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>`;
             
             const upcomingBadge = isUpcoming ? `<div class="absolute bottom-2 left-2 z-20 pointer-events-none"><span class="bg-[#F47521] text-white text-[9px] md:text-[10px] px-1.5 py-1 rounded font-black uppercase tracking-wide shadow-md">UPCOMING</span></div>` : '';
             const formatBadge = item.format ? `<span class="bg-black/80 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded border border-white/5 font-bold uppercase shadow-sm">${item.format}</span>` : '';
-            const subBadge = `<span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-sm font-bold">CC ${item.sub}</span>`;
-            const dubBadge = (item.dub && item.dub !== '0' && item.dub !== 0) ? `<span class="bg-purple-600/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-sm font-bold"><i class="fas fa-microphone text-[9px] mr-0.5"></i> ${item.dub}</span>` : '';
+            
+            // Strict sub/dub logic
+            const subBadge = item.sub !== null ? `<span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-sm font-bold">CC ${item.sub}</span>` : `<span class="bg-[#F47521]/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-sm font-bold">CC —</span>`;
+            const dubBadge = (item.dub !== null && item.dub > 0) ? `<span class="bg-purple-600/90 backdrop-blur-sm text-white text-[10px] md:text-xs px-2 py-0.5 rounded shadow-sm font-bold"><i class="fas fa-microphone text-[9px] mr-0.5"></i> ${item.dub}</span>` : '';
 
             return `
             <div id="${cardId}" class="snap-start shrink-0 w-[140px] md:w-[190px] relative group cursor-pointer transition-transform duration-300 hover:scale-[1.03] hover:z-10" onclick="window.sliderNavigate('${item.id}')">
@@ -339,33 +362,35 @@
         }
 
         // 2. LIST VIEW CARD (Matches search.js results)
-        function generateListCardHtml(anime) {
-            const safeTitle = anime.title.replace(/'/g, "\\'");
+        function generateListCardHtml(item) {
+            const safeTitle = item.title.replace(/'/g, "\\'");
+            const cardId = `listcard-${item.id}-${Math.random().toString(36).substring(7)}`;
             
-            // In library it is guaranteed to be saved initially.
-            const listSaveBtn = `<button onclick="window.removeFromLibrary(event, '${anime.id}')" class="text-[#F47521] bg-[#F47521]/10 px-2.5 py-1.5 rounded text-[10px] font-bold hover:bg-[#F47521] hover:text-black transition flex items-center gap-1.5"><i class="fas fa-check"></i> Saved</button>`;
+            const listSaveBtn = `<button onclick="window.removeFromLibrary(event, '${item.id}', '${cardId}')" class="text-[#F47521] bg-[#F47521]/10 px-2.5 py-1.5 rounded text-[10px] font-bold hover:bg-[#F47521] hover:text-black transition flex items-center gap-1.5"><i class="fas fa-check"></i> Saved</button>`;
+            
+            const subStr = item.sub !== null ? item.sub : '—';
 
             return `
-            <div onclick="window.sliderNavigate('${anime.id}')" class="flex gap-4 items-stretch bg-gradient-to-br from-[#141414] to-[#0a0a0a] p-3 rounded-xl cursor-pointer hover:border-[#F47521]/50 border border-white/5 transition-all duration-300 shadow-md hover:shadow-xl hover:-translate-y-0.5 group h-full">
+            <div id="${cardId}" onclick="window.sliderNavigate('${item.id}')" class="flex gap-4 items-stretch bg-gradient-to-br from-[#141414] to-[#0a0a0a] p-3 rounded-xl cursor-pointer hover:border-[#F47521]/50 border border-white/5 transition-all duration-300 shadow-md hover:shadow-xl hover:-translate-y-0.5 group h-full">
                 <div class="relative w-24 md:w-28 shrink-0">
-                    <img src="${anime.poster}" class="w-full h-full object-cover rounded-lg shadow-md group-hover:brightness-110 transition">
+                    <img src="${item.poster}" class="w-full h-full object-cover rounded-lg shadow-md group-hover:brightness-110 transition">
                     <div class="absolute inset-0 bg-black/10 group-hover:bg-transparent transition rounded-lg"></div>
                 </div>
                 <div class="flex flex-col flex-1 min-w-0 justify-between py-1">
                     <div>
-                        <h4 class="text-sm md:text-base font-bold text-white truncate group-hover:text-[#F47521] transition-colors">${anime.title}</h4>
-                        <p class="text-[10px] md:text-xs text-gray-400 line-clamp-2 mt-1.5 leading-relaxed">${anime.description}</p>
+                        <h4 class="text-sm md:text-base font-bold text-white truncate group-hover:text-[#F47521] transition-colors">${item.title}</h4>
+                        <p class="text-[10px] md:text-xs text-gray-400 line-clamp-2 mt-1.5 leading-relaxed">${item.synopsis}</p>
                     </div>
                     
                     <div class="flex flex-col gap-2 mt-3">
                         <div class="flex gap-2 items-center text-[9px] md:text-[10px] font-black uppercase tracking-wider">
-                            <span class="text-gray-300 bg-black border border-white/10 px-1.5 py-0.5 rounded shadow-sm">${anime.format}</span>
-                            <span class="text-gray-300">SUB <span class="text-[#F47521]">${anime.sub}</span></span>
-                            ${(anime.dub && anime.dub !== '0' && anime.dub !== 0) ? `<span class="text-gray-300 border-l border-white/10 pl-2">DUB <span class="text-purple-400">${anime.dub}</span></span>` : ''}
+                            <span class="text-gray-300 bg-black border border-white/10 px-1.5 py-0.5 rounded shadow-sm">${item.format}</span>
+                            <span class="text-gray-300">SUB <span class="text-[#F47521]">${subStr}</span></span>
+                            ${(item.dub !== null && item.dub > 0) ? `<span class="text-gray-300 border-l border-white/10 pl-2">DUB <span class="text-purple-400">${item.dub}</span></span>` : ''}
                         </div>
                         <div class="flex items-center gap-2 mt-1 border-t border-white/5 pt-2">
                             ${listSaveBtn}
-                            <button onclick="event.stopPropagation(); window.shareAnime('${anime.id}', '${safeTitle}')" class="text-gray-400 bg-white/5 px-2.5 py-1.5 rounded text-[10px] font-bold hover:bg-blue-500 hover:text-white transition flex items-center gap-1.5">
+                            <button onclick="event.stopPropagation(); window.shareAnime('${item.id}', '${safeTitle}')" class="text-gray-400 bg-white/5 px-2.5 py-1.5 rounded text-[10px] font-bold hover:bg-blue-500 hover:text-white transition flex items-center gap-1.5">
                                 <i class="fas fa-share"></i> Share
                             </button>
                         </div>
@@ -375,13 +400,15 @@
         }
 
         // Horizontal Slider Block
-        function buildSliderHtml(genreName, items) {
-            const trackId = `track-${genreName.replace(/[^a-zA-Z0-9]/g, '-')}`;
+        function buildSliderHtml(categoryTitle, items) {
+            if (!items || items.length === 0) return '';
+            const trackId = `track-${categoryTitle.replace(/[^a-zA-Z0-9]/g, '-')}`;
+            
             return `
                 <div id="container-${trackId}" class="mb-10 relative">
                     <div class="flex items-center justify-between mb-4 pl-4 md:pl-6 pr-4 border-l-4 border-[#F47521] ml-4 md:ml-6">
                         <h2 class="text-lg md:text-xl font-black text-white uppercase tracking-wider pl-3">
-                            ${genreName} <span class="text-xs text-gray-500 font-bold ml-2">(${items.length})</span>
+                            ${categoryTitle} <span class="text-xs text-gray-500 font-bold ml-2">(${items.length})</span>
                         </h2>
                     </div>
                     
@@ -439,42 +466,52 @@
             `;
         }
 
-        // Layout Coordinator
+        // Logical Layout Coordinator
         function processAndRenderLayout() {
-            groupedGenres = {};
-            
-            // Map items
-            enrichedLibraryItems.forEach(item => {
-                const g = item.primaryGenre;
-                if (!groupedGenres[g]) groupedGenres[g] = [];
-                groupedGenres[g].push(item);
-            });
+            // 1. Dynamic Top Categories
+            const recentlyAdded = [...enrichedLibraryItems].sort((a, b) => b.timestamp - a.timestamp);
+            const currentlyAiring = enrichedLibraryItems.filter(i => i.status === 'RELEASING');
+            const completed = enrichedLibraryItems.filter(i => i.status === 'COMPLETED');
+            const upcoming = enrichedLibraryItems.filter(i => i.status === 'UPCOMING' || i.status === 'NOT_YET_RELEASED');
 
-            // Sort alphabetically for consistency
-            const sortedGenreKeys = Object.keys(groupedGenres).sort();
-
-            // 1. Top 2 Sliders
             let topHtml = '';
-            const topKeys = sortedGenreKeys.slice(0, 2);
-            topKeys.forEach(k => topHtml += buildSliderHtml(k, groupedGenres[k]));
+            topHtml += buildSliderHtml('Recently Added', recentlyAdded);
+            topHtml += buildSliderHtml('Currently Airing', currentlyAiring);
+            topHtml += buildSliderHtml('Upcoming', upcoming);
+            topHtml += buildSliderHtml('Completed', completed);
+            
             document.getElementById('top-sliders-mount').innerHTML = topHtml;
 
-            // 2. The Big Rectangle Genre Tiles
+            // 2. Group by ALL Genres (An anime can be in Action AND Fantasy)
+            groupedGenres = {};
+            enrichedLibraryItems.forEach(item => {
+                item.genres.forEach(g => {
+                    if (!groupedGenres[g]) groupedGenres[g] = [];
+                    // Prevent duplicates in the same genre
+                    if (!groupedGenres[g].find(i => i.id === item.id)) {
+                        groupedGenres[g].push(item);
+                    }
+                });
+            });
+
+            // Sort genres alphabetically
+            const sortedGenreKeys = Object.keys(groupedGenres).sort();
+
+            // 3. The Big Rectangle Genre Tiles
             const allGenresData = sortedGenreKeys.map(k => ({
                 name: k,
                 count: groupedGenres[k].length,
-                bg: groupedGenres[k][0].poster
+                bg: groupedGenres[k][0].banner || groupedGenres[k][0].poster // Prefer banner for wide tiles
             }));
             
             if (sortedGenreKeys.length > 0) {
                 document.getElementById('genre-tiles-mount').innerHTML = buildGenreTilesHtml(allGenresData);
             }
 
-            // 3. Remaining Sliders
-            let bottomHtml = '';
-            const bottomKeys = sortedGenreKeys.slice(2);
-            bottomKeys.forEach(k => bottomHtml += buildSliderHtml(k, groupedGenres[k]));
-            document.getElementById('bottom-sliders-mount').innerHTML = bottomHtml;
+            // 4. Remaining Genre Sliders
+            let slidersHtml = '';
+            sortedGenreKeys.forEach(k => slidersHtml += buildSliderHtml(k, groupedGenres[k]));
+            document.getElementById('genre-sliders-mount').innerHTML = slidersHtml;
         }
 
         // --- FULLSCREEN GENRE LIST OVERLAY --- //
@@ -502,8 +539,7 @@
             }, 300);
         };
 
-
-        // --- SEARCH SYSTEM (Uses List View HTML) --- //
+        // --- SEARCH SYSTEM (Uses Local Enriched Data) --- //
         window.handleSearch = () => {
             const query = document.getElementById('library-search').value.trim().toLowerCase();
             const clearBtn = document.getElementById('clear-search-btn');
@@ -518,9 +554,16 @@
                 slidersView.classList.add('hidden-el');
                 searchView.classList.remove('hidden-el');
 
-                const filtered = enrichedLibraryItems.filter(item => 
-                    item.title.toLowerCase().includes(query)
-                );
+                // Filter locally without API requests
+                const filtered = enrichedLibraryItems.filter(item => {
+                    const haystack = [
+                        item.title,
+                        item.format,
+                        item.status,
+                        ...(item.genres || [])
+                    ].join(' ').toLowerCase();
+                    return haystack.includes(query);
+                });
 
                 countLabel.innerText = `Search Results (${filtered.length})`;
 
@@ -559,6 +602,15 @@
                 alert("Link copied!");
             }
         };
+
+        // Fallback initialization
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                if (window.app && window.app.components && window.app.components.bottomnav) {
+                    window.app.components.bottomnav();
+                }
+            }, 500);
+        });
 
     </script>
 </body>
