@@ -85,7 +85,7 @@
     <script>
         window.app = {
             config: {
-                anikotoBase: 'https://anikoto-api-xi.vercel.app', 
+                anikotoBase: 'https://anikoto-api-lyart.vercel.app', 
                 megaPlayBase: 'https://megaplay.buzz/stream/s-2', 
                 defaultAvatars: ["https://iili.io/fWydBMG.md.png", "https://iili.io/fWydqns.md.png"]
             },
@@ -112,8 +112,8 @@
                     }
                 }
 
-                // If module components haven't written to the global array registry yet, wait 50ms
-                if (!window.app.components.header || !window.app.components.info) {
+                // Make sure we wait for bottomnav to register as well
+                if (!window.app.components.header || !window.app.components.info || !window.app.components.bottomnav) {
                     setTimeout(window.app.init, 50);
                     return;
                 }
@@ -135,6 +135,7 @@
 
     <script type="module" src="header.js"></script>
     <script src="info.js"></script>
+    <script src="bottomnav.js"></script>
     <script src="auth.js"></script> 
     
     <script>
