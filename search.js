@@ -1,9 +1,19 @@
-// search.js - Full Featured Search & History Engine (Firestore Only - Fixed Sync & Responsive Layouts)
+// search.js - Full Featured Search & History Engine (Firestore Only - PC Widescreen Optimized)
 
 window.app = window.app || {};
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // --- IN-MEMORY STATE (Replaces LocalStorage) ---
+    
+    // --- WIDESCREEN FIX: Automatically widen the parent container for PC ---
+    const mainContainer = document.querySelector('main.container');
+    if (mainContainer) {
+        // Remove narrow width restrictions often carried over from other pages
+        mainContainer.classList.remove('max-w-3xl', 'max-w-4xl', 'max-w-5xl');
+        // Apply ultra-wide maximums to utilize PC screen space effectively
+        mainContainer.classList.add('max-w-7xl', '2xl:max-w-[1600px]', 'w-full');
+    }
+
+    // --- IN-MEMORY STATE ---
     let currentUserId = null;
     let inMemoryLibrary = [];
     let inMemoryClickedHistory = [];
@@ -24,7 +34,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     const filterModal = document.getElementById('filter-modal');
     
-    // UPDATED API BASE
     const API_BASE = 'https://anikoto-api-lyart.vercel.app';
     const ANILIST_URL = 'https://graphql.anilist.co';
     let typingTimer;
@@ -37,7 +46,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- FIREBASE INITIALIZATION ---
     try {
         const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js');
-        const { getFirestore, collection, getDocs, setDoc, deleteDoc, doc, query, orderBy, limit } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        const { getFirestore, collection, getDocs, doc, query, orderBy, limit } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         const { getAuth, onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
 
         const firebaseConfig = {
@@ -53,7 +62,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.app.db = window.app.db || getFirestore(firebaseApp);
         const auth = getAuth(firebaseApp);
 
-        // Listen for Auth State to securely get UID without LocalStorage
         onAuthStateChanged(auth, (user) => {
             if (user && !user.isAnonymous) {
                 currentUserId = user.uid;
@@ -64,31 +72,25 @@ document.addEventListener('DOMContentLoaded', async () => {
                 inMemoryClickedHistory = [];
                 inMemorySearchHistory = [];
                 
-                // Show logged out state
                 if(historyContainer) historyContainer.innerHTML = `<div class="text-[10px] text-gray-600 italic">Log in to view search history.</div>`;
                 if(trendingContainer) trendingContainer.innerHTML = `<div class="p-10 text-center w-full flex flex-col items-center justify-center opacity-60"><i class="fas fa-history text-3xl text-gray-600 mb-3 block"></i><p class="text-sm text-gray-400">Log in to view recently clicked anime.</p></div>`;
             }
         });
-
     } catch (error) {
         console.error("Failed to initialize Firebase:", error);
         if(historyContainer) historyContainer.innerHTML = `<div class="text-[10px] text-red-500 italic">Failed to connect to database.</div>`;
     }
 
-    // --- FIREBASE CLOUD SYNC LOGIC ---
     const syncWithCloud = async () => {
         if (!currentUserId) return;
-
         try {
             const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
             const { collection, getDocs, query, orderBy, limit } = firestore;
 
-            // 1. Fetch Cloud Library into Memory
             const libraryRef = collection(window.app.db, "users", currentUserId, "library");
             const libSnapshot = await getDocs(libraryRef);
             inMemoryLibrary = libSnapshot.docs.map(doc => doc.data());
 
-            // 2. Fetch Cloud History into Memory
             const historyRef = collection(window.app.db, "users", currentUserId, "history");
             const historyQuery = query(historyRef, orderBy("timestamp", "desc"), limit(30));
             const histSnapshot = await getDocs(historyQuery);
@@ -105,12 +107,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             inMemoryClickedHistory = inMemoryClickedHistory.slice(0, 15);
             inMemorySearchHistory = inMemorySearchHistory.slice(0, 10);
 
-            // Render UI with fetched data
             renderClickedHistory();
             renderSearchTextHistory();
         } catch (error) {
             console.error("Cloud sync failed (Check Firebase Rules):", error);
-            if(historyContainer) historyContainer.innerHTML = `<div class="text-[10px] text-red-500 italic">Sync failed. Check connection.</div>`;
         }
     };
 
@@ -129,7 +129,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 wrapper.classList.toggle('dropdown-open');
             });
         }
-
         options.forEach(opt => {
             opt.addEventListener('click', () => {
                 selectBtn.setAttribute('data-value', opt.getAttribute('data-value'));
@@ -143,10 +142,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.querySelectorAll('.custom-select-wrapper').forEach(w => w.classList.remove('dropdown-open'));
     });
 
-    // --- 1. INITIALIZATION ---
-    const initSearchPage = async () => {
-        initTypewriterPlaceholder();       
-    };
+    // --- INITIALIZATION ---
+    const initSearchPage = async () => { initTypewriterPlaceholder(); };
 
     const initTypewriterPlaceholder = async () => {
         if(!searchInput) return;
@@ -157,9 +154,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query })
             });
             const json = await res.json();
-            if (json.data && json.data.Page.media) {
-                trendingTitles = json.data.Page.media.map(a => a.title.english || a.title.romaji);
-            }
+            if (json.data && json.data.Page.media) trendingTitles = json.data.Page.media.map(a => a.title.english || a.title.romaji);
         } catch (e) {}
 
         let titleIndex = 0; let charIndex = 0; let isDeleting = false;
@@ -184,7 +179,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         type();
     };
 
-    // --- 2. RECENTLY VIEWED (CLICKED) HISTORY ---
+    // --- RECENTLY VIEWED (CLICKED) HISTORY ---
     window.saveAndGo = async (id, title, image, type, sub, dub) => {
         const docIdStr = String(id); 
         const animeData = { historyType: 'anime', id: docIdStr, title, image, type, sub, dub, timestamp: Date.now() };
@@ -198,15 +193,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
                 const docRef = firestore.doc(window.app.db, "users", currentUserId, "history", `anime_${docIdStr}`);
                 await firestore.setDoc(docRef, animeData, { merge: true });
-            } catch (e) { console.error("Firebase History Write Error:", e); }
+            } catch (e) {}
         }
-
         window.location.href = `info.html?id=${id}`;
     };
 
     window.deleteClickedHistory = async (event, id) => {
         event.stopPropagation(); 
-        
         inMemoryClickedHistory = inMemoryClickedHistory.filter(item => String(item.id) !== String(id));
         renderClickedHistory();
 
@@ -215,7 +208,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
                 const docRef = firestore.doc(window.app.db, "users", currentUserId, "history", `anime_${id}`);
                 await firestore.deleteDoc(docRef);
-            } catch (e) { console.error("Firebase History Delete Error:", e); }
+            } catch (e) {}
         }
     };
 
@@ -223,35 +216,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         if(!trendingContainer) return;
         
         if (inMemoryClickedHistory.length === 0) {
-            trendingContainer.innerHTML = `
-                <div class="p-10 text-center w-full flex flex-col items-center justify-center opacity-60">
-                    <i class="fas fa-history text-3xl text-gray-600 mb-3 block"></i>
-                    <p class="text-sm text-gray-400">Your recently viewed anime will appear here.</p>
-                </div>`;
+            trendingContainer.innerHTML = `<div class="p-10 text-center w-full flex flex-col items-center justify-center opacity-60"><i class="fas fa-history text-3xl text-gray-600 mb-3 block"></i><p class="text-sm text-gray-400">Your recently viewed anime will appear here.</p></div>`;
             trendingContainer.className = "flex w-full"; 
             return;
         }
 
-        // Applied Responsive Grid (Mobile single column, PC multi-column)
-        trendingContainer.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-6"; 
+        // Expanded grid columns for PC layout scaling (up to 5 columns on ultra-wide)
+        trendingContainer.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 pb-6"; 
 
         trendingContainer.innerHTML = inMemoryClickedHistory.map(anime => {
             const safeTitle = anime.title.replace(/'/g, "\\'");
             return `
             <div onclick="window.saveAndGo('${anime.id}', '${safeTitle}', '${anime.image}', '${anime.type}', '${anime.sub}', '${anime.dub}')" class="relative flex gap-4 items-stretch bg-gradient-to-br from-[#141414] to-[#0a0a0a] p-3 rounded-xl cursor-pointer hover:border-[#F47521]/50 border border-white/5 transition-all duration-300 shadow-md hover:shadow-xl hover:-translate-y-0.5 group h-full">
-                
                 <button onclick="window.deleteClickedHistory(event, '${anime.id}')" class="absolute top-2 right-2 bg-black/60 hover:bg-[#F47521] text-white w-6 h-6 rounded-full flex items-center justify-center transition-colors z-10 border border-white/10 hover:border-white shadow-md group/btn">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 group-hover/btn:scale-110 transition-transform" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-                    </svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 group-hover/btn:scale-110 transition-transform" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
                 </button>
-
                 <div class="relative w-20 md:w-24 shrink-0">
                     <img src="${anime.image}" class="w-full h-full object-cover rounded-lg shadow-md group-hover:brightness-110 transition">
                 </div>
                 <div class="flex flex-col flex-1 min-w-0 justify-center py-1 pr-6">
                     <h4 class="text-sm md:text-base font-bold text-white truncate group-hover:text-[#F47521] transition-colors">${anime.title}</h4>
-                    
                     <div class="flex gap-2 items-center text-[9px] md:text-[10px] font-black uppercase tracking-wider mt-2.5">
                         <span class="text-gray-300 bg-black border border-white/10 px-1.5 py-0.5 rounded shadow-sm">${anime.type || 'TV'}</span>
                         <span class="text-gray-300">SUB <span class="text-[#F47521]">${anime.sub}</span></span>
@@ -262,7 +246,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }).join('');
     };
 
-    // --- 3. SEARCH TEXT HISTORY LOGIC ---
+    // --- SEARCH TEXT HISTORY LOGIC ---
     const saveSearchHistory = async (term) => {
         inMemorySearchHistory = inMemorySearchHistory.filter(t => t.toLowerCase() !== term.toLowerCase()); 
         inMemorySearchHistory.unshift(term);
@@ -273,10 +257,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
                 const safeTerm = term.trim().replace(/[\/\\.#$\[\]]/g, '_');
-                const docId = `search_${safeTerm}`; 
-                const docRef = firestore.doc(window.app.db, "users", currentUserId, "history", docId);
+                const docRef = firestore.doc(window.app.db, "users", currentUserId, "history", `search_${safeTerm}`);
                 await firestore.setDoc(docRef, { historyType: 'search', term: term, timestamp: Date.now() }, { merge: true });
-            } catch (e) { console.error("Firebase Search Term Save Error:", e); }
+            } catch (e) {}
         }
     };
 
@@ -288,10 +271,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
                 const safeTerm = term.trim().replace(/[\/\\.#$\[\]]/g, '_');
-                const docId = `search_${safeTerm}`;
-                const docRef = firestore.doc(window.app.db, "users", currentUserId, "history", docId);
-                await firestore.deleteDoc(docRef);
-            } catch (e) { console.error("Firebase Search Term Delete Error:", e); }
+                await firestore.deleteDoc(firestore.doc(window.app.db, "users", currentUserId, "history", `search_${safeTerm}`));
+            } catch (e) {}
         }
     };
 
@@ -303,7 +284,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         if(clearAllBtn) clearAllBtn.classList.toggle('hidden', inMemorySearchHistory.length === 0);
         if(historyHint) historyHint.classList.toggle('hidden', inMemorySearchHistory.length === 0);
         
-        // Handle Empty State Visually
         if (inMemorySearchHistory.length === 0 && currentUserId) {
             historyContainer.innerHTML = `<div class="text-[10px] text-gray-600 italic">No recent searches found.</div>`;
             return;
@@ -311,8 +291,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         historyContainer.innerHTML = inMemorySearchHistory.map(term => `
             <div class="history-item relative flex items-center bg-[#111] border border-white/5 rounded-full px-4 py-2 cursor-pointer hover:border-[#F47521] transition select-none shadow-sm" data-term="${term}">
-                <i class="fas fa-history text-gray-500 mr-2 text-xs"></i>
-                <span class="text-xs font-semibold text-gray-300">${term}</span>
+                <i class="fas fa-history text-gray-500 mr-2 text-xs"></i><span class="text-xs font-semibold text-gray-300">${term}</span>
             </div>
         `).join('');
 
@@ -334,17 +313,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
                 for (const term of inMemorySearchHistory) {
                     const safeTerm = term.trim().replace(/[\/\\.#$\[\]]/g, '_');
-                    const docId = `search_${safeTerm}`;
-                    const docRef = firestore.doc(window.app.db, "users", currentUserId, "history", docId);
-                    await firestore.deleteDoc(docRef);
+                    await firestore.deleteDoc(firestore.doc(window.app.db, "users", currentUserId, "history", `search_${safeTerm}`));
                 }
-            } catch (e) { console.error("Firebase clear all error:", e); }
+            } catch (e) {}
         }
         inMemorySearchHistory = []; 
         renderSearchTextHistory(); 
     });
 
-    // --- 4. FILTER LOGIC ---
+    // --- FILTER LOGIC ---
     const filterBtn = document.getElementById('filter-btn');
     const closeFilterBtn = document.getElementById('close-filter-btn');
     const resetFilterBtn = document.getElementById('reset-filter-btn');
@@ -381,12 +358,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if(typingView) typingView.classList.add('hidden');
         if(resultsView) resultsView.classList.add('hidden');
         
-        // EXPLICIT RENDER TRIGGER FOR IDLE VIEW
-        if (view === 'idle' && idleView) { 
-            idleView.classList.remove('hidden'); 
-            renderClickedHistory(); 
-            renderSearchTextHistory(); 
-        }
+        if (view === 'idle' && idleView) { idleView.classList.remove('hidden'); renderClickedHistory(); renderSearchTextHistory(); }
         if (view === 'typing' && typingView) typingView.classList.remove('hidden');
         if (view === 'results' && resultsView) resultsView.classList.remove('hidden');
     };
@@ -398,35 +370,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     if(clearBtn) {
-        clearBtn.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 hover:text-[#F47521] bg-[#111] hover:bg-white rounded-full p-0.5 transition-all duration-200" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-        </svg>`;
-        
-        clearBtn.addEventListener('click', () => {
-            searchInput.value = ''; 
-            clearBtn.classList.add('hidden'); 
-            switchView('idle'); 
-            searchInput.focus();
-        });
+        clearBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 hover:text-[#F47521] bg-[#111] hover:bg-white rounded-full p-0.5 transition-all duration-200" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg>`;
+        clearBtn.addEventListener('click', () => { searchInput.value = ''; clearBtn.classList.add('hidden'); switchView('idle'); searchInput.focus(); });
     }
 
     if(searchInput) {
         searchInput.addEventListener('input', (e) => {
             const val = e.target.value.trim();
             if(clearBtn) clearBtn.classList.toggle('hidden', val.length === 0);
-            
             clearTimeout(typingTimer);
             if (val.length === 0) { switchView('idle'); return; }
-
             switchView('typing');
             if(suggestionsContainer) suggestionsContainer.innerHTML = `<div class="p-8 text-center text-sm text-gray-400"><i class="fas fa-spinner fa-spin text-[#F47521] mr-2"></i> Fetching suggestions...</div>`;
             typingTimer = setTimeout(() => fetchSuggestions(val), 300); 
         });
-
-        searchInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && searchInput.value.trim()) handleSearchSubmit(searchInput.value.trim());
-        });
+        searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter' && searchInput.value.trim()) handleSearchSubmit(searchInput.value.trim()); });
     }
 
     const fetchSuggestions = async (term) => {
@@ -436,24 +394,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             const res = await fetch(ANILIST_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, variables: { search: term } }) });
             const json = await res.json();
             const media = json.data?.Page?.media || [];
-
             if (media.length === 0) { suggestionsContainer.innerHTML = `<div class="p-4 text-xs text-gray-500">No suggestions.</div>`; return; }
 
             window.handleSuggestionClick = (title) => { searchInput.value = title; handleSearchSubmit(title); };
-
             suggestionsContainer.innerHTML = media.map(anime => {
                 const title = anime.title.english || anime.title.romaji;
-                const safeTitle = title.replace(/'/g, "\\'");
-                const highlighted = highlightText(title, term);
                 return `
-                <div onclick="handleSuggestionClick('${safeTitle}')" class="flex items-center gap-3 p-3 hover:bg-[#111] rounded-lg cursor-pointer transition border-b border-white/5 last:border-0">
-                    <i class="fas fa-search text-gray-600 text-sm"></i><span class="text-sm text-gray-300 truncate">${highlighted}</span>
+                <div onclick="handleSuggestionClick('${title.replace(/'/g, "\\'")}')" class="flex items-center gap-3 p-3 hover:bg-[#111] rounded-lg cursor-pointer transition border-b border-white/5 last:border-0">
+                    <i class="fas fa-search text-gray-600 text-sm"></i><span class="text-sm text-gray-300 truncate">${highlightText(title, term)}</span>
                 </div>`;
             }).join('');
         } catch (err) { suggestionsContainer.innerHTML = `<div class="p-4 text-xs text-gray-500">Network error.</div>`; }
     };
 
-    // --- 5. SEARCH & RESULTS RENDERING ---
+    // --- SEARCH & RESULTS RENDERING ---
     const render404State = (message = "Nothing matched your search.") => {
         if(topResultCard) topResultCard.innerHTML = '';
         if(resultsListContainer) resultsListContainer.innerHTML = ''; 
@@ -471,7 +425,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         if(topResultCard) topResultCard.innerHTML = `<div class="animate-pulse w-full h-64 md:h-80 bg-[#111] rounded-2xl"></div>`;
         if(resultsListContainer) {
-            resultsListContainer.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6"; 
+            // Setup expanded columns for loading state too
+            resultsListContainer.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 mt-6"; 
             resultsListContainer.innerHTML = `<div class="col-span-full p-8 text-center text-sm text-[#F47521] w-full"><i class="fas fa-circle-notch fa-spin text-2xl mb-3 block"></i> Scanning Anime...</div>`;
         }
 
@@ -522,9 +477,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const topImg = topAnime.image || topAnime.poster;
             const topType = topAnime.type || 'TV';
 
-            const checkLibraryStatus = (animeId) => {
-                return inMemoryLibrary.some(item => String(item.id) === String(animeId));
-            };
+            const checkLibraryStatus = (animeId) => inMemoryLibrary.some(item => String(item.id) === String(animeId));
 
             const isTopAdded = checkLibraryStatus(topAnime.id);
             const topSafeTitle = topAnime.title.replace(/'/g, "\\'");
@@ -542,13 +495,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <div class="absolute inset-0 bg-gradient-to-r from-[#050505] via-[#050505]/80 to-transparent hidden md:block"></div>
                     </div>
                     <div class="relative flex flex-col md:flex-row gap-5 md:gap-8 p-5 md:p-8 w-full z-10 items-start md:items-end">
-                        <img src="${topImg}" class="w-28 md:w-48 h-40 md:h-64 object-cover rounded-xl shadow-2xl border border-white/10 shrink-0 transform group-hover:-translate-y-2 transition-transform duration-500">
+                        <img src="${topImg}" class="w-28 md:w-48 lg:w-56 h-40 md:h-64 lg:h-72 object-cover rounded-xl shadow-2xl border border-white/10 shrink-0 transform group-hover:-translate-y-2 transition-transform duration-500">
                         <div class="flex flex-col flex-1 w-full min-w-0">
                             <span class="text-[10px] md:text-xs font-black uppercase tracking-widest text-[#F47521] mb-1.5 md:mb-2 flex items-center gap-2">
                                 <i class="fas fa-fire"></i> Top Match
                             </span>
-                            <h3 class="text-xl md:text-4xl font-black leading-tight text-white mb-2 md:mb-3 drop-shadow-lg truncate">${topAnime.title}</h3>
-                            <p id="top-result-desc" class="text-xs md:text-sm text-gray-300 line-clamp-3 md:line-clamp-4 mb-4 md:mb-6 leading-relaxed max-w-3xl">${description}</p>
+                            <h3 class="text-xl md:text-4xl lg:text-5xl font-black leading-tight text-white mb-2 md:mb-3 drop-shadow-lg truncate">${topAnime.title}</h3>
+                            <p id="top-result-desc" class="text-xs md:text-sm lg:text-base text-gray-300 line-clamp-3 md:line-clamp-4 mb-4 md:mb-6 leading-relaxed max-w-4xl">${description}</p>
                             
                             <div class="flex flex-wrap items-center gap-3 mt-auto w-full">
                                 <button onclick="event.stopPropagation(); window.saveAndGo('${topAnime.id}', '${topSafeTitle}', '${topImg}', '${topType}', '${topSubEps}', '${topDubEps}')" class="bg-white text-black px-5 py-2.5 rounded-lg font-black text-[11px] md:text-xs uppercase tracking-widest hover:bg-[#F47521] hover:text-white transition shadow-lg"><i class="fas fa-play mr-2"></i> Watch Now</button>
@@ -569,8 +522,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             if(resultsListContainer && restAnime.length > 0) {
-                // Applied Responsive Grid layout (Mobile single column, PC multi-column)
-                resultsListContainer.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6";
+                // Expanded grid up to 5 columns on ultra-wide screens to eliminate dead space
+                resultsListContainer.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 mt-6";
                 
                 resultsListContainer.innerHTML = restAnime.map(anime => {
                     const aSub = anime.tvInfo?.sub || anime.sub || '?';
@@ -621,7 +574,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-    // --- 6. SAVE TO SUBCOLLECTION LOGIC ---
+    // --- SAVE TO SUBCOLLECTION LOGIC ---
     window.app.toggleSearchLibraryClick = async (event, id, title, img) => {
         event.stopPropagation(); 
         
@@ -644,7 +597,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             const notifDocRef = firestore.doc(window.app.db, "users", currentUserId, "notifications", `lib_${docIdStr}`);
 
             if (isCurrentlyAdded) {
-                // Remove from memory
                 inMemoryLibrary.splice(existingItemIndex, 1); 
                 
                 if (btn) {
@@ -659,10 +611,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
                 
-                // Delete from Firestore
                 await firestore.deleteDoc(libDocRef);
 
-                // Add to Notification (Optional Integration consistency)
                 await firestore.setDoc(notifDocRef, {
                     id: `lib_${docIdStr}`, type: 'library', title: 'Library Updated',
                     message: `You removed ${title} from your library.`, image: img,
@@ -671,7 +621,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
             } else {
-                // Add to memory
                 inMemoryLibrary.unshift(formattedAnime);
                 
                 if (btn) {
@@ -684,10 +633,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
                 
-                // Add to Firestore
                 await firestore.setDoc(libDocRef, formattedAnime);
 
-                // Add to Notification (Optional Integration consistency)
                 await firestore.setDoc(notifDocRef, {
                     id: `lib_${docIdStr}`, type: 'library', title: 'Library Updated',
                     message: `You added ${title} to your library!`, image: img,
