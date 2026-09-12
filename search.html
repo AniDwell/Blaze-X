@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -26,7 +27,8 @@
 <body class="bg-[#050505] text-white font-sans min-h-screen pb-20 overflow-x-hidden">
 
     <div class="sticky top-0 z-40 bg-[#050505]/95 backdrop-blur-md px-4 py-4 border-b border-white/10">
-        <div class="relative max-w-2xl mx-auto flex items-center gap-3">
+        <!-- FIXED: Replaced max-w-2xl with widescreen compatible classes -->
+        <div class="relative w-full max-w-7xl 2xl:max-w-[1600px] mx-auto flex items-center gap-3">
             <button onclick="history.back()" class="text-gray-400 hover:text-white transition">
                 <i class="fas fa-arrow-left text-xl"></i>
             </button>
@@ -47,7 +49,8 @@
         </div>
     </div>
 
-    <main class="max-w-2xl mx-auto px-4 pt-6">
+    <!-- FIXED: Replaced max-w-2xl with widescreen compatible classes -->
+    <main class="w-full max-w-7xl 2xl:max-w-[1600px] mx-auto px-4 pt-6">
         
         <div id="idle-view" class="block animate-fade-in">
             <div class="mb-8">
@@ -170,9 +173,8 @@
         </div>
     </div>
 
-        <script src="auth.js"></script> 
+    <script src="auth.js"></script> 
     <script src="404.js"></script>
     <script src="search.js"></script>
 </body>
 </html>
-
