@@ -1,4 +1,4 @@
-// recent_slider.js - Latest Releases Slider (Live Sync, Notifications, No Gradient)
+// recent_slider.js - Latest Releases Slider (Live Sync, Deterministic Notifications, Release Baseline)
 
 window.app = window.app || {};
 window.app.components = window.app.components || {};
@@ -46,12 +46,12 @@ window.app.updateRecentBtnUI = (btn, isAdded) => {
 };
 
 // --- INSTANT SAVE & NOTIFY LOGIC ---
-window.app.toggleRecentLibrary = async (event, btn, id, title, img) => {
+window.app.toggleRecentLibrary = async (event, btn, id, title, img, ep = 0, status = 'RELEASING') => {
     event.stopPropagation(); 
     
     try {
         await initFirebaseRecent();
-        const { doc, setDoc, deleteDoc, collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+        const { doc, setDoc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
         
         const auth = window.app.auth;
         const db = window.app.db;
@@ -65,34 +65,54 @@ window.app.toggleRecentLibrary = async (event, btn, id, title, img) => {
         const docIdStr = String(id);
         const isAdded = btn.dataset.added === "true";
         const libDocRef = doc(db, "users", auth.currentUser.uid, "library", docIdStr);
-        const notifRef = collection(db, "users", auth.currentUser.uid, "notifications");
+        const notifDocRef = doc(db, "users", auth.currentUser.uid, "notifications", `lib_${docIdStr}`);
+
+        // Base payload for Release Manager baseline tracking
+        const payload = {
+            id: docIdStr,
+            title,
+            img,
+            timestamp: Date.now(),
+            lastKnownEpisode: parseInt(ep) || 0,
+            releaseStatus: status
+        };
 
         if (isAdded) {
+            // Optimistic UI update
             window.app.updateRecentBtnUI(btn, false);
             window.app.state.carouselLibrarySet.delete(docIdStr);
 
+            // DB Updates
             await deleteDoc(libDocRef);
-            await addDoc(notifRef, {
+            await setDoc(notifDocRef, {
+                id: `lib_${docIdStr}`,
                 type: 'library',
                 title: 'Library Updated',
                 message: `You removed ${title} from your library.`,
                 image: img,
-                timestamp: Date.now()
-            });
+                animeId: docIdStr, // Required for Info.html routing
+                timestamp: Date.now(),
+                read: false
+            }, { merge: true });
 
             if (window.app.showCustomAlert) window.app.showCustomAlert("Removed from Library", "success");
         } else {
+            // Optimistic UI update
             window.app.updateRecentBtnUI(btn, true);
             window.app.state.carouselLibrarySet.add(docIdStr);
 
-            await setDoc(libDocRef, { id: docIdStr, title, img, timestamp: Date.now() });
-            await addDoc(notifRef, {
+            // DB Updates
+            await setDoc(libDocRef, payload, { merge: true });
+            await setDoc(notifDocRef, {
+                id: `lib_${docIdStr}`,
                 type: 'library',
                 title: 'Library Updated',
                 message: `You added ${title} to your library!`,
                 image: img,
-                timestamp: Date.now()
-            });
+                animeId: docIdStr, // Required for Info.html routing
+                timestamp: Date.now(),
+                read: false
+            }, { merge: true });
 
             if (window.app.showCustomAlert) window.app.showCustomAlert("Added to Library!", "success");
         }
@@ -160,7 +180,7 @@ window.app.components.recentSlider = async () => {
 
     try {
         // 2. FETCH LATEST EPISODES FROM CUSTOM API
-        const baseUrl = 'https://anikoto-api-xi.vercel.app';
+        const baseUrl = 'https://anikoto-api-lyart.vercel.app';
         const rawResponse = await fetch(`${baseUrl}/api/latest-episodes`);
         const response = await rawResponse.json();
         
@@ -174,15 +194,17 @@ window.app.components.recentSlider = async () => {
         // Limit to top 15 to keep it fast
         const topRecent = recentEpisodes.slice(0, 15);
 
-        // 3. ENRICH WITH ANILIST HIGH-RES COVERS (Parallel Fetch)
+        // 3. ENRICH WITH ANILIST HIGH-RES COVERS & STATUS (Parallel Fetch)
         const enrichedSlides = await Promise.all(topRecent.map(async (slide) => {
             const cleanTitle = (slide.title || '').replace(/\(Dub\)|\(Sub\)|Episode \d+/gi, '').trim();
             let finalImage = slide.image || slide.poster;
+            let finalStatus = 'RELEASING'; // Safe default for latest episodes
             
             try {
                 const query = `query ($search: String) { 
                     Media (search: $search, type: ANIME, sort: SEARCH_MATCH) { 
                         coverImage { extraLarge } 
+                        status
                     } 
                 }`;
                 const aniRes = await fetch('https://graphql.anilist.co', {
@@ -191,8 +213,13 @@ window.app.components.recentSlider = async () => {
                     body: JSON.stringify({ query, variables: { search: cleanTitle } })
                 });
                 const aniData = await aniRes.json();
-                if (aniData?.data?.Media?.coverImage?.extraLarge) {
-                    finalImage = aniData.data.Media.coverImage.extraLarge;
+                if (aniData?.data?.Media) {
+                    if (aniData.data.Media.coverImage?.extraLarge) {
+                        finalImage = aniData.data.Media.coverImage.extraLarge;
+                    }
+                    if (aniData.data.Media.status) {
+                        finalStatus = aniData.data.Media.status;
+                    }
                 }
             } catch(e) {}
 
@@ -203,7 +230,8 @@ window.app.components.recentSlider = async () => {
                 episode: slide.episodeNumber || slide.episode || null,
                 type: slide.type || 'TV',
                 sub: slide.tvInfo?.sub || slide.sub || '?',
-                dub: slide.tvInfo?.dub || slide.dub || 0
+                dub: slide.tvInfo?.dub || slide.dub || 0,
+                status: finalStatus
             };
         }));
 
@@ -225,7 +253,7 @@ window.app.components.recentSlider = async () => {
                 <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden shadow-lg border border-white/10 group-hover:border-[#F47521]/70 transition-colors">
                     <img src="${anime.image}" loading="lazy" class="w-full h-full object-cover">
                     
-                    <button onclick="window.app.toggleRecentLibrary(event, this, '${anime.id}', '${safeTitle}', '${anime.image}')" 
+                    <button onclick="window.app.toggleRecentLibrary(event, this, '${anime.id}', '${safeTitle}', '${anime.image}', ${anime.episode || 0}, '${anime.status}')" 
                             data-added="${isAdded}"
                             data-id="${docIdStr}"
                             class="recent-lib-btn absolute top-2 right-2 z-30 p-2 rounded ${isAdded ? 'bg-black/80' : 'bg-black/70'} backdrop-blur-md border border-white/10 shadow-lg hover:bg-black transition-all flex items-center justify-center">
