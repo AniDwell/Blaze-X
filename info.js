@@ -116,6 +116,61 @@ window.app.components.info = async () => {
                 parsedAniCharacters = aniData.characters.edges;
             }
 
+            // --- PROGRESSION & WATCH TRACKER (CLOUD SYNC INTEGRATED) ---
+            const profile = window.app.state?.activeProfile || null;
+            let playBtnText = "Play E01";
+            let targetEpisodeSlug = episodesList.length > 0 ? (episodesList[0].slug || "1") : '1';
+            let targetEpNum = 1;
+            let trackObj = null;
+
+            if (profile && profile.uid) {
+                // 1. Fetch Local Data First for speed
+                const localHistory = localStorage.getItem(`blazex_progress_${profile.uid}_${animeId}`);
+                if (localHistory) {
+                    try { trackObj = JSON.parse(localHistory); } catch(e) {}
+                }
+
+                // 2. Fetch Latest Cloud DB Data
+                try {
+                    const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+                    const { getFirestore, doc, getDoc } = firestore;
+                    const db = getFirestore();
+                    const progressRef = doc(db, "users", profile.uid, "progress", String(animeId));
+                    const progressSnap = await getDoc(progressRef);
+                    
+                    if (progressSnap.exists()) {
+                        const dbData = progressSnap.data();
+                        // Merge or replace if DB data is newer
+                        if (!trackObj || !trackObj.timestamp || (dbData.timestamp && dbData.timestamp > trackObj.timestamp)) {
+                            trackObj = dbData;
+                            localStorage.setItem(`blazex_progress_${profile.uid}_${animeId}`, JSON.stringify(trackObj));
+                        }
+                    }
+                } catch (err) {
+                    console.log("DB progress sync skipped or failed.", err);
+                }
+
+                // 3. Process the resolved tracking object
+                if (trackObj && trackObj.lastWatchedEp) {
+                    targetEpNum = parseInt(trackObj.lastWatchedEp);
+                    targetEpisodeSlug = trackObj.lastSlug || String(targetEpNum);
+
+                    if (trackObj.finishedEp === true) {
+                        const totalAvailableEps = episodesList.length;
+                        if (targetEpNum < totalAvailableEps) {
+                            targetEpNum += 1;
+                            const nextEpObj = episodesList.find(e => (e.num || e.episode_no) == targetEpNum);
+                            targetEpisodeSlug = nextEpObj ? (nextEpObj.slug || nextEpObj.id) : String(targetEpNum);
+                            playBtnText = `Play E${targetEpNum < 10 ? '0' + targetEpNum : targetEpNum}`;
+                        } else {
+                            playBtnText = `Replay Last Ep`;
+                        }
+                    } else {
+                        playBtnText = `Resume E${targetEpNum < 10 ? '0' + targetEpNum : targetEpNum}`;
+                    }
+                }
+            }
+
             window.app.state.currentAnimePage = {
                 id: animeId,
                 title: finalTitle,
@@ -128,7 +183,11 @@ window.app.components.info = async () => {
                 characters: parsedAniCharacters,
                 aniList: aniData,
                 scheduleCountdown: scheduleData,
-                rawPayload: baseAnime
+                rawPayload: baseAnime,
+                progressData: trackObj, // Stored for use by the Grid later
+                smartPlayAction: targetEpisodeSlug,
+                smartPlayNumber: targetEpNum,
+                smartPlayText: playBtnText
             };
 
             window.app.state.activeInfoTab = 'episodes'; 
@@ -136,43 +195,6 @@ window.app.components.info = async () => {
             window.app.state.epSearchValue = '';
             window.app.state.epRangeFilter = null; 
             window.app.state.activeLanguageType = 'sub';
-
-            // --- PROGRESSION & WATCH TRACKER ---
-            const profile = window.app.state?.activeProfile || null;
-            let playBtnText = "Play E01";
-            let targetEpisodeSlug = episodesList.length > 0 ? (episodesList[0].slug || "1") : '1';
-            let targetEpNum = 1;
-
-            if (profile && profile.uid) {
-                const localHistory = localStorage.getItem(`blazex_progress_${profile.uid}_${animeId}`);
-                if (localHistory) {
-                    try {
-                        const trackObj = JSON.parse(localHistory); 
-                        if (trackObj && trackObj.lastWatchedEp) {
-                            targetEpNum = parseInt(trackObj.lastWatchedEp);
-                            targetEpisodeSlug = trackObj.lastSlug || String(targetEpNum);
-
-                            if (trackObj.finishedEp === true) {
-                                const totalAvailableEps = episodesList.length;
-                                if (targetEpNum < totalAvailableEps) {
-                                    targetEpNum += 1;
-                                    const nextEpObj = episodesList.find(e => (e.num || e.episode_no) == targetEpNum);
-                                    targetEpisodeSlug = nextEpObj ? (nextEpObj.slug || nextEpObj.id) : String(targetEpNum);
-                                    playBtnText = `Play E${targetEpNum < 10 ? '0' + targetEpNum : targetEpNum}`;
-                                } else {
-                                    playBtnText = `Replay Last Ep`;
-                                }
-                            } else {
-                                playBtnText = `Resume E${targetEpNum < 10 ? '0' + targetEpNum : targetEpNum}`;
-                            }
-                        }
-                    } catch(e) {}
-                }
-            }
-
-            window.app.state.currentAnimePage.smartPlayAction = targetEpisodeSlug;
-            window.app.state.currentAnimePage.smartPlayNumber = targetEpNum;
-            window.app.state.currentAnimePage.smartPlayText = playBtnText;
 
             renderAnimeInfoShell();
 
@@ -923,12 +945,7 @@ window.app.renderNumericEpisodeGrid = () => {
         return;
     }
 
-    const profile = window.app.state?.activeProfile || null;
-    let localHistoryMap = null;
-    if (profile && profile.uid) {
-        const stored = localStorage.getItem(`blazex_progress_${profile.uid}_${data.id}`);
-        if (stored) { try { localHistoryMap = JSON.parse(stored); } catch(e){} }
-    }
+    const progressData = window.app.state.currentAnimePage.progressData;
 
     let gridHtml = '';
     episodesToRender.forEach((ep) => {
@@ -940,11 +957,12 @@ window.app.renderNumericEpisodeGrid = () => {
         const isSupportedByLang = (currentLangMode === 'sub' && ep.isSub !== false) || 
                                   (currentLangMode === 'dub' && ep.isDub === true);
 
+        // Check if episode is watched using the Cloud Synced object
         let isAlreadyWatched = false;
-        if (localHistoryMap && localHistoryMap.watchedHistoryList) {
-            isAlreadyWatched = localHistoryMap.watchedHistoryList.includes(parseInt(epNumber));
-        } else if (localHistoryMap && localHistoryMap.lastWatchedEp) {
-            isAlreadyWatched = parseInt(epNumber) <= parseInt(localHistoryMap.lastWatchedEp);
+        if (progressData && progressData.watchedHistoryList) {
+            isAlreadyWatched = progressData.watchedHistoryList.includes(parseInt(epNumber));
+        } else if (progressData && progressData.lastWatchedEp) {
+            isAlreadyWatched = parseInt(epNumber) <= parseInt(progressData.lastWatchedEp);
         }
 
         let buttonStyleClass = '';
@@ -977,6 +995,7 @@ window.app.renderNumericEpisodeGrid = () => {
     gridDiv.innerHTML = gridHtml;
 };
 
+// --- CLOUD SYNCED STREAM LAUNCHER ---
 window.app.resolveEpisodeStreamAndRoute = async (episodeSlug, episodeNumber, animeId) => {
     try {
         const baseUrl = 'https://anikoto-api-lyart.vercel.app';
@@ -1010,21 +1029,44 @@ window.app.resolveEpisodeStreamAndRoute = async (episodeSlug, episodeNumber, ani
 
         window.app.state.resolvedStreamManifest = verifiedStreamData;
 
+        // --- Save Progress to Cloud DB & Local Storage ---
         const profile = window.app.state?.activeProfile || null;
         if (profile && profile.uid) {
-            let mockProgressHistory = { lastWatchedEp: episodeNumber, lastSlug: episodeSlug, finishedEp: false, watchedHistoryList: [episodeNumber] };
+            let mockProgressHistory = { 
+                animeId: String(animeId),
+                lastWatchedEp: episodeNumber, 
+                lastSlug: episodeSlug, 
+                finishedEp: false, 
+                watchedHistoryList: [episodeNumber],
+                timestamp: Date.now()
+            };
+            
             const stored = localStorage.getItem(`blazex_progress_${profile.uid}_${animeId}`);
             if (stored) {
                 try {
                     let parsed = JSON.parse(stored);
+                    parsed.animeId = String(animeId);
                     parsed.lastWatchedEp = episodeNumber;
                     parsed.lastSlug = episodeSlug;
+                    parsed.timestamp = Date.now(); // Update timestamp
                     if(!parsed.watchedHistoryList) parsed.watchedHistoryList = [];
                     if(!parsed.watchedHistoryList.includes(episodeNumber)) parsed.watchedHistoryList.push(episodeNumber);
                     mockProgressHistory = parsed;
                 } catch(e){}
             }
+            
+            // Save to LocalStorage instantly
             localStorage.setItem(`blazex_progress_${profile.uid}_${animeId}`, JSON.stringify(mockProgressHistory));
+
+            // Sync to Firestore DB before navigating
+            try {
+                const firestore = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
+                const { getFirestore, doc, setDoc } = firestore;
+                const db = getFirestore();
+                await setDoc(doc(db, "users", profile.uid, "progress", String(animeId)), mockProgressHistory, { merge: true });
+            } catch (err) {
+                console.error("Firebase progress save failed:", err);
+            }
         }
 
         window.location.href = `play.html?id=${encodeURIComponent(episodeSlug)}&anime=${animeId}&ep=${episodeNumber}&type=${targetType}&server=${targetServer}`;
